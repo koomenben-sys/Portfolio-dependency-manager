@@ -1,7 +1,6 @@
 import React from 'react';
-import { TEAMS } from '../../constants';
-
-export function DependencyMatrix({ initiatives, dependencies }) {
+export function DependencyMatrix({ initiatives, dependencies, teams }) {
+  const TEAMS = teams || [];
   return (
     <div className="bg-white p-6 rounded shadow col-span-2">
       <h3 className="font-bold mb-4">Dependency Matrix</h3>

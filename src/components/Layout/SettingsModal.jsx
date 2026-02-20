@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { exportData, importData } from '../../utils/dataExport';
 
-export function SettingsModal({ 
-  isOpen, 
-  onClose, 
-  portfolios, 
-  initiatives, 
+export function SettingsModal({
+  isOpen,
+  onClose,
+  portfolios,
+  initiatives,
   dependencies,
   setPortfolios,
   setInitiatives,
-  setDependencies
+  setDependencies,
+  teams,
+  addTeam,
+  updateTeam,
+  deleteTeam
 }) {
   const [showExport, setShowExport] = useState(false);
   const [exportText, setExportText] = useState('');
@@ -82,10 +86,46 @@ export function SettingsModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg">
+      <div className="bg-white rounded-lg shadow-lg w-96">
         <div className="p-4 border-b">
           <h3 className="text-lg font-bold">Settings</h3>
         </div>
+
+        {/* Teams */}
+        <div className="p-4 border-b">
+          <div className="flex justify-between items-center mb-3">
+            <h4 className="font-semibold text-sm">Teams</h4>
+            <button
+              onClick={addTeam}
+              className="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              + Add
+            </button>
+          </div>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {teams.map((team, index) => (
+              <div key={index} className="flex gap-2 items-center">
+                <input
+                  value={team}
+                  onChange={(e) => updateTeam(index, e.target.value)}
+                  className="flex-1 border rounded px-2 py-1 text-sm"
+                  placeholder="Team name"
+                />
+                <button
+                  onClick={() => deleteTeam(index)}
+                  className="text-red-500 hover:text-red-700 text-sm px-1"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            {teams.length === 0 && (
+              <p className="text-gray-400 text-sm">No teams yet.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Data */}
         <div className="p-2">
           <button
             onClick={handleExport}
@@ -103,6 +143,7 @@ export function SettingsModal({
             />
           </label>
         </div>
+
         <div className="p-4 border-t">
           <button
             onClick={onClose}
