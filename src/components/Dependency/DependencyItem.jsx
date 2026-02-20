@@ -1,15 +1,16 @@
 import React from 'react';
 import { Trash } from '../common/Icons';
-import { TEAMS, QUARTERS, EFFORT_SIZES } from '../../constants';
+import { QUARTERS, EFFORT_SIZES } from '../../constants';
 
-export function DependencyItem({ 
-  dependency, 
+export function DependencyItem({
+  dependency,
   currentTeam,
-  onUpdate, 
+  teams,
+  onUpdate,
   onDelete,
-  onToggleQuarter 
+  onToggleQuarter
 }) {
-  const availableTeams = TEAMS.filter(t => t !== currentTeam);
+  const availableTeams = (teams || []).filter(t => t !== currentTeam);
 
   return (
     <div className="bg-gray-50 p-3 rounded mb-2">

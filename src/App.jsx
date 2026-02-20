@@ -10,12 +10,12 @@ import { PortfolioOverviewView } from './views/PortfolioOverviewView';
 import { usePortfolios } from './hooks/usePortfolios';
 import { useInitiatives } from './hooks/useInitiatives';
 import { useDependencies } from './hooks/useDependencies';
+import { useTeams } from './hooks/useTeams';
 
 function App() {
   const [currentView, setCurrentView] = useState('portfolios');
   const [showSettings, setShowSettings] = useState(false);
 
-  // Custom hooks for data management
   const {
     portfolios,
     addPortfolio,
@@ -44,11 +44,10 @@ function App() {
     deleteDependenciesForInitiative
   } = useDependencies(counters, setCounters, initiatives);
 
+  const { teams, addTeam, updateTeam, deleteTeam } = useTeams();
+
   // For import functionality
-  const [setPortfolios] = useState(() => (data) => {
-    // This would need to be connected to the portfolios state
-    // For now, it's a placeholder
-  });
+  const [setPortfolios] = useState(() => (data) => {});
   const [setInitiatives] = useState(() => (data) => {});
   const [setDependencies] = useState(() => (data) => {});
 
@@ -76,6 +75,7 @@ function App() {
             initiatives={initiatives}
             dependencies={dependencies}
             portfolios={portfolios}
+            teams={teams}
             addInitiative={addInitiative}
             updateInitiative={updateInitiative}
             deleteInitiative={deleteInitiative}
@@ -103,6 +103,7 @@ function App() {
             portfolios={portfolios}
             initiatives={initiatives}
             dependencies={dependencies}
+            teams={teams}
           />
         )}
 
@@ -124,6 +125,10 @@ function App() {
         setPortfolios={setPortfolios}
         setInitiatives={setInitiatives}
         setDependencies={setDependencies}
+        teams={teams}
+        addTeam={addTeam}
+        updateTeam={updateTeam}
+        deleteTeam={deleteTeam}
       />
     </div>
   );

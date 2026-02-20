@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { Plus, Calendar } from '../components/common/Icons';
 import { InitiativeCard } from '../components/Initiative/InitiativeCard';
 import { DependencyItem } from '../components/Dependency/DependencyItem';
-import { TEAMS, EFFORT_SIZES } from '../constants';
+import { EFFORT_SIZES } from '../constants';
 
 export function DependenciesView({
   initiatives,
   dependencies,
   portfolios,
+  teams,
   addInitiative,
   updateInitiative,
   deleteInitiative,
@@ -19,7 +20,7 @@ export function DependenciesView({
   updateDependencyStatus,
   deleteDependenciesForInitiative
 }) {
-  const [currentTeam, setCurrentTeam] = useState(TEAMS[0]);
+  const [currentTeam, setCurrentTeam] = useState(teams[0] || '');
   const [subView, setSubView] = useState('outgoing');
 
   const teamInitiatives = initiatives.filter(i => i.team === currentTeam);
@@ -44,7 +45,7 @@ export function DependenciesView({
           onChange={(e) => setCurrentTeam(e.target.value)}
           className="border rounded px-4 py-2"
         >
-          {TEAMS.map(team => (
+          {teams.map(team => (
             <option key={team}>{team}</option>
           ))}
         </select>
@@ -112,6 +113,7 @@ export function DependenciesView({
                     <DependencyItem
                       dependency={dep}
                       currentTeam={currentTeam}
+                      teams={teams}
                       onUpdate={updateDependency}
                       onDelete={deleteDependency}
                       onToggleQuarter={toggleDependencyQuarter}
