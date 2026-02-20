@@ -11,6 +11,7 @@ export function SettingsModal({
   setInitiatives,
   setDependencies,
   teams,
+  setTeams,
   addTeam,
   updateTeam,
   deleteTeam
@@ -42,6 +43,9 @@ export function SettingsModal({
         setPortfolios(result.data.portfolios);
         setInitiatives(result.data.initiatives);
         setDependencies(result.data.dependencies);
+        if (result.data.teams && result.data.teams.length > 0) {
+          setTeams(result.data.teams);
+        }
         alert('Import successful!');
         onClose();
       } else {

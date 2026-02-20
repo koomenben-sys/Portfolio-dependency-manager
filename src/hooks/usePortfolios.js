@@ -36,6 +36,7 @@ export function usePortfolios() {
 
   return {
     portfolios,
+    setPortfolios,
     addPortfolio,
     updatePortfolio,
     deletePortfolio,

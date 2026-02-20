@@ -18,6 +18,7 @@ function App() {
 
   const {
     portfolios,
+    setPortfolios,
     addPortfolio,
     updatePortfolio,
     deletePortfolio,
@@ -27,6 +28,7 @@ function App() {
 
   const {
     initiatives,
+    setInitiatives,
     addInitiative,
     updateInitiative,
     deleteInitiative,
@@ -36,6 +38,7 @@ function App() {
 
   const {
     dependencies,
+    setDependencies,
     addDependency,
     updateDependency,
     deleteDependency,
@@ -44,12 +47,7 @@ function App() {
     deleteDependenciesForInitiative
   } = useDependencies(counters, setCounters, initiatives);
 
-  const { teams, addTeam, updateTeam, deleteTeam } = useTeams();
-
-  // For import functionality
-  const [setPortfolios] = useState(() => (data) => {});
-  const [setInitiatives] = useState(() => (data) => {});
-  const [setDependencies] = useState(() => (data) => {});
+  const { teams, setTeams, addTeam, updateTeam, deleteTeam } = useTeams();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -126,6 +124,7 @@ function App() {
         setInitiatives={setInitiatives}
         setDependencies={setDependencies}
         teams={teams}
+        setTeams={setTeams}
         addTeam={addTeam}
         updateTeam={updateTeam}
         deleteTeam={deleteTeam}
