@@ -17,7 +17,8 @@ export function importData(jsonString) {
       data: {
         portfolios: data.portfolios || [],
         initiatives: data.initiatives || [],
-        dependencies: data.dependencies || []
+        dependencies: data.dependencies || [],
+        teams: data.teams || []
       }
     };
   } catch (error) {

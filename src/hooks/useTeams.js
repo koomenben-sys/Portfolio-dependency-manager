@@ -16,5 +16,5 @@ export function useTeams() {
     setTeams(teams.filter((_, i) => i !== index));
   };
 
-  return { teams, addTeam, updateTeam, deleteTeam };
+  return { teams, setTeams, addTeam, updateTeam, deleteTeam };
 }
