@@ -8,9 +8,12 @@ export function DependencyItem({
   teams,
   onUpdate,
   onDelete,
-  onToggleQuarter
+  onToggleQuarter,
+  role,
 }) {
   const availableTeams = (teams || []).filter(t => t !== currentTeam);
+  const canEdit = role === 'admin' || role === 'editor';
+  const roClass = !canEdit ? 'bg-gray-50 cursor-default' : '';
 
   return (
     <div className="bg-gray-50 p-3 rounded mb-2">
@@ -23,8 +26,9 @@ export function DependencyItem({
       <div className="flex gap-2 mb-2">
         <select
           value={dependency.dependsOnTeam}
-          onChange={(e) => onUpdate(dependency.id, 'dependsOnTeam', e.target.value)}
-          className="border rounded px-2 py-1"
+          onChange={(e) => canEdit && onUpdate(dependency.id, 'dependsOnTeam', e.target.value)}
+          disabled={!canEdit}
+          className={`border rounded px-2 py-1 ${roClass}`}
         >
           <option value="">Team...</option>
           {availableTeams.map(team => (
@@ -34,17 +38,20 @@ export function DependencyItem({
 
         <input
           value={dependency.description}
-          onChange={(e) => onUpdate(dependency.id, 'description', e.target.value)}
-          className="flex-1 border rounded px-2 py-1"
+          onChange={(e) => canEdit && onUpdate(dependency.id, 'description', e.target.value)}
+          readOnly={!canEdit}
+          className={`flex-1 border rounded px-2 py-1 ${roClass}`}
           placeholder="What?"
         />
 
-        <button
-          onClick={() => onDelete(dependency.id)}
-          className="text-red-600 hover:text-red-800"
-        >
-          <Trash size={16} />
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => onDelete(dependency.id)}
+            className="text-red-600 hover:text-red-800"
+          >
+            <Trash size={16} />
+          </button>
+        )}
       </div>
 
       <div className="flex gap-2 items-center flex-wrap">
@@ -52,11 +59,14 @@ export function DependencyItem({
         {QUARTERS.map(q => (
           <button
             key={q}
-            onClick={() => onToggleQuarter(dependency.id, q)}
+            onClick={() => canEdit && onToggleQuarter(dependency.id, q)}
+            disabled={!canEdit}
             className={`px-2 py-1 text-sm rounded ${
               (dependency.quarters || []).includes(q)
                 ? 'bg-blue-600 text-white'
-                : 'border hover:bg-gray-100'
+                : canEdit
+                  ? 'border hover:bg-gray-100'
+                  : 'border opacity-60 cursor-default'
             }`}
           >
             {q}

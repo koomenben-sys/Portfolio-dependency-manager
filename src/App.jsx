@@ -7,14 +7,18 @@ import { DependenciesView } from './views/DependenciesView';
 import { PrioritizationView } from './views/PrioritizationView';
 import { AlignmentView } from './views/AlignmentView';
 import { PortfolioOverviewView } from './views/PortfolioOverviewView';
+import { LoginView } from './views/LoginView';
 import { usePortfolios } from './hooks/usePortfolios';
 import { useInitiatives } from './hooks/useInitiatives';
 import { useDependencies } from './hooks/useDependencies';
 import { useTeams } from './hooks/useTeams';
+import { useAuth } from './context/AuthContext';
 import { supabase } from './lib/supabase';
 import { generateRefCode } from './utils/referenceCodeGenerator';
 
 function App() {
+  const { user, role, loading, signOut } = useAuth();
+
   const [currentView, setCurrentView] = useState('portfolios');
   const [showSettings, setShowSettings] = useState(false);
 
@@ -48,6 +52,19 @@ function App() {
   } = useDependencies();
 
   const { teams, setTeams, addTeam, updateTeam, deleteTeam } = useTeams();
+
+  // ── Auth gates ────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginView />;
+  }
 
   // ── Import: full ETL from localStorage-format JSON into Supabase ──────────
   const handleImport = async ({ portfolios: pData, initiatives: iData, dependencies: dData, teams: tData }) => {
@@ -136,11 +153,12 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
+      <Header user={user} role={role} onSignOut={signOut} />
       <Navigation
         currentView={currentView}
         onViewChange={setCurrentView}
         onSettingsClick={() => setShowSettings(true)}
+        role={role}
       />
 
       <div className="p-6">
@@ -150,6 +168,7 @@ function App() {
             addPortfolio={addPortfolio}
             updatePortfolio={updatePortfolio}
             deletePortfolio={deletePortfolio}
+            role={role}
           />
         )}
 
@@ -169,6 +188,7 @@ function App() {
             toggleDependencyQuarter={toggleDependencyQuarter}
             updateDependencyStatus={updateDependencyStatus}
             deleteDependenciesForInitiative={deleteDependenciesForInitiative}
+            role={role}
           />
         )}
 
@@ -178,6 +198,7 @@ function App() {
             portfolios={portfolios}
             dependencies={dependencies}
             reorderInitiatives={reorderInitiatives}
+            role={role}
           />
         )}
 
@@ -210,6 +231,7 @@ function App() {
         addTeam={addTeam}
         updateTeam={updateTeam}
         deleteTeam={deleteTeam}
+        role={role}
       />
     </div>
   );
