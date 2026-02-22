@@ -1,8 +1,6 @@
 import React from 'react';
 import { DependencyMatrix } from '../components/Dependency/DependencyMatrix';
-import { TEAMS } from '../constants';
-
-export function AlignmentView({ portfolios, initiatives, dependencies }) {
+export function AlignmentView({ portfolios, initiatives, dependencies, teams }) {
   // Portfolio Health
   const portfolioHealth = portfolios.map(portfolio => {
     const portfolioInitiatives = initiatives.filter(i => i.portfolio == portfolio.id);
@@ -98,7 +96,7 @@ export function AlignmentView({ portfolios, initiatives, dependencies }) {
         </div>
 
         {/* Dependency Matrix */}
-        <DependencyMatrix initiatives={initiatives} dependencies={dependencies} />
+        <DependencyMatrix initiatives={initiatives} dependencies={dependencies} teams={teams} />
       </div>
     </div>
   );

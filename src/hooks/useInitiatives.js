@@ -52,6 +52,7 @@ export function useInitiatives(counters, setCounters) {
 
   return {
     initiatives,
+    setInitiatives,
     addInitiative,
     updateInitiative,
     deleteInitiative,

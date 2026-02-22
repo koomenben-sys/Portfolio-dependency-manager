@@ -10,14 +10,15 @@ import { PortfolioOverviewView } from './views/PortfolioOverviewView';
 import { usePortfolios } from './hooks/usePortfolios';
 import { useInitiatives } from './hooks/useInitiatives';
 import { useDependencies } from './hooks/useDependencies';
+import { useTeams } from './hooks/useTeams';
 
 function App() {
   const [currentView, setCurrentView] = useState('portfolios');
   const [showSettings, setShowSettings] = useState(false);
 
-  // Custom hooks for data management
   const {
     portfolios,
+    setPortfolios,
     addPortfolio,
     updatePortfolio,
     deletePortfolio,
@@ -27,6 +28,7 @@ function App() {
 
   const {
     initiatives,
+    setInitiatives,
     addInitiative,
     updateInitiative,
     deleteInitiative,
@@ -36,6 +38,7 @@ function App() {
 
   const {
     dependencies,
+    setDependencies,
     addDependency,
     updateDependency,
     deleteDependency,
@@ -44,13 +47,7 @@ function App() {
     deleteDependenciesForInitiative
   } = useDependencies(counters, setCounters, initiatives);
 
-  // For import functionality
-  const [setPortfolios] = useState(() => (data) => {
-    // This would need to be connected to the portfolios state
-    // For now, it's a placeholder
-  });
-  const [setInitiatives] = useState(() => (data) => {});
-  const [setDependencies] = useState(() => (data) => {});
+  const { teams, setTeams, addTeam, updateTeam, deleteTeam } = useTeams();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -76,6 +73,7 @@ function App() {
             initiatives={initiatives}
             dependencies={dependencies}
             portfolios={portfolios}
+            teams={teams}
             addInitiative={addInitiative}
             updateInitiative={updateInitiative}
             deleteInitiative={deleteInitiative}
@@ -103,6 +101,7 @@ function App() {
             portfolios={portfolios}
             initiatives={initiatives}
             dependencies={dependencies}
+            teams={teams}
           />
         )}
 
@@ -124,6 +123,11 @@ function App() {
         setPortfolios={setPortfolios}
         setInitiatives={setInitiatives}
         setDependencies={setDependencies}
+        teams={teams}
+        setTeams={setTeams}
+        addTeam={addTeam}
+        updateTeam={updateTeam}
+        deleteTeam={deleteTeam}
       />
     </div>
   );

@@ -1,0 +1,371 @@
+{
+  "exportDate": "2025-01-15T09:00:00.000Z",
+  "teams": [
+    "Cloud Platform",
+    "Applicatiebeheer",
+    "Data & Analytics",
+    "Security & Compliance",
+    "Zorgadministratie",
+    "Financiën & Facturatie"
+  ],
+  "portfolios": [
+    {
+      "id": 1001,
+      "refCode": "PF-0001",
+      "name": "Azure Cloud Transitie 2025",
+      "description": "Migratie van on-premise infrastructuur naar Microsoft Azure. Omvat alle kernplatforms en bedrijfsapplicaties.",
+      "year": 2025,
+      "owner": "Jan de Vries"
+    },
+    {
+      "id": 1002,
+      "refCode": "PF-0002",
+      "name": "Digitale Zorgverlening",
+      "description": "Modernisering van digitale kanalen voor verzekerden, zorgverleners en declaratieverwerking.",
+      "year": 2025,
+      "owner": "Marieke Bakker"
+    },
+    {
+      "id": 1003,
+      "refCode": "PF-0003",
+      "name": "Compliance & Beveiliging",
+      "description": "Implementatie van Zero Trust architectuur, AVG-compliance monitoring en Identity & Access Management in Azure.",
+      "year": 2025,
+      "owner": "Peter Smit"
+    }
+  ],
+  "initiatives": [
+    {
+      "id": 2001,
+      "refCode": "IN-0001",
+      "name": "Azure Landing Zone inrichting",
+      "team": "Cloud Platform",
+      "quarters": ["Q1", "Q2"],
+      "portfolio": 1001,
+      "effort": "L",
+      "valueType": "Risk Reduction",
+      "valueAmount": "850000",
+      "priority": 1
+    },
+    {
+      "id": 2002,
+      "refCode": "IN-0002",
+      "name": "Azure DevOps CI/CD Platform",
+      "team": "Cloud Platform",
+      "quarters": ["Q1", "Q2"],
+      "portfolio": 1001,
+      "effort": "M",
+      "valueType": "EUR",
+      "valueAmount": "350000",
+      "priority": 2
+    },
+    {
+      "id": 2003,
+      "refCode": "IN-0003",
+      "name": "Migratie Kern Verzekeringsplatform",
+      "team": "Applicatiebeheer",
+      "quarters": ["Q2", "Q3", "Q4"],
+      "portfolio": 1001,
+      "effort": "XL",
+      "valueType": "EUR",
+      "valueAmount": "2500000",
+      "priority": 3
+    },
+    {
+      "id": 2004,
+      "refCode": "IN-0004",
+      "name": "Polis Administratie Systeem modernisering",
+      "team": "Applicatiebeheer",
+      "quarters": ["Q3", "Q4"],
+      "portfolio": 1001,
+      "effort": "L",
+      "valueType": "EUR",
+      "valueAmount": "1200000",
+      "priority": 4
+    },
+    {
+      "id": 2005,
+      "refCode": "IN-0005",
+      "name": "Claimverwerkingssysteem migratie naar Azure",
+      "team": "Applicatiebeheer",
+      "quarters": ["Q3", "Q4"],
+      "portfolio": 1001,
+      "effort": "L",
+      "valueType": "EUR",
+      "valueAmount": "950000",
+      "priority": 5
+    },
+    {
+      "id": 2006,
+      "refCode": "IN-0006",
+      "name": "Data Warehouse migratie naar Azure Synapse",
+      "team": "Data & Analytics",
+      "quarters": ["Q2", "Q3"],
+      "portfolio": 1001,
+      "effort": "XL",
+      "valueType": "EUR",
+      "valueAmount": "1800000",
+      "priority": 6
+    },
+    {
+      "id": 2007,
+      "refCode": "IN-0007",
+      "name": "FHIR API zorgdata integratie",
+      "team": "Data & Analytics",
+      "quarters": ["Q3", "Q4"],
+      "portfolio": 1002,
+      "effort": "M",
+      "valueType": "EUR",
+      "valueAmount": "600000",
+      "priority": 7
+    },
+    {
+      "id": 2008,
+      "refCode": "IN-0008",
+      "name": "Real-time declaratie analytics dashboard",
+      "team": "Data & Analytics",
+      "quarters": ["Q4"],
+      "portfolio": 1002,
+      "effort": "M",
+      "valueType": "EUR",
+      "valueAmount": "450000",
+      "priority": 8
+    },
+    {
+      "id": 2009,
+      "refCode": "IN-0009",
+      "name": "Azure AD Identity & Access Management",
+      "team": "Security & Compliance",
+      "quarters": ["Q1", "Q2"],
+      "portfolio": 1003,
+      "effort": "L",
+      "valueType": "Risk Reduction",
+      "valueAmount": "750000",
+      "priority": 9
+    },
+    {
+      "id": 2010,
+      "refCode": "IN-0010",
+      "name": "AVG Compliance monitoring dashboard",
+      "team": "Security & Compliance",
+      "quarters": ["Q2", "Q3"],
+      "portfolio": 1003,
+      "effort": "M",
+      "valueType": "Regulatory",
+      "valueAmount": "380000",
+      "priority": 10
+    },
+    {
+      "id": 2011,
+      "refCode": "IN-0011",
+      "name": "Zero Trust Network implementatie",
+      "team": "Security & Compliance",
+      "quarters": ["Q2", "Q3", "Q4"],
+      "portfolio": 1003,
+      "effort": "L",
+      "valueType": "Risk Reduction",
+      "valueAmount": "920000",
+      "priority": 11
+    },
+    {
+      "id": 2012,
+      "refCode": "IN-0012",
+      "name": "Mijn Zorgverzekeraar portaal migratie",
+      "team": "Zorgadministratie",
+      "quarters": ["Q3", "Q4"],
+      "portfolio": 1002,
+      "effort": "L",
+      "valueType": "EUR",
+      "valueAmount": "800000",
+      "priority": 12
+    },
+    {
+      "id": 2013,
+      "refCode": "IN-0013",
+      "name": "Declaratieverwerking automatisering",
+      "team": "Zorgadministratie",
+      "quarters": ["Q4"],
+      "portfolio": 1002,
+      "effort": "M",
+      "valueType": "EUR",
+      "valueAmount": "550000",
+      "priority": 13
+    },
+    {
+      "id": 2014,
+      "refCode": "IN-0014",
+      "name": "SAP S/4HANA migratie naar Azure",
+      "team": "Financiën & Facturatie",
+      "quarters": ["Q3", "Q4"],
+      "portfolio": 1001,
+      "effort": "XL",
+      "valueType": "EUR",
+      "valueAmount": "3200000",
+      "priority": 14
+    },
+    {
+      "id": 2015,
+      "refCode": "IN-0015",
+      "name": "Premium incasso digitalisering",
+      "team": "Financiën & Facturatie",
+      "quarters": ["Q4"],
+      "portfolio": 1002,
+      "effort": "M",
+      "valueType": "EUR",
+      "valueAmount": "420000",
+      "priority": 15
+    }
+  ],
+  "dependencies": [
+    {
+      "id": 3001,
+      "refCode": "DEP-0001",
+      "initiativeId": 2003,
+      "dependsOnTeam": "Cloud Platform",
+      "description": "Azure Landing Zone en netwerksegmentatie gereed voor productie workloads",
+      "quarters": ["Q2"],
+      "effort": "L",
+      "status": "Committed"
+    },
+    {
+      "id": 3002,
+      "refCode": "DEP-0002",
+      "initiativeId": 2003,
+      "dependsOnTeam": "Security & Compliance",
+      "description": "Azure AD rollen en conditional access policies geconfigureerd voor kernplatform",
+      "quarters": ["Q2"],
+      "effort": "M",
+      "status": "Under Discussion"
+    },
+    {
+      "id": 3003,
+      "refCode": "DEP-0003",
+      "initiativeId": 2004,
+      "dependsOnTeam": "Cloud Platform",
+      "description": "Azure DevOps pipelines en artifact registry beschikbaar voor PAS deployments",
+      "quarters": ["Q2", "Q3"],
+      "effort": "S",
+      "status": "Committed"
+    },
+    {
+      "id": 3004,
+      "refCode": "DEP-0004",
+      "initiativeId": 2005,
+      "dependsOnTeam": "Data & Analytics",
+      "description": "Databasemigratie scripts en validatieframework voor claimsysteem brondatabases",
+      "quarters": ["Q3"],
+      "effort": "M",
+      "status": "Pending"
+    },
+    {
+      "id": 3005,
+      "refCode": "DEP-0005",
+      "initiativeId": 2006,
+      "dependsOnTeam": "Cloud Platform",
+      "description": "Azure Synapse workspace provisioning met private endpoints en managed VNet",
+      "quarters": ["Q2"],
+      "effort": "M",
+      "status": "Committed"
+    },
+    {
+      "id": 3006,
+      "refCode": "DEP-0006",
+      "initiativeId": 2007,
+      "dependsOnTeam": "Zorgadministratie",
+      "description": "API documentatie en testomgeving bronsystemen voor FHIR mapping",
+      "quarters": ["Q3"],
+      "effort": "S",
+      "status": "Under Discussion"
+    },
+    {
+      "id": 3007,
+      "refCode": "DEP-0007",
+      "initiativeId": 2008,
+      "dependsOnTeam": "Financiën & Facturatie",
+      "description": "Gestandaardiseerd declaratie datamodel en historische data export (5 jaar)",
+      "quarters": ["Q4"],
+      "effort": "M",
+      "status": "Pending"
+    },
+    {
+      "id": 3008,
+      "refCode": "DEP-0008",
+      "initiativeId": 2009,
+      "dependsOnTeam": "Cloud Platform",
+      "description": "Azure tenant configuratie, management groups en subscription structuur",
+      "quarters": ["Q1"],
+      "effort": "S",
+      "status": "Committed"
+    },
+    {
+      "id": 3009,
+      "refCode": "DEP-0009",
+      "initiativeId": 2011,
+      "dependsOnTeam": "Applicatiebeheer",
+      "description": "Volledig applicatieregister met netwerkcommunicatie-matrix voor micro-segmentatie",
+      "quarters": ["Q2"],
+      "effort": "L",
+      "status": "Can't Commit"
+    },
+    {
+      "id": 3010,
+      "refCode": "DEP-0010",
+      "initiativeId": 2012,
+      "dependsOnTeam": "Cloud Platform",
+      "description": "Azure App Service omgeving met autoscaling en geo-redundantie voor verzekerdenportaal",
+      "quarters": ["Q3"],
+      "effort": "M",
+      "status": "Committed"
+    },
+    {
+      "id": 3011,
+      "refCode": "DEP-0011",
+      "initiativeId": 2012,
+      "dependsOnTeam": "Security & Compliance",
+      "description": "WAF-policies, TLS-certificaten en DDoS-bescherming voor publiek portaal",
+      "quarters": ["Q3"],
+      "effort": "S",
+      "status": "Committed"
+    },
+    {
+      "id": 3012,
+      "refCode": "DEP-0012",
+      "initiativeId": 2013,
+      "dependsOnTeam": "Data & Analytics",
+      "description": "FHIR API endpoint beschikbaar voor geautomatiseerde declaratievalidatie",
+      "quarters": ["Q4"],
+      "effort": "M",
+      "status": "Pending"
+    },
+    {
+      "id": 3013,
+      "refCode": "DEP-0013",
+      "initiativeId": 2014,
+      "dependsOnTeam": "Cloud Platform",
+      "description": "High-performance netwerkconfiguratie (ExpressRoute) en SAP-gecertificeerde VM-types",
+      "quarters": ["Q3"],
+      "effort": "L",
+      "status": "Under Discussion"
+    },
+    {
+      "id": 3014,
+      "refCode": "DEP-0014",
+      "initiativeId": 2014,
+      "dependsOnTeam": "Security & Compliance",
+      "description": "SAP beveiligingsaudit en pentest Azure omgeving vóór go-live",
+      "quarters": ["Q3"],
+      "effort": "M",
+      "status": "Pending"
+    },
+    {
+      "id": 3015,
+      "refCode": "DEP-0015",
+      "initiativeId": 2015,
+      "dependsOnTeam": "Zorgadministratie",
+      "description": "Zorgadministratie API koppeling voor real-time premiecontrole bij incasso",
+      "quarters": ["Q4"],
+      "effort": "S",
+      "status": "Pending"
+    }
+  ]
+}

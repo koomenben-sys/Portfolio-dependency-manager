@@ -56,6 +56,7 @@ export function useDependencies(counters, setCounters, initiatives) {
 
   return {
     dependencies,
+    setDependencies,
     addDependency,
     updateDependency,
     deleteDependency,
