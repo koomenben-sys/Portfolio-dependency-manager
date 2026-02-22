@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Calendar } from '../components/common/Icons';
 import { InitiativeCard } from '../components/Initiative/InitiativeCard';
 import { DependencyItem } from '../components/Dependency/DependencyItem';
@@ -20,7 +20,14 @@ export function DependenciesView({
   updateDependencyStatus,
   deleteDependenciesForInitiative
 }) {
-  const [currentTeam, setCurrentTeam] = useState(teams[0] || '');
+  const [currentTeam, setCurrentTeam] = useState('');
+
+  // Set the first team once teams load from Supabase
+  useEffect(() => {
+    if (teams.length > 0 && !currentTeam) {
+      setCurrentTeam(teams[0]);
+    }
+  }, [teams]);
   const [subView, setSubView] = useState('outgoing');
 
   const teamInitiatives = initiatives.filter(i => i.team === currentTeam);

@@ -7,11 +7,8 @@ export function SettingsModal({
   portfolios,
   initiatives,
   dependencies,
-  setPortfolios,
-  setInitiatives,
-  setDependencies,
+  onImport,
   teams,
-  setTeams,
   addTeam,
   updateTeam,
   deleteTeam
@@ -37,15 +34,10 @@ export function SettingsModal({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const result = importData(event.target.result);
       if (result.success) {
-        setPortfolios(result.data.portfolios);
-        setInitiatives(result.data.initiatives);
-        setDependencies(result.data.dependencies);
-        if (result.data.teams && result.data.teams.length > 0) {
-          setTeams(result.data.teams);
-        }
+        await onImport(result.data);
         alert('Import successful!');
         onClose();
       } else {

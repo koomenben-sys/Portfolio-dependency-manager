@@ -1,54 +1,151 @@
-import { useLocalStorage } from './useLocalStorage';
-import { generateRefCode } from '../utils/referenceCodeGenerator';
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
+import { initiativeFromDb, nextRefCode, teamIdByName, DELETE_ALL } from '../lib/db'
 
-export function useInitiatives(counters, setCounters) {
-  const [initiatives, setInitiatives] = useLocalStorage('initiatives', []);
+export function useInitiatives() {
+  const [initiatives, setInitiativesState] = useState([])
+  const [loading, setLoading]              = useState(true)
 
-  const addInitiative = (team) => {
-    const refCode = generateRefCode('initiative', counters.initiative);
-    const newInitiative = {
-      id: Date.now(),
-      refCode,
-      name: '',
-      team,
-      quarters: [],
-      portfolio: '',
-      effort: 'M',
-      valueType: 'EUR',
-      valueAmount: '',
-      priority: initiatives.length + 1
-    };
-    
-    setInitiatives([...initiatives, newInitiative]);
-    setCounters({ ...counters, initiative: counters.initiative + 1 });
-  };
+  useEffect(() => { load() }, [])
 
-  const updateInitiative = (id, field, value) => {
-    setInitiatives(initiatives.map(i => 
-      i.id === id ? { ...i, [field]: value } : i
-    ));
-  };
+  async function load() {
+    const { data, error } = await supabase
+      .from('initiatives')
+      .select('*, teams(name)')
+      .order('priority')
 
-  const deleteInitiative = (id) => {
-    setInitiatives(initiatives.filter(i => i.id !== id));
-  };
+    if (error) { console.error('useInitiatives load error:', error); setLoading(false); return }
 
-  const toggleQuarter = (id, quarter) => {
-    setInitiatives(initiatives.map(i => 
-      i.id === id 
-        ? {
-            ...i,
-            quarters: i.quarters.includes(quarter)
-              ? i.quarters.filter(q => q !== quarter)
-              : [...i.quarters, quarter]
-          }
-        : i
-    ));
-  };
+    setInitiativesState((data ?? []).map(initiativeFromDb))
+    setLoading(false)
+  }
 
-  const reorderInitiatives = (newOrder) => {
-    setInitiatives(newOrder);
-  };
+  const addInitiative = async (teamName) => {
+    const [refCode, teamId] = await Promise.all([
+      nextRefCode('initiative'),
+      teamIdByName(teamName),
+    ])
+
+    const { data, error } = await supabase
+      .from('initiatives')
+      .insert({
+        ref_code:     refCode,
+        name:         '',
+        team_id:      teamId,
+        quarters:     [],
+        portfolio_id: null,
+        effort:       'M',
+        value_type:   'EUR',
+        value_amount: null,
+        priority:     initiatives.length + 1,
+      })
+      .select('*, teams(name)')
+      .single()
+
+    if (error) { console.error('addInitiative error:', error); return }
+
+    setInitiativesState(prev => [...prev, initiativeFromDb(data)])
+  }
+
+  const updateInitiative = async (id, field, value) => {
+    // Optimistic update
+    setInitiativesState(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i))
+
+    // Build the DB update object, mapping camelCase → snake_case and names → UUIDs
+    let dbUpdate = {}
+    switch (field) {
+      case 'team':
+        dbUpdate.team_id = await teamIdByName(value)
+        break
+      case 'portfolio':
+        dbUpdate.portfolio_id = value || null
+        break
+      case 'valueType':
+        dbUpdate.value_type = value
+        break
+      case 'valueAmount':
+        dbUpdate.value_amount = value || null
+        break
+      case 'refCode':
+        dbUpdate.ref_code = value
+        break
+      default:
+        dbUpdate[field] = value
+    }
+
+    const { error } = await supabase
+      .from('initiatives')
+      .update(dbUpdate)
+      .eq('id', id)
+
+    if (error) console.error('updateInitiative error:', error)
+  }
+
+  const deleteInitiative = async (id) => {
+    // Optimistic update (also remove orphaned dependencies from local state)
+    setInitiativesState(prev => prev.filter(i => i.id !== id))
+
+    // DB cascade handles dependency deletion automatically
+    const { error } = await supabase
+      .from('initiatives')
+      .delete()
+      .eq('id', id)
+
+    if (error) console.error('deleteInitiative error:', error)
+  }
+
+  const toggleQuarter = async (id, quarter) => {
+    const initiative = initiatives.find(i => i.id === id)
+    if (!initiative) return
+
+    const quarters = initiative.quarters.includes(quarter)
+      ? initiative.quarters.filter(q => q !== quarter)
+      : [...initiative.quarters, quarter]
+
+    // Optimistic update
+    setInitiativesState(prev => prev.map(i => i.id === id ? { ...i, quarters } : i))
+
+    const { error } = await supabase
+      .from('initiatives')
+      .update({ quarters })
+      .eq('id', id)
+
+    if (error) console.error('toggleQuarter error:', error)
+  }
+
+  const reorderInitiatives = async (newOrder) => {
+    // newOrder is the full array in the new sorted order
+    setInitiativesState(newOrder)
+
+    // Update priority for each initiative in Supabase
+    await Promise.all(
+      newOrder.map((initiative, index) =>
+        supabase
+          .from('initiatives')
+          .update({ priority: index + 1 })
+          .eq('id', initiative.id)
+      )
+    )
+  }
+
+  // Bulk replace — used by the import flow in App.jsx
+  // Receives already-mapped DB rows (with correct UUIDs)
+  const setInitiatives = async (dbRows) => {
+    await supabase.from('initiatives').delete().neq(DELETE_ALL.column, DELETE_ALL.value)
+
+    if (!dbRows?.length) { setInitiativesState([]); return [] }
+
+    const { data, error } = await supabase
+      .from('initiatives')
+      .insert(dbRows)
+      .select('*, teams(name)')
+
+    if (error) { console.error('setInitiatives error:', error); return [] }
+
+    const rows = data ?? []
+    setInitiativesState(rows.map(initiativeFromDb))
+    return rows
+  }
 
   return {
     initiatives,
@@ -57,6 +154,7 @@ export function useInitiatives(counters, setCounters) {
     updateInitiative,
     deleteInitiative,
     toggleQuarter,
-    reorderInitiatives
-  };
+    reorderInitiatives,
+    loading,
+  }
 }
