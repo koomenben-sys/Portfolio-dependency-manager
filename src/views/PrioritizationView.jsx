@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 
-export function PrioritizationView({ initiatives, portfolios, dependencies, reorderInitiatives }) {
+export function PrioritizationView({ initiatives, portfolios, dependencies, reorderInitiatives, role }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
 
-  const sortedInitiatives = [...initiatives].sort((a, b) => 
+  const isAdmin = role === 'admin';
+
+  const sortedInitiatives = [...initiatives].sort((a, b) =>
     (a.priority || 999) - (b.priority || 999)
   );
 
@@ -37,7 +39,13 @@ export function PrioritizationView({ initiatives, portfolios, dependencies, reor
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">Initiative Prioritization</h2>
-      <p className="text-gray-600 mb-4">Drag and drop to reorder initiatives by priority</p>
+      {isAdmin ? (
+        <p className="text-gray-600 mb-4">Drag and drop to reorder initiatives by priority</p>
+      ) : (
+        <p className="text-amber-600 text-sm mb-4 bg-amber-50 border border-amber-200 rounded px-3 py-2 inline-block">
+          Reordering requires admin access. Showing current priority order.
+        </p>
+      )}
 
       <div className="bg-white rounded shadow border">
         <div className="grid grid-cols-12 gap-4 p-4 bg-gray-50 border-b font-semibold text-sm">
@@ -52,23 +60,23 @@ export function PrioritizationView({ initiatives, portfolios, dependencies, reor
 
         {sortedInitiatives.map((initiative, idx) => {
           const portfolio = portfolios.find(p => p.id == initiative.portfolio);
-          const deps = dependencies.filter(d => d.initiativeId === initiative.id);
-          const committed = deps.filter(d => d.status === 'Committed').length;
-          const pending = deps.filter(d => d.status === 'Pending').length;
+          const deps       = dependencies.filter(d => d.initiativeId === initiative.id);
+          const committed  = deps.filter(d => d.status === 'Committed').length;
+          const pending    = deps.filter(d => d.status === 'Pending').length;
           const discussion = deps.filter(d => d.status === 'Under Discussion').length;
-          const blocked = deps.filter(d => d.status === "Can't Commit").length;
-          const total = deps.length;
+          const blocked    = deps.filter(d => d.status === "Can't Commit").length;
+          const total      = deps.length;
 
           return (
             <div
               key={initiative.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, idx)}
-              onDragOver={(e) => handleDragOver(e, idx)}
-              onDragEnd={handleDragEnd}
-              className={`grid grid-cols-12 gap-4 p-4 border-b hover:bg-gray-50 cursor-move ${
-                draggedIndex === idx ? 'opacity-50' : ''
-              }`}
+              draggable={isAdmin}
+              onDragStart={isAdmin ? (e) => handleDragStart(e, idx) : undefined}
+              onDragOver={isAdmin ? (e) => handleDragOver(e, idx) : undefined}
+              onDragEnd={isAdmin ? handleDragEnd : undefined}
+              className={`grid grid-cols-12 gap-4 p-4 border-b hover:bg-gray-50 ${
+                isAdmin ? 'cursor-move' : 'cursor-default'
+              } ${draggedIndex === idx ? 'opacity-50' : ''}`}
             >
               <div className="col-span-1 flex items-center font-bold text-gray-600">
                 {idx + 1}

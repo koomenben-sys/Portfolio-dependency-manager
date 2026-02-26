@@ -2,16 +2,19 @@ import React from 'react';
 import { Trash } from '../common/Icons';
 import { QUARTERS, EFFORT_SIZES, VALUE_TYPES } from '../../constants';
 
-export function InitiativeCard({ 
-  initiative, 
+export function InitiativeCard({
+  initiative,
   portfolios,
   dependencies,
-  onUpdate, 
+  onUpdate,
   onDelete,
   onToggleQuarter,
-  onAddDependency
+  onAddDependency,
+  role,
 }) {
   const initiativeDeps = dependencies.filter(d => d.initiativeId === initiative.id);
+  const canEdit = role === 'admin' || role === 'editor';
+  const roClass = !canEdit ? 'bg-gray-50 cursor-default' : '';
 
   return (
     <div className="bg-white p-6 rounded mb-4 shadow">
@@ -26,8 +29,9 @@ export function InitiativeCard({
           <label className="text-sm">Name</label>
           <input
             value={initiative.name}
-            onChange={(e) => onUpdate(initiative.id, 'name', e.target.value)}
-            className="w-full border rounded px-3 py-2"
+            onChange={(e) => canEdit && onUpdate(initiative.id, 'name', e.target.value)}
+            readOnly={!canEdit}
+            className={`w-full border rounded px-3 py-2 ${roClass}`}
           />
         </div>
 
@@ -35,8 +39,9 @@ export function InitiativeCard({
           <label className="text-sm">Effort</label>
           <select
             value={initiative.effort}
-            onChange={(e) => onUpdate(initiative.id, 'effort', e.target.value)}
-            className="w-full border rounded px-3 py-2"
+            onChange={(e) => canEdit && onUpdate(initiative.id, 'effort', e.target.value)}
+            disabled={!canEdit}
+            className={`w-full border rounded px-3 py-2 ${roClass}`}
           >
             {EFFORT_SIZES.map(size => (
               <option key={size}>{size}</option>
@@ -50,11 +55,14 @@ export function InitiativeCard({
             {QUARTERS.map(q => (
               <button
                 key={q}
-                onClick={() => onToggleQuarter(initiative.id, q)}
+                onClick={() => canEdit && onToggleQuarter(initiative.id, q)}
+                disabled={!canEdit}
                 className={`px-3 py-1 rounded border ${
                   initiative.quarters.includes(q)
                     ? 'bg-blue-600 text-white'
-                    : 'hover:bg-gray-50'
+                    : canEdit
+                      ? 'hover:bg-gray-50'
+                      : 'opacity-60 cursor-default'
                 }`}
               >
                 {q}
@@ -67,8 +75,9 @@ export function InitiativeCard({
           <label className="text-sm">Portfolio</label>
           <select
             value={initiative.portfolio}
-            onChange={(e) => onUpdate(initiative.id, 'portfolio', e.target.value)}
-            className="w-full border rounded px-3 py-2"
+            onChange={(e) => canEdit && onUpdate(initiative.id, 'portfolio', e.target.value)}
+            disabled={!canEdit}
+            className={`w-full border rounded px-3 py-2 ${roClass}`}
           >
             <option value="">Select...</option>
             {portfolios.map(p => (
@@ -83,8 +92,9 @@ export function InitiativeCard({
           <label className="text-sm">Value</label>
           <select
             value={initiative.valueType}
-            onChange={(e) => onUpdate(initiative.id, 'valueType', e.target.value)}
-            className="w-full border rounded px-3 py-2"
+            onChange={(e) => canEdit && onUpdate(initiative.id, 'valueType', e.target.value)}
+            disabled={!canEdit}
+            className={`w-full border rounded px-3 py-2 ${roClass}`}
           >
             {VALUE_TYPES.map(v => (
               <option key={v}>{v}</option>
@@ -97,8 +107,9 @@ export function InitiativeCard({
             <label className="text-sm">Amount</label>
             <input
               value={initiative.valueAmount}
-              onChange={(e) => onUpdate(initiative.id, 'valueAmount', e.target.value)}
-              className="w-full border rounded px-3 py-2"
+              onChange={(e) => canEdit && onUpdate(initiative.id, 'valueAmount', e.target.value)}
+              readOnly={!canEdit}
+              className={`w-full border rounded px-3 py-2 ${roClass}`}
             />
           </div>
         )}
@@ -107,21 +118,25 @@ export function InitiativeCard({
       <div className="border-t pt-4">
         <div className="flex justify-between mb-3">
           <h4 className="font-semibold">Dependencies ({initiativeDeps.length})</h4>
-          <button
-            onClick={() => onAddDependency(initiative.id)}
-            className="text-sm bg-gray-100 px-3 py-1 rounded hover:bg-gray-200"
-          >
-            Add
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => onAddDependency(initiative.id)}
+              className="text-sm bg-gray-100 px-3 py-1 rounded hover:bg-gray-200"
+            >
+              Add
+            </button>
+          )}
         </div>
       </div>
 
-      <button
-        onClick={() => onDelete(initiative.id)}
-        className="mt-4 text-red-600 hover:text-red-800 flex items-center gap-2"
-      >
-        <Trash size={16} /> Delete
-      </button>
+      {canEdit && (
+        <button
+          onClick={() => onDelete(initiative.id)}
+          className="mt-4 text-red-600 hover:text-red-800 flex items-center gap-2"
+        >
+          <Trash size={16} /> Delete
+        </button>
+      )}
     </div>
   );
 }

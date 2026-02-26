@@ -18,7 +18,8 @@ export function DependenciesView({
   deleteDependency,
   toggleDependencyQuarter,
   updateDependencyStatus,
-  deleteDependenciesForInitiative
+  deleteDependenciesForInitiative,
+  role,
 }) {
   const [currentTeam, setCurrentTeam] = useState('');
 
@@ -30,8 +31,10 @@ export function DependenciesView({
   }, [teams]);
   const [subView, setSubView] = useState('outgoing');
 
+  const canEdit = role === 'admin' || role === 'editor';
+
   const teamInitiatives = initiatives.filter(i => i.team === currentTeam);
-  
+
   const outgoingDeps = dependencies.filter(d => {
     const init = initiatives.find(i => i.id === d.initiativeId);
     return init && init.team === currentTeam;
@@ -91,13 +94,15 @@ export function DependenciesView({
         <div>
           <div className="flex justify-between mb-4">
             <h3 className="text-xl font-bold">Initiatives</h3>
-            <button
-              onClick={() => addInitiative(currentTeam)}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            >
-              <Plus size={18} />
-              Add
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => addInitiative(currentTeam)}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              >
+                <Plus size={18} />
+                Add
+              </button>
+            )}
           </div>
 
           {teamInitiatives.map(initiative => {
@@ -113,6 +118,7 @@ export function DependenciesView({
                   onDelete={handleDeleteInitiative}
                   onToggleQuarter={toggleQuarter}
                   onAddDependency={addDependency}
+                  role={role}
                 />
 
                 {initDeps.map(dep => (
@@ -124,6 +130,7 @@ export function DependenciesView({
                       onUpdate={updateDependency}
                       onDelete={deleteDependency}
                       onToggleQuarter={toggleDependencyQuarter}
+                      role={role}
                     />
                   </div>
                 ))}
@@ -133,7 +140,7 @@ export function DependenciesView({
 
           {teamInitiatives.length === 0 && (
             <div className="bg-white p-12 rounded shadow text-center text-gray-500">
-              No initiatives for {currentTeam}. Click "Add" to create one.
+              No initiatives for {currentTeam}.{canEdit ? ' Click "Add" to create one.' : ''}
             </div>
           )}
         </div>
@@ -173,8 +180,9 @@ export function DependenciesView({
                     <label className="text-xs">Effort</label>
                     <select
                       value={dep.effort || 'TBD'}
-                      onChange={(e) => updateDependency(dep.id, 'effort', e.target.value)}
-                      className="border rounded px-3 py-1"
+                      onChange={(e) => canEdit && updateDependency(dep.id, 'effort', e.target.value)}
+                      disabled={!canEdit}
+                      className={`border rounded px-3 py-1 ${!canEdit ? 'bg-gray-50 cursor-default' : ''}`}
                     >
                       {EFFORT_SIZES.map(size => (
                         <option key={size}>{size}</option>
@@ -183,38 +191,54 @@ export function DependenciesView({
                   </div>
                 </div>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => updateDependencyStatus(dep.id, 'Committed')}
-                    className={`px-4 py-2 rounded ${
+                {canEdit ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => updateDependencyStatus(dep.id, 'Committed')}
+                      className={`px-4 py-2 rounded ${
+                        dep.status === 'Committed'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-green-100 hover:bg-green-200'
+                      }`}
+                    >
+                      Commit
+                    </button>
+                    <button
+                      onClick={() => updateDependencyStatus(dep.id, "Can't Commit")}
+                      className={`px-4 py-2 rounded ${
+                        dep.status === "Can't Commit"
+                          ? 'bg-red-600 text-white'
+                          : 'bg-red-100 hover:bg-red-200'
+                      }`}
+                    >
+                      Can't
+                    </button>
+                    <button
+                      onClick={() => updateDependencyStatus(dep.id, 'Under Discussion')}
+                      className={`px-4 py-2 rounded ${
+                        dep.status === 'Under Discussion'
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-yellow-100 hover:bg-yellow-200'
+                      }`}
+                    >
+                      Discussion
+                    </button>
+                  </div>
+                ) : (
+                  <span
+                    className={`inline-block px-3 py-1 rounded text-sm ${
                       dep.status === 'Committed'
-                        ? 'bg-green-600 text-white'
-                        : 'bg-green-100 hover:bg-green-200'
+                        ? 'bg-green-100 text-green-800'
+                        : dep.status === "Can't Commit"
+                        ? 'bg-red-100 text-red-800'
+                        : dep.status === 'Under Discussion'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-gray-100 text-gray-700'
                     }`}
                   >
-                    Commit
-                  </button>
-                  <button
-                    onClick={() => updateDependencyStatus(dep.id, "Can't Commit")}
-                    className={`px-4 py-2 rounded ${
-                      dep.status === "Can't Commit"
-                        ? 'bg-red-600 text-white'
-                        : 'bg-red-100 hover:bg-red-200'
-                    }`}
-                  >
-                    Can't
-                  </button>
-                  <button
-                    onClick={() => updateDependencyStatus(dep.id, 'Under Discussion')}
-                    className={`px-4 py-2 rounded ${
-                      dep.status === 'Under Discussion'
-                        ? 'bg-yellow-600 text-white'
-                        : 'bg-yellow-100 hover:bg-yellow-200'
-                    }`}
-                  >
-                    Discussion
-                  </button>
-                </div>
+                    {dep.status}
+                  </span>
+                )}
               </div>
             );
           })}

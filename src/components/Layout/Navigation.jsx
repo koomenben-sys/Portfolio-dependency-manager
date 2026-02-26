@@ -1,7 +1,7 @@
 import React from 'react';
 import { Target, GitBranch, Users, Calendar, Eye, Settings } from '../common/Icons';
 
-export function Navigation({ currentView, onViewChange, onSettingsClick }) {
+export function Navigation({ currentView, onViewChange, onSettingsClick, role }) {
   const tabs = [
     { id: 'portfolios', label: '1. Portfolios', icon: Target },
     { id: 'dependencies', label: '2. Dependencies', icon: GitBranch },
@@ -33,12 +33,14 @@ export function Navigation({ currentView, onViewChange, onSettingsClick }) {
           })}
         </div>
         <div className="relative">
-          <button
-            onClick={onSettingsClick}
-            className="p-2 rounded bg-gray-100 hover:bg-gray-200"
-          >
-            <Settings size={20} />
-          </button>
+          {role === 'admin' && (
+            <button
+              onClick={onSettingsClick}
+              className="p-2 rounded bg-gray-100 hover:bg-gray-200"
+            >
+              <Settings size={20} />
+            </button>
+          )}
         </div>
       </div>
     </div>
