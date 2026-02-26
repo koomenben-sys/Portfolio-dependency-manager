@@ -36,15 +36,13 @@ export function AuthProvider({ children }) {
       async (event, session) => {
         settled = true;
         clearTimeout(timeout);
-        try {
-          if (session?.user) {
-            setUser(session.user);
-            setRole(await loadRole(session.user.id));
-          } else {
-            setUser(null);
-            setRole(null);
-          }
-        } finally {
+        if (session?.user) {
+          setUser(session.user);
+          setLoading(false); // unblock UI immediately; role loads in background
+          setRole(await loadRole(session.user.id));
+        } else {
+          setUser(null);
+          setRole(null);
           setLoading(false);
         }
       }
