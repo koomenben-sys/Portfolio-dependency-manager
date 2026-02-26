@@ -19,10 +19,23 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    // onAuthStateChange fires immediately with INITIAL_SESSION on mount,
-    // so there is no need for a separate getSession() call.
+    let settled = false;
+
+    // Safety net: if onAuthStateChange doesn't fire within 5s (e.g. expired
+    // token causes a silent network hang), unblock the UI so the user sees
+    // the login screen instead of a stuck "Loading…".
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        setUser(null);
+        setRole(null);
+        setLoading(false);
+      }
+    }, 5000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        settled = true;
+        clearTimeout(timeout);
         try {
           if (session?.user) {
             setUser(session.user);
@@ -32,13 +45,15 @@ export function AuthProvider({ children }) {
             setRole(null);
           }
         } finally {
-          // Always clear the loading gate, even if loadRole fails
           setLoading(false);
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {

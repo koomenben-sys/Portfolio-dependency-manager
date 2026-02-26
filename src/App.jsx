@@ -19,6 +19,22 @@ import { generateRefCode } from './utils/referenceCodeGenerator';
 function App() {
   const { user, role, loading, signOut } = useAuth();
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginView />;
+  }
+
+  return <AuthenticatedApp user={user} role={role} signOut={signOut} />;
+}
+
+function AuthenticatedApp({ user, role, signOut }) {
   const [currentView, setCurrentView] = useState('portfolios');
   const [showSettings, setShowSettings] = useState(false);
 
@@ -52,19 +68,6 @@ function App() {
   } = useDependencies();
 
   const { teams, setTeams, addTeam, updateTeam, deleteTeam } = useTeams();
-
-  // ── Auth gates ────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Loading…</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <LoginView />;
-  }
 
   // ── Import: full ETL from localStorage-format JSON into Supabase ──────────
   const handleImport = async ({ portfolios: pData, initiatives: iData, dependencies: dData, teams: tData }) => {

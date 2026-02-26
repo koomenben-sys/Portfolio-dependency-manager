@@ -108,6 +108,7 @@ export function SettingsModal({
       }
     };
     reader.readAsText(file);
+    e.target.value = ''; // Reset so the same file can be selected again
   };
 
   if (showExport) {
