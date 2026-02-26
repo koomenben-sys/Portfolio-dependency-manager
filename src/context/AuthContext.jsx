@@ -19,26 +19,22 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    // Restore existing session on mount
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        setRole(await loadRole(session.user.id));
-      }
-      setLoading(false);
-    });
-
-    // Keep in sync with login / logout / token refresh events
+    // onAuthStateChange fires immediately with INITIAL_SESSION on mount,
+    // so there is no need for a separate getSession() call.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (session?.user) {
-          setUser(session.user);
-          setRole(await loadRole(session.user.id));
-        } else {
-          setUser(null);
-          setRole(null);
+        try {
+          if (session?.user) {
+            setUser(session.user);
+            setRole(await loadRole(session.user.id));
+          } else {
+            setUser(null);
+            setRole(null);
+          }
+        } finally {
+          // Always clear the loading gate, even if loadRole fails
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
@@ -47,7 +43,9 @@ export function AuthProvider({ children }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    // onAuthStateChange fires and clears user / role automatically
+    // Clear state immediately — don't wait for onAuthStateChange
+    setUser(null);
+    setRole(null);
   };
 
   return (
