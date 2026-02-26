@@ -13,20 +13,21 @@ _Updated by Claude at the end of each session._
 
 - **Last session:** 2026-02-26
 - **Worked on:**
-  - Fixed data not loading after login: moved all data hooks into `AuthenticatedApp` child component in `App.jsx` so hooks only mount after authentication (PR #5)
+  - Fixed data not loading after login: moved all data hooks into `AuthenticatedApp` child component in `App.jsx` so hooks only mount after authentication (PR #5, merged)
   - Fixed file input not re-triggering when importing the same file twice (`e.target.value = ''` reset in `SettingsModal.jsx`)
   - Fixed `get_users_with_roles` Supabase RPC returning 400 (recreated function with correct return type)
   - Created and imported test data (`testdata-zorgverzekeraar.json`) — 4 portfolios, 8 teams, 16 initiatives, 18 dependencies
-  - Diagnosed white screen / stuck "Loading…" as an expired `sb-*-auth-token` in localStorage (workaround: delete the key manually in DevTools)
+  - Added 5s timeout fallback in `AuthContext` so a stuck loading state auto-resolves to login screen (instead of requiring manual localStorage cleanup)
 - **Next steps:**
-  - Merge PR #5 into main to deploy the data-loading fix to GitHub Pages
-  - Consider adding a timeout/fallback in `AuthContext` so a stuck loading state auto-recovers instead of requiring manual localStorage cleanup
+  - White loading screen still occurring on localhost and GitHub Pages despite fixes — needs investigation
+  - Suspect: browser cache on GitHub Pages (try hard refresh Cmd+Shift+R), or dev server not running on localhost
+  - If still broken: check whether `onAuthStateChange` is firing at all (add console.log temporarily), and check Supabase project status
 - **Open questions / decisions:**
   - `gh` CLI is installed and authenticated (HTTPS, koomenben-sys)
   - Dev server (`localhost:5173`) runs from the `eloquent-jennings` worktree (`npm run dev`)
   - Auth system lives in `src/context/AuthContext.jsx` + `src/views/LoginView.jsx`
   - Admin role management is done via Supabase SQL editor directly (no client-side UI)
-  - If app shows a blank "Loading…" screen: open DevTools → Application → Local Storage → delete the `sb-*-auth-token` key and refresh
+  - If app shows a blank "Loading…" screen: wait 5 seconds (timeout kicks in) → then log in again. If still stuck, delete `sb-*-auth-token` in DevTools → Application → Local Storage
 
 ## Project Overview
 A React app for managing portfolios, initiatives, and cross-team dependencies.
