@@ -19,17 +19,25 @@ _Updated by Claude at the end of each session._
 
 - **Last session:** 2026-02-27
 - **Worked on:**
-  - F5 fix confirmed working and merged (PR #9) — `reloadSignoutConfirmed` gate in `AuthContext`
-  - Initiative tab UI: delete button moved above separator line (top-right of card); dependency items now render inside the initiative's white card box (PR #10)
-  - Prioritization tab: added dedicated Value column, removed Ref column, added clickable column-header sorting with stacked triangle icons (PRs #11, #12)
-  - Alignment tab: renamed "Status" heading to "Dependency status" (PR #13)
+  - F5 fix confirmed working and merged (PR #9) — `reloadSignoutConfirmed` gate in `AuthContext`; Supabase v2 fires `SIGNED_IN` on session restoration so we block all events until our `signOut()` confirms with `SIGNED_OUT`
+  - Initiative tab (PR #10): delete button moved to top-right of card header (above separator); dependency items now render inside the white card box via `children` prop
+  - Prioritization tab (PR #11): dedicated Value column added, Ref column removed; sort dropdown replaced with clickable column headers
+  - Prioritization tab (PR #12): stacked triangle sort icons (`SortUnsorted`/`SortAsc`/`SortDesc`) added to `Icons.jsx`; active direction solid, inactive at 25% opacity; drag-to-reorder only enabled when sorted by # ascending
+  - Alignment tab (PR #13): renamed "Status" section heading to "Dependency status"
+  - Process: added AC + Gherkin step to CLAUDE.md for future major features
 - **Next steps:**
-  - Potential future features (brainstormed, not started): quarter filter across all views, timing conflict detection (initiative quarter vs dependency quarter), team capacity per quarter, quarterly roadmap swimlane view
+  - Nothing pending — app is stable and clean
+- **Future feature ideas (brainstormed, not started):**
+  - Quarter filter across all views
+  - Timing conflict detection (initiative in Q1 but dependency in Q2)
+  - Team capacity per quarter (sum effort sizes per team per quarter)
+  - Quarterly roadmap swimlane view
 - **Open questions / decisions:**
   - `gh` CLI is installed and authenticated (HTTPS, koomenben-sys)
   - Dev server runs from `eloquent-jennings` worktree (`npm run dev`) — kept updated to `main`
   - Auth system lives in `src/context/AuthContext.jsx` + `src/views/LoginView.jsx`
   - Admin role management is done via Supabase SQL editor directly (no client-side UI)
+  - `Icons.jsx` now exports `SortUnsorted`, `SortAsc`, `SortDesc` in addition to existing icons
 
 ## Project Overview
 A React app for managing portfolios, initiatives, and cross-team dependencies.
