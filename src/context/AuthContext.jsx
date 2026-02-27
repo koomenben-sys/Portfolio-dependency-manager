@@ -14,7 +14,14 @@ export function AuthProvider({ children }) {
       .select('role')
       .eq('user_id', userId)
       .single();
-    if (error) return 'viewer';
+    if (error) {
+      // JWT expired/invalid — stored session is stale. Sign out so
+      // onAuthStateChange fires with null and the user sees the login screen.
+      if (error.code === 'PGRST301' || error.code === 'PGRST302') {
+        supabase.auth.signOut();
+      }
+      return 'viewer';
+    }
     return data?.role ?? 'viewer';
   }
 
