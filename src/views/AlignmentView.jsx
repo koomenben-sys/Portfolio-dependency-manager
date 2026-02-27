@@ -84,7 +84,7 @@ export function AlignmentView({ portfolios, initiatives, dependencies, teams }) 
 
         {/* Status Overview */}
         <div className="bg-white p-6 rounded shadow col-span-2">
-          <h3 className="font-bold mb-4">Status</h3>
+          <h3 className="font-bold mb-4">Dependency status</h3>
           <div className="grid grid-cols-4 gap-4 text-center">
             {statusCounts.map(({ status, color, count }) => (
               <div key={status} className={`p-4 bg-${color}-50 rounded`}>
