@@ -63,9 +63,11 @@ export function AuthProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        // On a page reload we already cleared state; skip INITIAL_SESSION so
-        // we don't flash authenticated content while the sign-out completes.
-        if (isReload && event === 'INITIAL_SESSION') return;
+        // On a page reload we already cleared state; skip all automatic session
+        // restoration events (INITIAL_SESSION, TOKEN_REFRESHED, etc.) so a
+        // racing token refresh can't re-set the user before signOut completes.
+        // Only allow SIGNED_IN through — that's the user explicitly logging in.
+        if (isReload && event !== 'SIGNED_IN' && event !== 'PASSWORD_RECOVERY') return;
 
         settled = true;
         clearTimeout(timeout);
