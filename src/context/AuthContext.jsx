@@ -24,13 +24,13 @@ export function AuthProvider({ children }) {
         return 'viewer';
       }
       return data?.role ?? 'viewer';
-    } catch {
+    } catch (err) {
       // Likely an AbortError from the 8s fetch timeout. Schedule one retry so
       // the role updates to the correct value once the connection recovers.
       setTimeout(() => {
         loadRole(userId).then(r => setRole(r)).catch(() => {});
       }, 6000);
-      throw; // re-throw so the caller's .catch(() => 'viewer') fires immediately
+      throw err; // re-throw so the caller's .catch(() => 'viewer') fires immediately
     }
   }
 
