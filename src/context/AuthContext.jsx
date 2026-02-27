@@ -35,6 +35,19 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
+    // Detect page reloads (F5 / Ctrl+R) using sessionStorage, which survives
+    // reloads within the same tab but is cleared when the tab is closed.
+    // On reload, sign out immediately so the user gets a clean login instead of
+    // a broken state (empty data, null role, broken sign-out button).
+    const isReload = sessionStorage.getItem('app_initialized') === '1';
+    sessionStorage.setItem('app_initialized', '1');
+    if (isReload) {
+      setUser(null);
+      setRole(null);
+      setLoading(false);
+      supabase.auth.signOut(); // clears localStorage; don't await — login screen shows already
+    }
+
     let settled = false;
 
     // Safety net: if onAuthStateChange doesn't fire within 5s (e.g. expired
@@ -48,8 +61,23 @@ export function AuthProvider({ children }) {
       }
     }, 5000);
 
+    // On reload, block ALL events until our signOut() confirms with SIGNED_OUT.
+    // Only then do we allow SIGNED_IN (the user's explicit re-login) through.
+    // Supabase fires SIGNED_IN on session restoration, so we can't use it as
+    // a safe "allow" event — we must wait for the signOut gate to open first.
+    let reloadSignoutConfirmed = !isReload;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!reloadSignoutConfirmed) {
+          if (event === 'SIGNED_OUT') {
+            reloadSignoutConfirmed = true;
+          }
+          // Don't process any event until signOut is confirmed — state is
+          // already null/false from the isReload block above.
+          return;
+        }
+
         settled = true;
         clearTimeout(timeout);
         if (session?.user) {
@@ -71,8 +99,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    // Clear state immediately — don't wait for onAuthStateChange
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      // signOut may fail if the session is already invalid; clear local state anyway
+    }
     setUser(null);
     setRole(null);
   };
