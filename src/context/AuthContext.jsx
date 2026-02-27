@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
         if (session?.user) {
           setUser(session.user);
           setLoading(false); // unblock UI immediately; role loads in background
-          setRole(await loadRole(session.user.id));
+          setRole(await loadRole(session.user.id).catch(() => 'viewer'));
         } else {
           setUser(null);
           setRole(null);

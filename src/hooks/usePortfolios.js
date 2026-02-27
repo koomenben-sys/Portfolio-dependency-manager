@@ -8,13 +8,18 @@ export function usePortfolios() {
 
   useEffect(() => { load() }, [])
 
-  async function load() {
+  async function load(attempt = 1) {
     const { data, error } = await supabase
       .from('portfolios')
       .select('*')
       .order('created_at')
 
-    if (error) { console.error('usePortfolios load error:', error); setLoading(false); return }
+    if (error) {
+      console.error('usePortfolios load error:', error)
+      if (attempt === 1) setTimeout(() => load(2), 5000)
+      setLoading(false)
+      return
+    }
 
     setPortfoliosState((data ?? []).map(portfolioFromDb))
     setLoading(false)
