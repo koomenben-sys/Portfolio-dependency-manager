@@ -8,13 +8,18 @@ export function useInitiatives() {
 
   useEffect(() => { load() }, [])
 
-  async function load() {
+  async function load(attempt = 1) {
     const { data, error } = await supabase
       .from('initiatives')
       .select('*, teams(name)')
       .order('priority')
 
-    if (error) { console.error('useInitiatives load error:', error); setLoading(false); return }
+    if (error) {
+      console.error('useInitiatives load error:', error)
+      if (attempt === 1) setTimeout(() => load(2), 5000)
+      setLoading(false)
+      return
+    }
 
     setInitiativesState((data ?? []).map(initiativeFromDb))
     setLoading(false)
