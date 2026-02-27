@@ -35,6 +35,18 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
+    // On page reload (F5 / Ctrl+R), sign out immediately to avoid stale/expired
+    // token state that silently causes data hooks to receive empty results and
+    // leaves the Supabase client in a broken state (sign out stops working, etc.).
+    const navType = performance.getEntriesByType?.('navigation')?.[0]?.type;
+    const isReload = navType === 'reload';
+    if (isReload) {
+      setUser(null);
+      setRole(null);
+      setLoading(false);
+      supabase.auth.signOut(); // clears localStorage; don't await — login screen shows already
+    }
+
     let settled = false;
 
     // Safety net: if onAuthStateChange doesn't fire within 5s (e.g. expired
@@ -50,6 +62,10 @@ export function AuthProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // On a page reload we already cleared state; skip INITIAL_SESSION so
+        // we don't flash authenticated content while the sign-out completes.
+        if (isReload && event === 'INITIAL_SESSION') return;
+
         settled = true;
         clearTimeout(timeout);
         if (session?.user) {
@@ -71,8 +87,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    // Clear state immediately — don't wait for onAuthStateChange
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      // signOut may fail if the session is already invalid; clear local state anyway
+    }
     setUser(null);
     setRole(null);
   };
