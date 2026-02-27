@@ -44,3 +44,25 @@ export const Settings = ({ size }) => (
 export const Eye = ({ size }) => (
   <Icon d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 100 6 3 3 0 000-6z" size={size} />
 );
+
+// Sort icons: stacked triangles — use SortUnsorted / SortAsc / SortDesc in table headers
+export const SortUnsorted = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 4l5 7H7l5-7z" />
+    <path d="M12 20l-5-7h10l-5 7z" />
+  </svg>
+);
+
+export const SortAsc = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 4l5 7H7l5-7z" />
+    <path d="M12 20l-5-7h10l-5 7z" opacity="0.25" />
+  </svg>
+);
+
+export const SortDesc = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 4l5 7H7l5-7z" opacity="0.25" />
+    <path d="M12 20l-5-7h10l-5 7z" />
+  </svg>
+);
