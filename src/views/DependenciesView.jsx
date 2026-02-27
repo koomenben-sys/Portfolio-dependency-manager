@@ -109,32 +109,30 @@ export function DependenciesView({
             const initDeps = outgoingDeps.filter(d => d.initiativeId === initiative.id);
 
             return (
-              <div key={initiative.id}>
-                <InitiativeCard
-                  initiative={initiative}
-                  portfolios={portfolios}
-                  dependencies={dependencies}
-                  onUpdate={updateInitiative}
-                  onDelete={handleDeleteInitiative}
-                  onToggleQuarter={toggleQuarter}
-                  onAddDependency={addDependency}
-                  role={role}
-                />
-
+              <InitiativeCard
+                key={initiative.id}
+                initiative={initiative}
+                portfolios={portfolios}
+                dependencies={dependencies}
+                onUpdate={updateInitiative}
+                onDelete={handleDeleteInitiative}
+                onToggleQuarter={toggleQuarter}
+                onAddDependency={addDependency}
+                role={role}
+              >
                 {initDeps.map(dep => (
-                  <div key={dep.id} className="ml-8 mb-4">
-                    <DependencyItem
-                      dependency={dep}
-                      currentTeam={currentTeam}
-                      teams={teams}
-                      onUpdate={updateDependency}
-                      onDelete={deleteDependency}
-                      onToggleQuarter={toggleDependencyQuarter}
-                      role={role}
-                    />
-                  </div>
+                  <DependencyItem
+                    key={dep.id}
+                    dependency={dep}
+                    currentTeam={currentTeam}
+                    teams={teams}
+                    onUpdate={updateDependency}
+                    onDelete={deleteDependency}
+                    onToggleQuarter={toggleDependencyQuarter}
+                    role={role}
+                  />
                 ))}
-              </div>
+              </InitiativeCard>
             );
           })}
 

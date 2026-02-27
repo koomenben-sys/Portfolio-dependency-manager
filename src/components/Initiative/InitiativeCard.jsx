@@ -11,6 +11,7 @@ export function InitiativeCard({
   onToggleQuarter,
   onAddDependency,
   role,
+  children,
 }) {
   const initiativeDeps = dependencies.filter(d => d.initiativeId === initiative.id);
   const canEdit = role === 'admin' || role === 'editor';
@@ -22,6 +23,14 @@ export function InitiativeCard({
         <span className="text-xs text-gray-500 font-mono">
           {initiative.refCode || 'N/A'}
         </span>
+        {canEdit && (
+          <button
+            onClick={() => onDelete(initiative.id)}
+            className="text-red-600 hover:text-red-800 flex items-center gap-1 text-sm"
+          >
+            <Trash size={14} /> Delete
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-4">
@@ -127,16 +136,8 @@ export function InitiativeCard({
             </button>
           )}
         </div>
+        {children}
       </div>
-
-      {canEdit && (
-        <button
-          onClick={() => onDelete(initiative.id)}
-          className="mt-4 text-red-600 hover:text-red-800 flex items-center gap-2"
-        >
-          <Trash size={16} /> Delete
-        </button>
-      )}
     </div>
   );
 }
