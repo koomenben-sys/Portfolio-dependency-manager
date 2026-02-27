@@ -1,45 +1,59 @@
 import React, { useState } from 'react';
+import { SortUnsorted, SortAsc, SortDesc } from '../components/common/Icons';
+
+const ASC  = 'asc';
+const DESC = 'desc';
+
+function SortIcon({ column, sortCol, sortDir }) {
+  if (sortCol !== column) return <span className="ml-1 text-gray-400"><SortUnsorted size={14} /></span>;
+  if (sortDir === ASC)    return <span className="ml-1 text-blue-600"><SortAsc size={14} /></span>;
+  return                         <span className="ml-1 text-blue-600"><SortDesc size={14} /></span>;
+}
 
 export function PrioritizationView({ initiatives, portfolios, dependencies, reorderInitiatives, role }) {
   const [draggedIndex, setDraggedIndex] = useState(null);
-  const [sortMode, setSortMode]         = useState('priority');
+  const [sortCol, setSortCol] = useState('priority');
+  const [sortDir, setSortDir] = useState(ASC);
 
-  const isAdmin      = role === 'admin';
-  const isDragEnabled = isAdmin && sortMode === 'priority';
+  const isAdmin       = role === 'admin';
+  const isDragEnabled = isAdmin && sortCol === 'priority' && sortDir === ASC;
+
+  const handleHeaderClick = (col) => {
+    if (sortCol === col) {
+      setSortDir(d => d === ASC ? DESC : ASC);
+    } else {
+      setSortCol(col);
+      setSortDir(ASC);
+    }
+  };
 
   const getSortedInitiatives = () => {
     const base = [...initiatives];
-    switch (sortMode) {
-      case 'name-asc':
-        return base.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      case 'name-desc':
-        return base.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
-      case 'value-high':
+    const dir  = sortDir === ASC ? 1 : -1;
+
+    switch (sortCol) {
+      case 'name':
+        return base.sort((a, b) => dir * (a.name || '').localeCompare(b.name || ''));
+      case 'team':
+        return base.sort((a, b) => dir * (a.team || '').localeCompare(b.team || ''));
+      case 'portfolio': {
+        const name = id => portfolios.find(p => p.id == id)?.name || '';
+        return base.sort((a, b) => dir * name(a.portfolio).localeCompare(name(b.portfolio)));
+      }
+      case 'value':
         return base.sort((a, b) => {
-          const aVal = a.valueType === 'EUR' ? parseFloat(a.valueAmount) || 0 : -1;
-          const bVal = b.valueType === 'EUR' ? parseFloat(b.valueAmount) || 0 : -1;
-          return bVal - aVal;
+          const aVal = a.valueType === 'EUR' ? parseFloat(a.valueAmount) || 0 : (sortDir === ASC ? Infinity : -Infinity);
+          const bVal = b.valueType === 'EUR' ? parseFloat(b.valueAmount) || 0 : (sortDir === ASC ? Infinity : -Infinity);
+          return dir * (aVal - bVal);
         });
-      case 'value-low':
-        return base.sort((a, b) => {
-          const aVal = a.valueType === 'EUR' ? parseFloat(a.valueAmount) || 0 : Infinity;
-          const bVal = b.valueType === 'EUR' ? parseFloat(b.valueAmount) || 0 : Infinity;
-          return aVal - bVal;
-        });
-      case 'committed':
+      case 'dependencies':
         return base.sort((a, b) => {
           const aC = dependencies.filter(d => d.initiativeId === a.id && d.status === 'Committed').length;
           const bC = dependencies.filter(d => d.initiativeId === b.id && d.status === 'Committed').length;
-          return bC - aC;
-        });
-      case 'not-committed':
-        return base.sort((a, b) => {
-          const aU = dependencies.filter(d => d.initiativeId === a.id && d.status !== 'Committed').length;
-          const bU = dependencies.filter(d => d.initiativeId === b.id && d.status !== 'Committed').length;
-          return bU - aU;
+          return dir * (aC - bC);
         });
       default:
-        return base.sort((a, b) => (a.priority || 999) - (b.priority || 999));
+        return base.sort((a, b) => dir * ((a.priority || 999) - (b.priority || 999)));
     }
   };
 
@@ -65,32 +79,28 @@ export function PrioritizationView({ initiatives, portfolios, dependencies, reor
 
   const handleDragEnd = () => setDraggedIndex(null);
 
+  const th = (col, label, colSpan = 'col-span-2') => (
+    <div
+      className={`${colSpan} flex items-center cursor-pointer select-none hover:text-blue-600 ${
+        sortCol === col ? 'text-blue-600' : ''
+      }`}
+      onClick={() => handleHeaderClick(col)}
+    >
+      {label}
+      <SortIcon column={col} sortCol={sortCol} sortDir={sortDir} />
+    </div>
+  );
+
   return (
     <div>
-      <div className="flex items-center mb-6">
+      <div className="flex items-center mb-4">
         <h2 className="text-2xl font-bold">Initiative Prioritization</h2>
-        <div className="ml-auto flex items-center gap-2">
-          <label className="text-sm text-gray-600">Sort:</label>
-          <select
-            value={sortMode}
-            onChange={(e) => setSortMode(e.target.value)}
-            className="border rounded px-3 py-1 text-sm"
-          >
-            <option value="priority">Priority order</option>
-            <option value="name-asc">Name A → Z</option>
-            <option value="name-desc">Name Z → A</option>
-            <option value="value-high">Value high → low</option>
-            <option value="value-low">Value low → high</option>
-            <option value="committed">Most committed</option>
-            <option value="not-committed">Most unresolved</option>
-          </select>
-        </div>
       </div>
 
       {isDragEnabled && (
-        <p className="text-gray-600 text-sm mb-4">Drag and drop to reorder initiatives by priority</p>
+        <p className="text-gray-600 text-sm mb-4">Drag and drop to reorder by priority. Click any column header to sort.</p>
       )}
-      {!isAdmin && sortMode === 'priority' && (
+      {!isAdmin && sortCol === 'priority' && sortDir === ASC && (
         <p className="text-amber-600 text-sm mb-4 bg-amber-50 border border-amber-200 rounded px-3 py-2 inline-block">
           Reordering requires admin access. Showing current priority order.
         </p>
@@ -98,13 +108,13 @@ export function PrioritizationView({ initiatives, portfolios, dependencies, reor
 
       <div className="bg-white rounded shadow border">
         <div className="grid grid-cols-12 gap-4 p-4 bg-gray-50 border-b font-semibold text-sm">
-          <div className="col-span-1">#</div>
-          <div className="col-span-2">Initiative</div>
-          <div className="col-span-2">Team</div>
-          <div className="col-span-2">Portfolio</div>
-          <div className="col-span-1">Quarters</div>
-          <div className="col-span-2">Value</div>
-          <div className="col-span-2">Dependencies</div>
+          {th('priority', '#', 'col-span-1')}
+          {th('name', 'Initiative')}
+          {th('team', 'Team')}
+          {th('portfolio', 'Portfolio')}
+          <div className="col-span-1 text-gray-500 select-none">Quarters</div>
+          {th('value', 'Value')}
+          {th('dependencies', 'Dependencies')}
         </div>
 
         {sortedInitiatives.map((initiative, idx) => {
@@ -128,7 +138,7 @@ export function PrioritizationView({ initiatives, portfolios, dependencies, reor
               } ${draggedIndex === idx ? 'opacity-50' : ''}`}
             >
               <div className="col-span-1 flex items-center font-bold text-gray-600">
-                {idx + 1}
+                {initiative.priority || idx + 1}
               </div>
               <div className="col-span-2 flex items-center font-medium">
                 {initiative.name || 'Unnamed'}
