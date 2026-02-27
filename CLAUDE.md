@@ -8,6 +8,12 @@
 - Don't refactor or "improve" code beyond what's asked
 - Use `npm` for all package management
 
+## Feature Shipping Process
+For major features, before writing code:
+1. Define **acceptance criteria** — clear, testable conditions that must be true for the feature to be considered done
+2. Write **Gherkin scenarios** — realistic Given/When/Then scenarios covering the happy path and key edge cases
+3. Get sign-off on both before implementation starts
+
 ## Current Work / Last Session
 _Updated by Claude at the end of each session._
 
