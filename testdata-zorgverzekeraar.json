@@ -1,0 +1,423 @@
+{
+  "exportDate": "2026-02-26T09:00:00.000Z",
+  "teams": [
+    "Cloud Platform",
+    "Security & Compliance",
+    "Applicatiebeheer",
+    "Data & Analytics",
+    "Zorgadministratie",
+    "Financiën & Facturatie",
+    "IT Operations",
+    "Ketenintegratie"
+  ],
+  "portfolios": [
+    {
+      "id": 1001,
+      "refCode": "PF-0001",
+      "name": "Cloud Next: Cloud migration",
+      "description": "Migratie van on-premise infrastructuur en applicaties naar de cloud. Omvat kernplatforms, opslag en bedrijfsapplicaties.",
+      "year": 2026,
+      "owner": "Jan de Vries"
+    },
+    {
+      "id": 1002,
+      "refCode": "PF-0002",
+      "name": "European Accessibility Act",
+      "description": "Implementatie van de Europese toegankelijkheidswet (EAA) per juni 2025. Alle digitale kanalen voldoen aan WCAG 2.1 AA.",
+      "year": 2026,
+      "owner": "Marieke Bakker"
+    },
+    {
+      "id": 1003,
+      "refCode": "PF-0003",
+      "name": "Ketenmonitoring",
+      "description": "Real-time monitoring van ketenprocessen tussen zorgverleners, zorgverzekeraars en declaratiesystemen (Vektis, ZorgTTP).",
+      "year": 2026,
+      "owner": "Peter Smit"
+    },
+    {
+      "id": 1004,
+      "refCode": "PF-0004",
+      "name": "Linux OS: security risk",
+      "description": "Mitigatie van beveiligingsrisico's op Linux-servers na einde support van huidige distributies. Patch, upgrade of migratie per systeem.",
+      "year": 2026,
+      "owner": "Sandra Visser"
+    }
+  ],
+  "initiatives": [
+    {
+      "id": 2001,
+      "refCode": "IN-0001",
+      "name": "Cloud Landing Zone inrichting",
+      "team": "Cloud Platform",
+      "quarters": ["Q1", "Q2"],
+      "portfolio": 1001,
+      "effort": "XL",
+      "valueType": "Risk Reduction",
+      "valueAmount": "1200000",
+      "priority": 1
+    },
+    {
+      "id": 2002,
+      "refCode": "IN-0002",
+      "name": "Migratie declaratiesysteem naar cloud",
+      "team": "Applicatiebeheer",
+      "quarters": ["Q2", "Q3"],
+      "portfolio": 1001,
+      "effort": "L",
+      "valueType": "EUR",
+      "valueAmount": "450000",
+      "priority": 2
+    },
+    {
+      "id": 2003,
+      "refCode": "IN-0003",
+      "name": "CI/CD pipeline modernisering",
+      "team": "Cloud Platform",
+      "quarters": ["Q1"],
+      "portfolio": 1001,
+      "effort": "M",
+      "valueType": "EUR",
+      "valueAmount": "180000",
+      "priority": 3
+    },
+    {
+      "id": 2004,
+      "refCode": "IN-0004",
+      "name": "Datawarehouse migratie",
+      "team": "Data & Analytics",
+      "quarters": ["Q3", "Q4"],
+      "portfolio": 1001,
+      "effort": "L",
+      "valueType": "EUR",
+      "valueAmount": "320000",
+      "priority": 4
+    },
+    {
+      "id": 2005,
+      "refCode": "IN-0005",
+      "name": "WCAG 2.1 AA audit — ledenportaal",
+      "team": "Applicatiebeheer",
+      "quarters": ["Q1"],
+      "portfolio": 1002,
+      "effort": "S",
+      "valueType": "Regulatory",
+      "valueAmount": "",
+      "priority": 5
+    },
+    {
+      "id": 2006,
+      "refCode": "IN-0006",
+      "name": "Toegankelijkheidsverbeteringen ledenportaal",
+      "team": "Applicatiebeheer",
+      "quarters": ["Q1", "Q2"],
+      "portfolio": 1002,
+      "effort": "M",
+      "valueType": "Regulatory",
+      "valueAmount": "",
+      "priority": 6
+    },
+    {
+      "id": 2007,
+      "refCode": "IN-0007",
+      "name": "WCAG audit — zorgverlenersportaal",
+      "team": "Applicatiebeheer",
+      "quarters": ["Q1", "Q2"],
+      "portfolio": 1002,
+      "effort": "M",
+      "valueType": "Regulatory",
+      "valueAmount": "",
+      "priority": 7
+    },
+    {
+      "id": 2008,
+      "refCode": "IN-0008",
+      "name": "Toegankelijkheidsverklaring publiceren",
+      "team": "Applicatiebeheer",
+      "quarters": ["Q2"],
+      "portfolio": 1002,
+      "effort": "S",
+      "valueType": "Regulatory",
+      "valueAmount": "",
+      "priority": 8
+    },
+    {
+      "id": 2009,
+      "refCode": "IN-0009",
+      "name": "Ketenmonitor dashboard — fase 1",
+      "team": "Data & Analytics",
+      "quarters": ["Q1", "Q2"],
+      "portfolio": 1003,
+      "effort": "L",
+      "valueType": "EUR",
+      "valueAmount": "275000",
+      "priority": 9
+    },
+    {
+      "id": 2010,
+      "refCode": "IN-0010",
+      "name": "Vektis koppeling real-time declaraties",
+      "team": "Ketenintegratie",
+      "quarters": ["Q2", "Q3"],
+      "portfolio": 1003,
+      "effort": "L",
+      "valueType": "EUR",
+      "valueAmount": "390000",
+      "priority": 10
+    },
+    {
+      "id": 2011,
+      "refCode": "IN-0011",
+      "name": "Alerting & escalatie ketenfouten",
+      "team": "IT Operations",
+      "quarters": ["Q3"],
+      "portfolio": 1003,
+      "effort": "M",
+      "valueType": "Risk Reduction",
+      "valueAmount": "",
+      "priority": 11
+    },
+    {
+      "id": 2012,
+      "refCode": "IN-0012",
+      "name": "SLA-rapportage ketenpartners",
+      "team": "Data & Analytics",
+      "quarters": ["Q3", "Q4"],
+      "portfolio": 1003,
+      "effort": "S",
+      "valueType": "EUR",
+      "valueAmount": "95000",
+      "priority": 12
+    },
+    {
+      "id": 2013,
+      "refCode": "IN-0013",
+      "name": "Linux server inventarisatie & risicoklassificatie",
+      "team": "IT Operations",
+      "quarters": ["Q1"],
+      "portfolio": 1004,
+      "effort": "S",
+      "valueType": "Risk Reduction",
+      "valueAmount": "",
+      "priority": 13
+    },
+    {
+      "id": 2014,
+      "refCode": "IN-0014",
+      "name": "Patch & upgrade kritieke Linux servers",
+      "team": "IT Operations",
+      "quarters": ["Q1", "Q2"],
+      "portfolio": 1004,
+      "effort": "L",
+      "valueType": "Risk Reduction",
+      "valueAmount": "",
+      "priority": 14
+    },
+    {
+      "id": 2015,
+      "refCode": "IN-0015",
+      "name": "Migratie end-of-life servers naar cloud",
+      "team": "Cloud Platform",
+      "quarters": ["Q2", "Q3"],
+      "portfolio": 1004,
+      "effort": "M",
+      "valueType": "Risk Reduction",
+      "valueAmount": "",
+      "priority": 15
+    },
+    {
+      "id": 2016,
+      "refCode": "IN-0016",
+      "name": "Security hardening resterende Linux systemen",
+      "team": "Security & Compliance",
+      "quarters": ["Q3", "Q4"],
+      "portfolio": 1004,
+      "effort": "M",
+      "valueType": "Risk Reduction",
+      "valueAmount": "",
+      "priority": 16
+    }
+  ],
+  "dependencies": [
+    {
+      "id": 3001,
+      "refCode": "DEP-0001",
+      "initiativeId": 2002,
+      "dependsOnTeam": "Cloud Platform",
+      "description": "Declaratiesysteem migratie vereist gereed zijn van de Landing Zone",
+      "quarters": ["Q2"],
+      "effort": "M",
+      "status": "Committed"
+    },
+    {
+      "id": 3002,
+      "refCode": "DEP-0002",
+      "initiativeId": 2004,
+      "dependsOnTeam": "Cloud Platform",
+      "description": "Datawarehouse migratie vereist cloud storage en netwerkinrichting vanuit Cloud Platform",
+      "quarters": ["Q3"],
+      "effort": "M",
+      "status": "Under Discussion"
+    },
+    {
+      "id": 3003,
+      "refCode": "DEP-0003",
+      "initiativeId": 2010,
+      "dependsOnTeam": "Data & Analytics",
+      "description": "Real-time Vektis koppeling vereist data pipeline infrastructuur van Data & Analytics",
+      "quarters": ["Q2"],
+      "effort": "L",
+      "status": "Pending"
+    },
+    {
+      "id": 3004,
+      "refCode": "DEP-0004",
+      "initiativeId": 2011,
+      "dependsOnTeam": "Ketenintegratie",
+      "description": "Alerting op ketenfouten vereist event feeds vanuit Ketenintegratie",
+      "quarters": ["Q3"],
+      "effort": "S",
+      "status": "Under Discussion"
+    },
+    {
+      "id": 3005,
+      "refCode": "DEP-0005",
+      "initiativeId": 2015,
+      "dependsOnTeam": "IT Operations",
+      "description": "Cloud migratie van EOL servers vereist inventarisatie en classificatie door IT Operations",
+      "quarters": ["Q2"],
+      "effort": "S",
+      "status": "Committed"
+    },
+    {
+      "id": 3006,
+      "refCode": "DEP-0006",
+      "initiativeId": 2016,
+      "dependsOnTeam": "IT Operations",
+      "description": "Security hardening vereist volledig gepatchte baseline van IT Operations",
+      "quarters": ["Q3"],
+      "effort": "M",
+      "status": "Pending"
+    },
+    {
+      "id": 3007,
+      "refCode": "DEP-0007",
+      "initiativeId": 2003,
+      "dependsOnTeam": "Security & Compliance",
+      "description": "CI/CD pipeline vereist beveiligingsreview en goedkeuring van Security & Compliance voor productietoegang",
+      "quarters": ["Q1"],
+      "effort": "S",
+      "status": "Committed"
+    },
+    {
+      "id": 3008,
+      "refCode": "DEP-0008",
+      "initiativeId": 2002,
+      "dependsOnTeam": "Security & Compliance",
+      "description": "Migratie declaratiesysteem vereist security assessment en risicogoedkeuring voorafgaand aan cutover",
+      "quarters": ["Q2"],
+      "effort": "M",
+      "status": "Under Discussion"
+    },
+    {
+      "id": 3009,
+      "refCode": "DEP-0009",
+      "initiativeId": 2002,
+      "dependsOnTeam": "IT Operations",
+      "description": "Migratie declaratiesysteem vereist decommissioning van on-premise servers door IT Operations na livegang",
+      "quarters": ["Q3"],
+      "effort": "S",
+      "status": "Pending"
+    },
+    {
+      "id": 3010,
+      "refCode": "DEP-0010",
+      "initiativeId": 2004,
+      "dependsOnTeam": "IT Operations",
+      "description": "Datawarehouse migratie vereist database-ondersteuning van IT Operations voor datavalidatie en cutover",
+      "quarters": ["Q3"],
+      "effort": "M",
+      "status": "Committed"
+    },
+    {
+      "id": 3011,
+      "refCode": "DEP-0011",
+      "initiativeId": 2006,
+      "dependsOnTeam": "Data & Analytics",
+      "description": "Toegankelijkheidsverbeteringen ledenportaal vereist gebruikergedrag-analyse van Data & Analytics om prioriteiten te bepalen",
+      "quarters": ["Q1"],
+      "effort": "S",
+      "status": "Committed"
+    },
+    {
+      "id": 3012,
+      "refCode": "DEP-0012",
+      "initiativeId": 2007,
+      "dependsOnTeam": "Ketenintegratie",
+      "description": "WCAG-audit zorgverlenersportaal vereist aanpassing van API-contracts door Ketenintegratie voor toegankelijke endpoints",
+      "quarters": ["Q2"],
+      "effort": "M",
+      "status": "Can't Commit"
+    },
+    {
+      "id": 3013,
+      "refCode": "DEP-0013",
+      "initiativeId": 2008,
+      "dependsOnTeam": "IT Operations",
+      "description": "Publicatie toegankelijkheidsverklaring vereist publicatie-infrastructuur en deploymentondersteuning van IT Operations",
+      "quarters": ["Q2"],
+      "effort": "S",
+      "status": "Committed"
+    },
+    {
+      "id": 3014,
+      "refCode": "DEP-0014",
+      "initiativeId": 2009,
+      "dependsOnTeam": "IT Operations",
+      "description": "Ketenmonitor dashboard vereist hostinginfrastructuur en serverinrichting van IT Operations",
+      "quarters": ["Q1"],
+      "effort": "M",
+      "status": "Committed"
+    },
+    {
+      "id": 3015,
+      "refCode": "DEP-0015",
+      "initiativeId": 2009,
+      "dependsOnTeam": "Ketenintegratie",
+      "description": "Ketenmonitor dashboard vereist gestructureerde event- en statusfeeds vanuit Ketenintegratie",
+      "quarters": ["Q1", "Q2"],
+      "effort": "L",
+      "status": "Under Discussion"
+    },
+    {
+      "id": 3016,
+      "refCode": "DEP-0016",
+      "initiativeId": 2012,
+      "dependsOnTeam": "Ketenintegratie",
+      "description": "SLA-rapportage vereist ruwe SLA- en beschikbaarheidsdata van ketenpartners via Ketenintegratie",
+      "quarters": ["Q3"],
+      "effort": "S",
+      "status": "Pending"
+    },
+    {
+      "id": 3017,
+      "refCode": "DEP-0017",
+      "initiativeId": 2014,
+      "dependsOnTeam": "Security & Compliance",
+      "description": "Patch & upgrade Linux servers vereist validatie en formele goedkeuring van patches door Security & Compliance",
+      "quarters": ["Q1", "Q2"],
+      "effort": "M",
+      "status": "Committed"
+    },
+    {
+      "id": 3018,
+      "refCode": "DEP-0018",
+      "initiativeId": 2013,
+      "dependsOnTeam": "Data & Analytics",
+      "description": "Linux server inventarisatie vereist rapportage-tooling en dashboardondersteuning van Data & Analytics",
+      "quarters": ["Q1"],
+      "effort": "S",
+      "status": "Committed"
+    }
+  ]
+}

@@ -11,23 +11,23 @@
 ## Current Work / Last Session
 _Updated by Claude at the end of each session._
 
-- **Last session:** 2026-02-26
+- **Last session:** 2026-02-27
 - **Worked on:**
-  - Fixed data not loading after login: moved all data hooks into `AuthenticatedApp` child component in `App.jsx` so hooks only mount after authentication (PR #5, merged)
-  - Fixed file input not re-triggering when importing the same file twice (`e.target.value = ''` reset in `SettingsModal.jsx`)
-  - Fixed `get_users_with_roles` Supabase RPC returning 400 (recreated function with correct return type)
-  - Created and imported test data (`testdata-zorgverzekeraar.json`) — 4 portfolios, 8 teams, 16 initiatives, 18 dependencies
-  - Added 5s timeout fallback in `AuthContext` so a stuck loading state auto-resolves to login screen (instead of requiring manual localStorage cleanup)
+  - Diagnosed F5 refresh issue: app showed empty data and null role after reload
+  - Root cause: stale Supabase session in localStorage — tokens had gone invalid, so all DB queries silently failed while the app still showed as "logged in". Fix: clear `sb-*-auth-token` in DevTools → Application → Local Storage, then log in again.
+  - Also identified two code-level fragilities exposed by the stale session scenario:
+    1. `loadRole` could throw without being caught → `role` stayed `null` (no badge, no admin access)
+    2. Data hooks had no retry — one failed load on mount = permanently empty data
+  - Fixed both in PR #7 (`claude/hardcore-moser`): added `.catch(() => 'viewer')` on `loadRole` call in `AuthContext`, and a single 5s auto-retry to all four data hooks
+  - PR #7 is open and ready to merge
 - **Next steps:**
-  - White loading screen still occurring on localhost and GitHub Pages despite fixes — needs investigation
-  - Suspect: browser cache on GitHub Pages (try hard refresh Cmd+Shift+R), or dev server not running on localhost
-  - If still broken: check whether `onAuthStateChange` is firing at all (add console.log temporarily), and check Supabase project status
+  - Merge PR #7
+  - Dev server worktree: `eloquent-jennings` was superseded by `main` + PR #7; after merging, run dev from `main` worktree or copy `.env` to the new worktree
 - **Open questions / decisions:**
   - `gh` CLI is installed and authenticated (HTTPS, koomenben-sys)
-  - Dev server (`localhost:5173`) runs from the `eloquent-jennings` worktree (`npm run dev`)
   - Auth system lives in `src/context/AuthContext.jsx` + `src/views/LoginView.jsx`
   - Admin role management is done via Supabase SQL editor directly (no client-side UI)
-  - If app shows a blank "Loading…" screen: wait 5 seconds (timeout kicks in) → then log in again. If still stuck, delete `sb-*-auth-token` in DevTools → Application → Local Storage
+  - If app shows empty data / no role badge after F5: clear `sb-*-auth-token` in DevTools → Application → Local Storage, then log in fresh. PR #7 adds a 5s auto-retry so this should recover on its own for transient failures.
 
 ## Project Overview
 A React app for managing portfolios, initiatives, and cross-team dependencies.
