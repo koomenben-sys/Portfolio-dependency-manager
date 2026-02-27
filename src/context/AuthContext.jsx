@@ -61,13 +61,22 @@ export function AuthProvider({ children }) {
       }
     }, 5000);
 
+    // On reload, block ALL events until our signOut() confirms with SIGNED_OUT.
+    // Only then do we allow SIGNED_IN (the user's explicit re-login) through.
+    // Supabase fires SIGNED_IN on session restoration, so we can't use it as
+    // a safe "allow" event — we must wait for the signOut gate to open first.
+    let reloadSignoutConfirmed = !isReload;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        // On a page reload we already cleared state; skip all automatic session
-        // restoration events (INITIAL_SESSION, TOKEN_REFRESHED, etc.) so a
-        // racing token refresh can't re-set the user before signOut completes.
-        // Only allow SIGNED_IN through — that's the user explicitly logging in.
-        if (isReload && event !== 'SIGNED_IN' && event !== 'PASSWORD_RECOVERY') return;
+        if (!reloadSignoutConfirmed) {
+          if (event === 'SIGNED_OUT') {
+            reloadSignoutConfirmed = true;
+          }
+          // Don't process any event until signOut is confirmed — state is
+          // already null/false from the isReload block above.
+          return;
+        }
 
         settled = true;
         clearTimeout(timeout);
