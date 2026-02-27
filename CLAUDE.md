@@ -13,21 +13,18 @@ _Updated by Claude at the end of each session._
 
 - **Last session:** 2026-02-27
 - **Worked on:**
-  - Diagnosed F5 refresh issue: app showed empty data and null role after reload
-  - Root cause: stale Supabase session in localStorage — tokens had gone invalid, so all DB queries silently failed while the app still showed as "logged in". Fix: clear `sb-*-auth-token` in DevTools → Application → Local Storage, then log in again.
-  - Also identified two code-level fragilities exposed by the stale session scenario:
-    1. `loadRole` could throw without being caught → `role` stayed `null` (no badge, no admin access)
-    2. Data hooks had no retry — one failed load on mount = permanently empty data
-  - Fixed both in PR #7 (`claude/hardcore-moser`): added `.catch(() => 'viewer')` on `loadRole` call in `AuthContext`, and a single 5s auto-retry to all four data hooks
-  - PR #7 is open and ready to merge
+  - Diagnosed and fixed F5 refresh issue (PR #7, merged): app showed empty data and null role after reload
+  - Root cause: stale Supabase session in localStorage — tokens had gone invalid so all DB queries silently failed while app still showed as "logged in"
+  - Code fixes: added `.catch(() => 'viewer')` on `loadRole` call in `AuthContext` (prevents null role); added 5s auto-retry to all four data hooks (recovers from transient failures)
+  - Confirmed working on localhost ✓
 - **Next steps:**
-  - Merge PR #7
-  - Dev server worktree: `eloquent-jennings` was superseded by `main` + PR #7; after merging, run dev from `main` worktree or copy `.env` to the new worktree
+  - Nothing pending — app is stable
 - **Open questions / decisions:**
   - `gh` CLI is installed and authenticated (HTTPS, koomenben-sys)
+  - Dev server runs from `eloquent-jennings` worktree (`npm run dev`) — kept updated to `main`
   - Auth system lives in `src/context/AuthContext.jsx` + `src/views/LoginView.jsx`
   - Admin role management is done via Supabase SQL editor directly (no client-side UI)
-  - If app shows empty data / no role badge after F5: clear `sb-*-auth-token` in DevTools → Application → Local Storage, then log in fresh. PR #7 adds a 5s auto-retry so this should recover on its own for transient failures.
+  - If app shows empty data / no role badge after F5: clear `sb-*-auth-token` in DevTools → Application → Local Storage, then log in fresh
 
 ## Project Overview
 A React app for managing portfolios, initiatives, and cross-team dependencies.
