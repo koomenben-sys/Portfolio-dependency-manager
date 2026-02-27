@@ -35,11 +35,12 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    // On page reload (F5 / Ctrl+R), sign out immediately to avoid stale/expired
-    // token state that silently causes data hooks to receive empty results and
-    // leaves the Supabase client in a broken state (sign out stops working, etc.).
-    const navType = performance.getEntriesByType?.('navigation')?.[0]?.type;
-    const isReload = navType === 'reload';
+    // Detect page reloads (F5 / Ctrl+R) using sessionStorage, which survives
+    // reloads within the same tab but is cleared when the tab is closed.
+    // On reload, sign out immediately so the user gets a clean login instead of
+    // a broken state (empty data, null role, broken sign-out button).
+    const isReload = sessionStorage.getItem('app_initialized') === '1';
+    sessionStorage.setItem('app_initialized', '1');
     if (isReload) {
       setUser(null);
       setRole(null);
