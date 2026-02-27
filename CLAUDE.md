@@ -13,18 +13,19 @@ _Updated by Claude at the end of each session._
 
 - **Last session:** 2026-02-27
 - **Worked on:**
-  - Diagnosed and fixed F5 refresh issue (PR #7, merged): app showed empty data and null role after reload
-  - Root cause: stale Supabase session in localStorage — tokens had gone invalid so all DB queries silently failed while app still showed as "logged in"
-  - Code fixes: added `.catch(() => 'viewer')` on `loadRole` call in `AuthContext` (prevents null role); added 5s auto-retry to all four data hooks (recovers from transient failures)
-  - Confirmed working on localhost ✓
+  - Diagnosed and fixed F5 refresh bug (PR #8, `claude/fetch-timeout-fix`, not yet merged)
+  - Root cause: Supabase v2 fires `SIGNED_IN` on session restoration from localStorage (not just `INITIAL_SESSION`), so all event-based guards were bypassed
+  - Fix: `reloadSignoutConfirmed` gate in `AuthContext.useEffect` — blocks ALL `onAuthStateChange` events on reload until our `signOut()` fires a `SIGNED_OUT`, then allows subsequent events (real user login) normally
+  - Also added: 8s fetch timeout in `supabase.js`, `loadRole` retry on throw, `.catch(() => 'viewer')` safety on `loadRole` call
 - **Next steps:**
-  - Nothing pending — app is stable
+  - Test F5 on `localhost:5173` — press F5, confirm login screen appears (or blank screen with no data), log back in, confirm data and role load correctly
+  - If confirmed working: merge PR #8
 - **Open questions / decisions:**
   - `gh` CLI is installed and authenticated (HTTPS, koomenben-sys)
   - Dev server runs from `eloquent-jennings` worktree (`npm run dev`) — kept updated to `main`
   - Auth system lives in `src/context/AuthContext.jsx` + `src/views/LoginView.jsx`
   - Admin role management is done via Supabase SQL editor directly (no client-side UI)
-  - If app shows empty data / no role badge after F5: clear `sb-*-auth-token` in DevTools → Application → Local Storage, then log in fresh
+  - PR #8 branch: `claude/fetch-timeout-fix`
 
 ## Project Overview
 A React app for managing portfolios, initiatives, and cross-team dependencies.
