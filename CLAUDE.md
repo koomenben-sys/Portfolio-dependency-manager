@@ -13,19 +13,17 @@ _Updated by Claude at the end of each session._
 
 - **Last session:** 2026-02-27
 - **Worked on:**
-  - Diagnosed and fixed F5 refresh bug (PR #8, `claude/fetch-timeout-fix`, not yet merged)
-  - Root cause: Supabase v2 fires `SIGNED_IN` on session restoration from localStorage (not just `INITIAL_SESSION`), so all event-based guards were bypassed
-  - Fix: `reloadSignoutConfirmed` gate in `AuthContext.useEffect` — blocks ALL `onAuthStateChange` events on reload until our `signOut()` fires a `SIGNED_OUT`, then allows subsequent events (real user login) normally
-  - Also added: 8s fetch timeout in `supabase.js`, `loadRole` retry on throw, `.catch(() => 'viewer')` safety on `loadRole` call
+  - F5 fix confirmed working and merged (PR #9) — `reloadSignoutConfirmed` gate in `AuthContext`
+  - Initiative tab UI: delete button moved above separator line (top-right of card); dependency items now render inside the initiative's white card box (PR #10)
+  - Prioritization tab: added dedicated Value column, removed Ref column, added clickable column-header sorting with stacked triangle icons (PRs #11, #12)
+  - Alignment tab: renamed "Status" heading to "Dependency status" (PR #13)
 - **Next steps:**
-  - Test F5 on `localhost:5173` — press F5, confirm login screen appears (or blank screen with no data), log back in, confirm data and role load correctly
-  - If confirmed working: merge PR #8
+  - Potential future features (brainstormed, not started): quarter filter across all views, timing conflict detection (initiative quarter vs dependency quarter), team capacity per quarter, quarterly roadmap swimlane view
 - **Open questions / decisions:**
   - `gh` CLI is installed and authenticated (HTTPS, koomenben-sys)
   - Dev server runs from `eloquent-jennings` worktree (`npm run dev`) — kept updated to `main`
   - Auth system lives in `src/context/AuthContext.jsx` + `src/views/LoginView.jsx`
   - Admin role management is done via Supabase SQL editor directly (no client-side UI)
-  - PR #8 branch: `claude/fetch-timeout-fix`
 
 ## Project Overview
 A React app for managing portfolios, initiatives, and cross-team dependencies.
