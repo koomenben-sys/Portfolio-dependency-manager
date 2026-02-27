@@ -9,20 +9,29 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   async function loadRole(userId) {
-    const { data, error } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .single();
-    if (error) {
-      // JWT expired/invalid — stored session is stale. Sign out so
-      // onAuthStateChange fires with null and the user sees the login screen.
-      if (error.code === 'PGRST301' || error.code === 'PGRST302') {
-        supabase.auth.signOut();
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .single();
+      if (error) {
+        // JWT expired/invalid — stored session is stale. Sign out so
+        // onAuthStateChange fires with null and the user sees the login screen.
+        if (error.code === 'PGRST301' || error.code === 'PGRST302') {
+          supabase.auth.signOut();
+        }
+        return 'viewer';
       }
-      return 'viewer';
+      return data?.role ?? 'viewer';
+    } catch (err) {
+      // Likely an AbortError from the 8s fetch timeout. Schedule one retry so
+      // the role updates to the correct value once the connection recovers.
+      setTimeout(() => {
+        loadRole(userId).then(r => setRole(r)).catch(() => {});
+      }, 6000);
+      throw err; // re-throw so the caller's .catch(() => 'viewer') fires immediately
     }
-    return data?.role ?? 'viewer';
   }
 
   useEffect(() => {
