@@ -91,7 +91,9 @@ export function PortfolioOverviewView({ portfolios, initiatives, dependencies })
                 {portfolioInitiatives.map(initiative => {
                   const deps = dependencies.filter(d => d.initiativeId === initiative.id);
                   const blocked = deps.some(d => d.status === "Can't Commit");
-                  const discussion = deps.some(d => d.status === 'Under Discussion');
+                  const discussion = !blocked && deps.some(d => d.status === 'Under Discussion');
+                  const pending = !blocked && !discussion && deps.some(d => d.status === 'Pending');
+                  const allCommitted = !blocked && !discussion && !pending && deps.length > 0 && deps.every(d => d.status === 'Committed');
 
                   return (
                     <div
@@ -103,14 +105,17 @@ export function PortfolioOverviewView({ portfolios, initiatives, dependencies })
                         <span className="text-gray-500">({initiative.team})</span>{' '}
                         <span className="text-gray-400">- {initiative.quarters.join(', ')}</span>
                       </div>
-                      <div>
+                      <div className="shrink-0 ml-4 text-right">
                         {blocked && (
                           <span className="text-red-600 text-xs">🚫 Blocked</span>
                         )}
-                        {!blocked && discussion && (
+                        {discussion && (
                           <span className="text-yellow-600 text-xs">💬 Discussion</span>
                         )}
-                        {!blocked && !discussion && deps.length > 0 && (
+                        {pending && (
+                          <span className="text-gray-500 text-xs">⏳ Pending</span>
+                        )}
+                        {allCommitted && (
                           <span className="text-green-600 text-xs">✓ Committed</span>
                         )}
                       </div>

@@ -99,9 +99,14 @@ src/
 - PRs merge into `main`, which triggers GitHub Pages deploy
 
 ## Dev Servers
-- `eloquent-jennings` (main) → port 5173, always running
+- Root repo (`main`) → port 5173, always running (`npm run dev` from repo root)
 - Feature worktree → port 5174, started when needed
 - Preview feature changes at `http://localhost:5174/Portfolio-dependency-manager/`
+
+### Important: where to make edits
+- **Edit files in the root repo `src/`** — the dev server runs from there, so hot-reload works immediately
+- Commit directly on `main` for small fixes; use a worktree + PR for larger features
+- The `eloquent-jennings` worktree is retired — no longer used
 
 ## Environment / Secrets
 - Supabase credentials are injected as GitHub Actions secrets for the Pages build
