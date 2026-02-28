@@ -1,5 +1,6 @@
 import React from 'react';
 import { DependencyMatrix } from '../components/Dependency/DependencyMatrix';
+import { status as statusColors } from '../constants/design';
 export function AlignmentView({ portfolios, initiatives, dependencies, teams }) {
   // Portfolio Health
   const portfolioHealth = portfolios.map(portfolio => {
@@ -36,10 +37,10 @@ export function AlignmentView({ portfolios, initiatives, dependencies, teams }) 
 
   // Status counts
   const statusCounts = [
-    { status: 'Committed', color: 'green', count: dependencies.filter(d => d.status === 'Committed').length },
-    { status: 'Pending', color: 'gray', count: dependencies.filter(d => d.status === 'Pending').length },
-    { status: 'Under Discussion', color: 'yellow', count: dependencies.filter(d => d.status === 'Under Discussion').length },
-    { status: "Can't Commit", color: 'red', count: dependencies.filter(d => d.status === "Can't Commit").length },
+    { label: 'Committed',         count: dependencies.filter(d => d.status === 'Committed').length },
+    { label: 'Pending',           count: dependencies.filter(d => d.status === 'Pending').length },
+    { label: 'Under Discussion',  count: dependencies.filter(d => d.status === 'Under Discussion').length },
+    { label: "Can't Commit",      count: dependencies.filter(d => d.status === "Can't Commit").length },
   ];
 
   return (
@@ -48,7 +49,7 @@ export function AlignmentView({ portfolios, initiatives, dependencies, teams }) 
 
       <div className="grid grid-cols-2 gap-6">
         {/* Portfolio Health */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-indigo-500">
           <h3 className="font-bold mb-4">Portfolio Health</h3>
           {portfolioHealth.map(({ portfolio, initiatives: inits, atRisk }) => (
             <div key={portfolio.id} className={`border-l-4 pl-4 mb-3 ${atRisk.length > 0 ? 'border-red-500' : 'border-green-500'}`}>
@@ -67,7 +68,7 @@ export function AlignmentView({ portfolios, initiatives, dependencies, teams }) 
         </div>
 
         {/* Teams Requiring Alignment */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-indigo-500">
           <h3 className="font-bold mb-4">Teams Requiring Alignment</h3>
           {alignmentNeeds.map((pair, idx) => {
             const hasBlocked = pair.blocked > 0;
@@ -93,13 +94,13 @@ export function AlignmentView({ portfolios, initiatives, dependencies, teams }) 
         </div>
 
         {/* Status Overview */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 col-span-2">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-indigo-500 col-span-2">
           <h3 className="font-bold mb-4">Dependency status</h3>
           <div className="grid grid-cols-4 gap-4 text-center">
-            {statusCounts.map(({ status, color, count }) => (
-              <div key={status} className={`p-4 bg-${color}-50 rounded`}>
-                <div className={`text-3xl font-bold text-${color}-800`}>{count}</div>
-                <div className={`text-sm text-${color}-600`}>{status}</div>
+            {statusCounts.map(({ label, count }) => (
+              <div key={label} className={`p-4 rounded ${statusColors[label].bg}`}>
+                <div className={`text-3xl font-bold ${statusColors[label].text}`}>{count}</div>
+                <div className={`text-sm ${statusColors[label].textLight}`}>{label}</div>
               </div>
             ))}
           </div>

@@ -3,6 +3,7 @@ import { Plus, Calendar } from '../components/common/Icons';
 import { InitiativeCard } from '../components/Initiative/InitiativeCard';
 import { DependencyItem } from '../components/Dependency/DependencyItem';
 import { EFFORT_SIZES } from '../constants';
+import { status as statusColors } from '../constants/design';
 
 export function DependenciesView({
   initiatives,
@@ -193,31 +194,19 @@ export function DependenciesView({
                   <div className="flex gap-2">
                     <button
                       onClick={() => updateDependencyStatus(dep.id, 'Committed')}
-                      className={`px-4 py-2 rounded ${
-                        dep.status === 'Committed'
-                          ? 'bg-green-600 text-white'
-                          : 'bg-green-100 hover:bg-green-200'
-                      }`}
+                      className={`px-4 py-2 rounded ${dep.status === 'Committed' ? statusColors.Committed.buttonActive : statusColors.Committed.button}`}
                     >
                       Commit
                     </button>
                     <button
                       onClick={() => updateDependencyStatus(dep.id, "Can't Commit")}
-                      className={`px-4 py-2 rounded ${
-                        dep.status === "Can't Commit"
-                          ? 'bg-red-600 text-white'
-                          : 'bg-red-100 hover:bg-red-200'
-                      }`}
+                      className={`px-4 py-2 rounded ${dep.status === "Can't Commit" ? statusColors["Can't Commit"].buttonActive : statusColors["Can't Commit"].button}`}
                     >
                       Can't
                     </button>
                     <button
                       onClick={() => updateDependencyStatus(dep.id, 'Under Discussion')}
-                      className={`px-4 py-2 rounded ${
-                        dep.status === 'Under Discussion'
-                          ? 'bg-yellow-600 text-white'
-                          : 'bg-yellow-100 hover:bg-yellow-200'
-                      }`}
+                      className={`px-4 py-2 rounded ${dep.status === 'Under Discussion' ? statusColors['Under Discussion'].buttonActive : statusColors['Under Discussion'].button}`}
                     >
                       Discussion
                     </button>
@@ -231,7 +220,7 @@ export function DependenciesView({
                         ? 'bg-red-100 text-red-800'
                         : dep.status === 'Under Discussion'
                         ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-gray-100 text-gray-700'
+                        : 'bg-gray-200 text-gray-700'
                     }`}
                   >
                     {dep.status}

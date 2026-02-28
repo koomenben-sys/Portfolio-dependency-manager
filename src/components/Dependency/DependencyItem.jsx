@@ -80,12 +80,12 @@ export function DependencyItem({
         <span
           className={`px-3 py-1 rounded text-sm ml-auto ${
             dependency.status === 'Committed'
-              ? 'bg-green-100'
+              ? 'bg-green-100 text-green-800'
               : dependency.status === "Can't Commit"
-              ? 'bg-red-100'
+              ? 'bg-red-100 text-red-800'
               : dependency.status === 'Under Discussion'
-              ? 'bg-yellow-100'
-              : 'bg-gray-100'
+              ? 'bg-yellow-100 text-yellow-800'
+              : 'bg-gray-200 text-gray-700'
           }`}
         >
           {dependency.status}
