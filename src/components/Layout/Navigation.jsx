@@ -11,7 +11,7 @@ export function Navigation({ currentView, onViewChange, onSettingsClick, role })
   ];
 
   return (
-    <div className="bg-white border-b">
+    <div className="bg-white border-b shadow-sm">
       <div className="flex flex-wrap gap-1 p-2 justify-between">
         <div className="flex flex-wrap gap-1">
           {tabs.map(tab => {
@@ -22,7 +22,7 @@ export function Navigation({ currentView, onViewChange, onSettingsClick, role })
                 onClick={() => onViewChange(tab.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded ${
                   currentView === tab.id || currentView.startsWith(tab.id)
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-indigo-600 text-white'
                     : 'bg-gray-100 hover:bg-gray-200'
                 }`}
               >

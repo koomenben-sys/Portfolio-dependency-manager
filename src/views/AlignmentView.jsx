@@ -48,10 +48,10 @@ export function AlignmentView({ portfolios, initiatives, dependencies, teams }) 
 
       <div className="grid grid-cols-2 gap-6">
         {/* Portfolio Health */}
-        <div className="bg-white p-6 rounded shadow">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="font-bold mb-4">Portfolio Health</h3>
           {portfolioHealth.map(({ portfolio, initiatives: inits, atRisk }) => (
-            <div key={portfolio.id} className="border-l-4 border-blue-600 pl-4 mb-3">
+            <div key={portfolio.id} className="border-l-4 border-indigo-600 pl-4 mb-3">
               <div className="font-semibold">{portfolio.name}</div>
               <div className="text-sm">
                 {inits.length} initiative{inits.length !== 1 ? 's' : ''}
@@ -67,7 +67,7 @@ export function AlignmentView({ portfolios, initiatives, dependencies, teams }) 
         </div>
 
         {/* Teams Requiring Alignment */}
-        <div className="bg-white p-6 rounded shadow">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="font-bold mb-4">Teams Requiring Alignment</h3>
           {alignmentNeeds.map((pair, idx) => (
             <div key={idx} className="border rounded p-3 bg-yellow-50 mb-2">
@@ -83,7 +83,7 @@ export function AlignmentView({ portfolios, initiatives, dependencies, teams }) 
         </div>
 
         {/* Status Overview */}
-        <div className="bg-white p-6 rounded shadow col-span-2">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 col-span-2">
           <h3 className="font-bold mb-4">Dependency status</h3>
           <div className="grid grid-cols-4 gap-4 text-center">
             {statusCounts.map(({ status, color, count }) => (

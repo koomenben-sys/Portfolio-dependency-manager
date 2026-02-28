@@ -53,7 +53,7 @@ export function DependenciesView({
         <select
           value={currentTeam}
           onChange={(e) => setCurrentTeam(e.target.value)}
-          className="border rounded px-4 py-2"
+          className="border border-gray-300 rounded px-4 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
         >
           {teams.map(team => (
             <option key={team}>{team}</option>
@@ -66,11 +66,11 @@ export function DependenciesView({
           onClick={() => setSubView('outgoing')}
           className={`px-4 py-2 flex items-center gap-2 ${
             subView === 'outgoing'
-              ? 'border-b-2 border-blue-600 text-blue-600'
+              ? 'border-b-2 border-indigo-600 text-indigo-600'
               : ''
           }`}
         >
-          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold">
+          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">
             {outgoingDeps.length}
           </span>
           Outgoing
@@ -79,11 +79,11 @@ export function DependenciesView({
           onClick={() => setSubView('incoming')}
           className={`px-4 py-2 flex items-center gap-2 ${
             subView === 'incoming'
-              ? 'border-b-2 border-blue-600 text-blue-600'
+              ? 'border-b-2 border-indigo-600 text-indigo-600'
               : ''
           }`}
         >
-          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold">
+          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">
             {incomingDeps.length}
           </span>
           Incoming
@@ -97,7 +97,7 @@ export function DependenciesView({
             {canEdit && (
               <button
                 onClick={() => addInitiative(currentTeam)}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
               >
                 <Plus size={18} />
                 Add
@@ -137,7 +137,7 @@ export function DependenciesView({
           })}
 
           {teamInitiatives.length === 0 && (
-            <div className="bg-white p-12 rounded shadow text-center text-gray-500">
+            <div className="bg-white p-12 rounded-lg shadow-sm border border-gray-200 text-center text-gray-500">
               No initiatives for {currentTeam}.{canEdit ? ' Click "Add" to create one.' : ''}
             </div>
           )}
@@ -153,7 +153,7 @@ export function DependenciesView({
             if (!initiative) return null;
 
             return (
-              <div key={dep.id} className="bg-white p-6 rounded mb-4 shadow">
+              <div key={dep.id} className="bg-white p-6 rounded-lg mb-4 shadow-sm border border-gray-200">
                 <div className="flex justify-between mb-4">
                   <div className="flex-1">
                     <h4 className="font-semibold text-lg">
@@ -166,7 +166,7 @@ export function DependenciesView({
                         {dep.quarters.map(q => (
                           <span
                             key={q}
-                            className="px-2 py-1 text-sm rounded bg-blue-600 text-white"
+                            className="px-2 py-1 text-sm rounded bg-indigo-600 text-white"
                           >
                             {q}
                           </span>
@@ -180,7 +180,7 @@ export function DependenciesView({
                       value={dep.effort || 'TBD'}
                       onChange={(e) => canEdit && updateDependency(dep.id, 'effort', e.target.value)}
                       disabled={!canEdit}
-                      className={`border rounded px-3 py-1 ${!canEdit ? 'bg-gray-50 cursor-default' : ''}`}
+                      className={`border border-gray-300 rounded px-3 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${!canEdit ? 'bg-gray-50 cursor-default' : ''}`}
                     >
                       {EFFORT_SIZES.map(size => (
                         <option key={size}>{size}</option>
@@ -242,7 +242,7 @@ export function DependenciesView({
           })}
 
           {incomingDeps.length === 0 && (
-            <div className="bg-white p-12 rounded shadow text-center text-gray-500">
+            <div className="bg-white p-12 rounded-lg shadow-sm border border-gray-200 text-center text-gray-500">
               No incoming dependencies for {currentTeam}.
             </div>
           )}

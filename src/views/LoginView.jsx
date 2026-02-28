@@ -35,9 +35,9 @@ export function LoginView() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-100 flex flex-col">
       {/* Header */}
-      <div className="bg-blue-600 text-white p-4">
+      <div className="bg-indigo-800 text-white p-4">
         <h1 className="text-2xl font-bold">Portfolio Dependency Manager</h1>
       </div>
 
@@ -56,7 +56,7 @@ export function LoginView() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="you@company.com"
                 autoComplete="email"
               />
@@ -69,7 +69,7 @@ export function LoginView() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="••••••••"
                 autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               />
@@ -90,7 +90,7 @@ export function LoginView() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+              className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
             >
               {loading
                 ? 'Please wait…'
@@ -106,7 +106,7 @@ export function LoginView() {
                 No account?{' '}
                 <button
                   onClick={() => { setMode('signup'); setError(''); setMessage(''); }}
-                  className="text-blue-600 hover:underline"
+                  className="text-indigo-600 hover:underline"
                 >
                   Sign up
                 </button>
@@ -116,7 +116,7 @@ export function LoginView() {
                 Already have an account?{' '}
                 <button
                   onClick={() => { setMode('signin'); setError(''); setMessage(''); }}
-                  className="text-blue-600 hover:underline"
+                  className="text-indigo-600 hover:underline"
                 >
                   Sign in
                 </button>

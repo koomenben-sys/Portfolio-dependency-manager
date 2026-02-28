@@ -32,7 +32,7 @@ export function PortfolioOverviewView({ portfolios, initiatives, dependencies })
         });
 
         return (
-          <div key={portfolio.id} className="bg-white p-6 rounded shadow mb-6">
+          <div key={portfolio.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-indigo-500 mb-6">
             <div className="mb-4">
               <h3 className="text-xl font-bold">{portfolio.name}</h3>
               <p className="text-sm text-gray-600">
@@ -44,7 +44,7 @@ export function PortfolioOverviewView({ portfolios, initiatives, dependencies })
             </div>
 
             <div className="grid grid-cols-4 gap-4">
-              <div className="bg-blue-50 p-4 rounded">
+              <div className="bg-indigo-50 p-4 rounded">
                 <div className="text-2xl font-bold">{portfolioInitiatives.length}</div>
                 <div className="text-sm">Total</div>
               </div>
@@ -71,7 +71,7 @@ export function PortfolioOverviewView({ portfolios, initiatives, dependencies })
                   </div>
                 )}
                 {regulatoryCount > 0 && (
-                  <div className="border-l-4 border-blue-500 pl-4">
+                  <div className="border-l-4 border-indigo-500 pl-4">
                     <div className="text-lg font-bold">{regulatoryCount}</div>
                     <div className="text-sm">Regulatory</div>
                   </div>
@@ -124,7 +124,7 @@ export function PortfolioOverviewView({ portfolios, initiatives, dependencies })
       })}
 
       {portfolios.length === 0 && (
-        <div className="bg-white p-12 rounded shadow text-center text-gray-500">
+        <div className="bg-white p-12 rounded-lg shadow-sm border border-gray-200 text-center text-gray-500">
           No portfolios yet. Create portfolios in the Portfolios tab.
         </div>
       )}

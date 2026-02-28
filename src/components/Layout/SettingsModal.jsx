@@ -44,7 +44,7 @@ function UserManagementSection() {
               value={user.role}
               onChange={(e) => handleRoleChange(user.id, e.target.value)}
               disabled={saving === user.id}
-              className="border rounded px-2 py-1 text-sm disabled:opacity-50"
+              className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50"
             >
               <option value="viewer">viewer</option>
               <option value="editor">editor</option>
@@ -125,7 +125,7 @@ export function SettingsModal({
           <div className="flex gap-2 justify-end">
             <button
               onClick={handleCopy}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
             >
               Copy
             </button>
@@ -158,7 +158,7 @@ export function SettingsModal({
             {isAdmin && (
               <button
                 onClick={addTeam}
-                className="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                className="text-sm px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700"
               >
                 + Add
               </button>
@@ -171,7 +171,7 @@ export function SettingsModal({
                   value={team}
                   onChange={(e) => isAdmin && updateTeam(index, e.target.value)}
                   readOnly={!isAdmin}
-                  className={`flex-1 border rounded px-2 py-1 text-sm ${!isAdmin ? 'bg-gray-50 cursor-default' : ''}`}
+                  className={`flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${!isAdmin ? 'bg-gray-50 cursor-default' : ''}`}
                   placeholder="Team name"
                 />
                 {isAdmin && (

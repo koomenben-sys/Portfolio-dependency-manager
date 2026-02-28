@@ -21,7 +21,7 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <p className="text-gray-500">Loading…</p>
       </div>
     );
@@ -155,7 +155,7 @@ function AuthenticatedApp({ user, role, signOut }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-100">
       <Header user={user} role={role} onSignOut={signOut} />
       <Navigation
         currentView={currentView}
