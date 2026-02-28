@@ -17,14 +17,15 @@ For major features, before writing code:
 ## Current Work / Last Session
 _Updated by Claude at the end of each session._
 
-- **Last session:** 2026-02-27
+- **Last session:** 2026-02-28
 - **Worked on:**
-  - F5 fix confirmed working and merged (PR #9) — `reloadSignoutConfirmed` gate in `AuthContext`; Supabase v2 fires `SIGNED_IN` on session restoration so we block all events until our `signOut()` confirms with `SIGNED_OUT`
-  - Initiative tab (PR #10): delete button moved to top-right of card header (above separator); dependency items now render inside the white card box via `children` prop
-  - Prioritization tab (PR #11): dedicated Value column added, Ref column removed; sort dropdown replaced with clickable column headers
-  - Prioritization tab (PR #12): stacked triangle sort icons (`SortUnsorted`/`SortAsc`/`SortDesc`) added to `Icons.jsx`; active direction solid, inactive at 25% opacity; drag-to-reorder only enabled when sorted by # ascending
-  - Alignment tab (PR #13): renamed "Status" section heading to "Dependency status"
-  - Process: added AC + Gherkin step to CLAUDE.md for future major features
+  - Full visual refresh (PR #14, merged): indigo palette, card contrast, left accent borders, input styling
+  - Alignment tab: Teams Requiring Alignment colour-coded (red = can't commit, yellow = under discussion); Portfolio Health dynamic border (green/red); Dependency status order (Committed first); accent borders on all four panel cards
+  - Dependency Matrix: status/icon centred, effort+quarter below side-by-side; empty cells white; cell bg uses `bgMedium` from design system
+  - Design system created at `src/constants/design.js` — card styles, status colours (bg/bgMedium/bgStrong/badge/text/button/icon), buttons, inputs, typography, accent borders, nav
+  - Status colours harmonized across AlignmentView, DependencyMatrix, DependencyItem, DependenciesView
+  - `.env` moved to repo root; worktrees use symlinks (`ln -s ../../../.env .env`)
+  - Logo deferred (knight unicode attempt reverted)
 - **Next steps:**
   - Nothing pending — app is stable and clean
 - **Future feature ideas (brainstormed, not started):**
@@ -32,12 +33,14 @@ _Updated by Claude at the end of each session._
   - Timing conflict detection (initiative in Q1 but dependency in Q2)
   - Team capacity per quarter (sum effort sizes per team per quarter)
   - Quarterly roadmap swimlane view
+  - Logo / branding
 - **Open questions / decisions:**
   - `gh` CLI is installed and authenticated (HTTPS, koomenben-sys)
   - Dev server runs from `eloquent-jennings` worktree (`npm run dev`) — kept updated to `main`
   - Auth system lives in `src/context/AuthContext.jsx` + `src/views/LoginView.jsx`
   - Admin role management is done via Supabase SQL editor directly (no client-side UI)
-  - `Icons.jsx` now exports `SortUnsorted`, `SortAsc`, `SortDesc` in addition to existing icons
+  - `Icons.jsx` exports `SortUnsorted`, `SortAsc`, `SortDesc` in addition to existing icons
+  - If a commit lands on a feature branch after PR is merged, cherry-pick it directly onto `main`
 
 ## Project Overview
 A React app for managing portfolios, initiatives, and cross-team dependencies.
@@ -72,6 +75,7 @@ src/
     Dependency/              # DependencyItem, DependencyMatrix
     common/Icons.jsx
   constants/index.js         # Teams, Quarters, Effort sizes, Statuses, Value types
+  constants/design.js        # Design system — card styles, status colours, buttons, inputs, typography, accents
   utils/
     referenceCodeGenerator.js  # Generates PF-0001, IN-0001, DEP-0001
     dataExport.js              # JSON export/import
@@ -94,6 +98,13 @@ src/
 - Main branch: `main`
 - PRs merge into `main`, which triggers GitHub Pages deploy
 
+## Dev Servers
+- `eloquent-jennings` (main) → port 5173, always running
+- Feature worktree → port 5174, started when needed
+- Preview feature changes at `http://localhost:5174/Portfolio-dependency-manager/`
+
 ## Environment / Secrets
 - Supabase credentials are injected as GitHub Actions secrets for the Pages build
-- Local dev: needs `.env` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+- Local dev: `.env` lives in the **repo root** (`portfolio-dependency-manager/.env`)
+- Each worktree has a symlink: `ln -s ../../../.env .env`
+- When creating a new worktree, always run that symlink command as part of setup
