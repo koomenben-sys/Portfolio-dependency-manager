@@ -2,7 +2,7 @@ import React from 'react';
 export function DependencyMatrix({ initiatives, dependencies, teams }) {
   const TEAMS = teams || [];
   return (
-    <div className="bg-white p-6 rounded shadow col-span-2">
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 col-span-2">
       <h3 className="font-bold mb-4">Dependency Matrix</h3>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
@@ -38,7 +38,7 @@ export function DependencyMatrix({ initiatives, dependencies, teams }) {
                     let bg = 
                       dep.status === "Can't Commit" ? 'bg-red-200' :
                       dep.status === 'Under Discussion' ? 'bg-yellow-200' :
-                      dep.status === 'Pending' ? 'bg-blue-100' :
+                      dep.status === 'Pending' ? 'bg-indigo-100' :
                       'bg-green-200';
 
                     return (

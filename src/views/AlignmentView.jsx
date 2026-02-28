@@ -36,8 +36,8 @@ export function AlignmentView({ portfolios, initiatives, dependencies, teams }) 
 
   // Status counts
   const statusCounts = [
-    { status: 'Pending', color: 'gray', count: dependencies.filter(d => d.status === 'Pending').length },
     { status: 'Committed', color: 'green', count: dependencies.filter(d => d.status === 'Committed').length },
+    { status: 'Pending', color: 'gray', count: dependencies.filter(d => d.status === 'Pending').length },
     { status: 'Under Discussion', color: 'yellow', count: dependencies.filter(d => d.status === 'Under Discussion').length },
     { status: "Can't Commit", color: 'red', count: dependencies.filter(d => d.status === "Can't Commit").length },
   ];
@@ -48,10 +48,10 @@ export function AlignmentView({ portfolios, initiatives, dependencies, teams }) 
 
       <div className="grid grid-cols-2 gap-6">
         {/* Portfolio Health */}
-        <div className="bg-white p-6 rounded shadow">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="font-bold mb-4">Portfolio Health</h3>
           {portfolioHealth.map(({ portfolio, initiatives: inits, atRisk }) => (
-            <div key={portfolio.id} className="border-l-4 border-blue-600 pl-4 mb-3">
+            <div key={portfolio.id} className={`border-l-4 pl-4 mb-3 ${atRisk.length > 0 ? 'border-red-500' : 'border-green-500'}`}>
               <div className="font-semibold">{portfolio.name}</div>
               <div className="text-sm">
                 {inits.length} initiative{inits.length !== 1 ? 's' : ''}
@@ -67,23 +67,33 @@ export function AlignmentView({ portfolios, initiatives, dependencies, teams }) 
         </div>
 
         {/* Teams Requiring Alignment */}
-        <div className="bg-white p-6 rounded shadow">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="font-bold mb-4">Teams Requiring Alignment</h3>
-          {alignmentNeeds.map((pair, idx) => (
-            <div key={idx} className="border rounded p-3 bg-yellow-50 mb-2">
-              <div className="font-semibold">{pair.team1} & {pair.team2}</div>
-              <div className="text-sm">
-                {pair.discussion} discussion, {pair.blocked} blocked
+          {alignmentNeeds.map((pair, idx) => {
+            const hasBlocked = pair.blocked > 0;
+            return (
+              <div
+                key={idx}
+                className={`border rounded p-3 mb-2 ${hasBlocked ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}`}
+              >
+                <div className={`font-semibold text-sm ${hasBlocked ? 'text-red-800' : 'text-yellow-800'}`}>
+                  {pair.team1} &amp; {pair.team2}
+                </div>
+                <div className={`text-xs mt-1 ${hasBlocked ? 'text-red-700' : 'text-yellow-700'}`}>
+                  {pair.blocked > 0 && <span>{pair.blocked} can't commit</span>}
+                  {pair.blocked > 0 && pair.discussion > 0 && <span>, </span>}
+                  {pair.discussion > 0 && <span>{pair.discussion} under discussion</span>}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {alignmentNeeds.length === 0 && (
             <p className="text-gray-500 text-sm">No alignment issues</p>
           )}
         </div>
 
         {/* Status Overview */}
-        <div className="bg-white p-6 rounded shadow col-span-2">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 col-span-2">
           <h3 className="font-bold mb-4">Dependency status</h3>
           <div className="grid grid-cols-4 gap-4 text-center">
             {statusCounts.map(({ status, color, count }) => (

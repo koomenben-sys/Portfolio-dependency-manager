@@ -6,8 +6,8 @@ const DESC = 'desc';
 
 function SortIcon({ column, sortCol, sortDir }) {
   if (sortCol !== column) return <span className="ml-1 text-gray-400"><SortUnsorted size={14} /></span>;
-  if (sortDir === ASC)    return <span className="ml-1 text-blue-600"><SortAsc size={14} /></span>;
-  return                         <span className="ml-1 text-blue-600"><SortDesc size={14} /></span>;
+  if (sortDir === ASC)    return <span className="ml-1 text-indigo-600"><SortAsc size={14} /></span>;
+  return                         <span className="ml-1 text-indigo-600"><SortDesc size={14} /></span>;
 }
 
 export function PrioritizationView({ initiatives, portfolios, dependencies, reorderInitiatives, role }) {
@@ -81,8 +81,8 @@ export function PrioritizationView({ initiatives, portfolios, dependencies, reor
 
   const th = (col, label, colSpan = 'col-span-2') => (
     <div
-      className={`${colSpan} flex items-center cursor-pointer select-none hover:text-blue-600 ${
-        sortCol === col ? 'text-blue-600' : ''
+      className={`${colSpan} flex items-center cursor-pointer select-none hover:text-indigo-600 ${
+        sortCol === col ? 'text-indigo-600' : ''
       }`}
       onClick={() => handleHeaderClick(col)}
     >
@@ -106,7 +106,7 @@ export function PrioritizationView({ initiatives, portfolios, dependencies, reor
         </p>
       )}
 
-      <div className="bg-white rounded shadow border">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="grid grid-cols-12 gap-4 p-4 bg-gray-50 border-b font-semibold text-sm">
           {th('priority', '#', 'col-span-1')}
           {th('name', 'Initiative')}

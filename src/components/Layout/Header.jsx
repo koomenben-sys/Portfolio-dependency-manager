@@ -8,7 +8,7 @@ const ROLE_BADGE = {
 
 export function Header({ user, role, onSignOut }) {
   return (
-    <div className="bg-blue-600 text-white p-4 flex justify-between items-center">
+    <div className="bg-indigo-800 text-white p-4 flex justify-between items-center">
       <h1 className="text-2xl font-bold">Portfolio Dependency Manager</h1>
 
       {user && (
@@ -21,7 +21,7 @@ export function Header({ user, role, onSignOut }) {
           )}
           <button
             onClick={onSignOut}
-            className="text-sm px-3 py-1 bg-white text-blue-600 rounded hover:bg-blue-50"
+            className="text-sm px-3 py-1 bg-white text-indigo-700 rounded hover:bg-indigo-50"
           >
             Sign out
           </button>

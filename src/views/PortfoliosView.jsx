@@ -10,7 +10,7 @@ export function PortfoliosView({ portfolios, addPortfolio, updatePortfolio, dele
         {role === 'admin' && (
           <button
             onClick={addPortfolio}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
           >
             <Plus size={18} />
             Add
@@ -29,7 +29,7 @@ export function PortfoliosView({ portfolios, addPortfolio, updatePortfolio, dele
       ))}
 
       {portfolios.length === 0 && (
-        <div className="bg-white p-12 rounded shadow text-center text-gray-500">
+        <div className="bg-white p-12 rounded-lg shadow-sm border border-gray-200 text-center text-gray-500">
           No portfolios yet.{role === 'admin' ? ' Click "Add" to create your first portfolio.' : ''}
         </div>
       )}

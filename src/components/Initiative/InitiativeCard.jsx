@@ -18,7 +18,7 @@ export function InitiativeCard({
   const roClass = !canEdit ? 'bg-gray-50 cursor-default' : '';
 
   return (
-    <div className="bg-white p-6 rounded mb-4 shadow">
+    <div className="bg-white p-6 rounded-lg mb-4 shadow-sm border border-gray-200 border-l-4 border-l-indigo-500">
       <div className="flex justify-between mb-2">
         <span className="text-xs text-gray-500 font-mono">
           {initiative.refCode || 'N/A'}
@@ -40,7 +40,7 @@ export function InitiativeCard({
             value={initiative.name}
             onChange={(e) => canEdit && onUpdate(initiative.id, 'name', e.target.value)}
             readOnly={!canEdit}
-            className={`w-full border rounded px-3 py-2 ${roClass}`}
+            className={`w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${roClass}`}
           />
         </div>
 
@@ -50,7 +50,7 @@ export function InitiativeCard({
             value={initiative.effort}
             onChange={(e) => canEdit && onUpdate(initiative.id, 'effort', e.target.value)}
             disabled={!canEdit}
-            className={`w-full border rounded px-3 py-2 ${roClass}`}
+            className={`w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${roClass}`}
           >
             {EFFORT_SIZES.map(size => (
               <option key={size}>{size}</option>
@@ -68,7 +68,7 @@ export function InitiativeCard({
                 disabled={!canEdit}
                 className={`px-3 py-1 rounded border ${
                   initiative.quarters.includes(q)
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-indigo-600 text-white'
                     : canEdit
                       ? 'hover:bg-gray-50'
                       : 'opacity-60 cursor-default'
@@ -86,7 +86,7 @@ export function InitiativeCard({
             value={initiative.portfolio}
             onChange={(e) => canEdit && onUpdate(initiative.id, 'portfolio', e.target.value)}
             disabled={!canEdit}
-            className={`w-full border rounded px-3 py-2 ${roClass}`}
+            className={`w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${roClass}`}
           >
             <option value="">Select...</option>
             {portfolios.map(p => (
@@ -103,7 +103,7 @@ export function InitiativeCard({
             value={initiative.valueType}
             onChange={(e) => canEdit && onUpdate(initiative.id, 'valueType', e.target.value)}
             disabled={!canEdit}
-            className={`w-full border rounded px-3 py-2 ${roClass}`}
+            className={`w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${roClass}`}
           >
             {VALUE_TYPES.map(v => (
               <option key={v}>{v}</option>
@@ -118,7 +118,7 @@ export function InitiativeCard({
               value={initiative.valueAmount}
               onChange={(e) => canEdit && onUpdate(initiative.id, 'valueAmount', e.target.value)}
               readOnly={!canEdit}
-              className={`w-full border rounded px-3 py-2 ${roClass}`}
+              className={`w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${roClass}`}
             />
           </div>
         )}

@@ -7,7 +7,7 @@ export function PortfolioCard({ portfolio, onUpdate, onDelete, role }) {
   const roClass   = readOnly ? 'bg-gray-50 cursor-default' : '';
 
   return (
-    <div className="bg-white p-6 rounded mb-4 shadow">
+    <div className="bg-white p-6 rounded-lg mb-4 shadow-sm border border-gray-200 border-l-4 border-l-indigo-500">
       <div className="flex justify-between mb-2">
         <span className="text-xs text-gray-500 font-mono">
           {portfolio.refCode || 'N/A'}
@@ -21,7 +21,7 @@ export function PortfolioCard({ portfolio, onUpdate, onDelete, role }) {
             value={portfolio.name}
             onChange={(e) => !readOnly && onUpdate(portfolio.id, 'name', e.target.value)}
             readOnly={readOnly}
-            className={`w-full border rounded px-3 py-2 ${roClass}`}
+            className={`w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${roClass}`}
           />
         </div>
 
@@ -31,7 +31,7 @@ export function PortfolioCard({ portfolio, onUpdate, onDelete, role }) {
             value={portfolio.owner}
             onChange={(e) => !readOnly && onUpdate(portfolio.id, 'owner', e.target.value)}
             readOnly={readOnly}
-            className={`w-full border rounded px-3 py-2 ${roClass}`}
+            className={`w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${roClass}`}
           />
         </div>
 
@@ -42,7 +42,7 @@ export function PortfolioCard({ portfolio, onUpdate, onDelete, role }) {
             value={portfolio.year}
             onChange={(e) => !readOnly && onUpdate(portfolio.id, 'year', e.target.value)}
             readOnly={readOnly}
-            className={`w-full border rounded px-3 py-2 ${roClass}`}
+            className={`w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${roClass}`}
           />
         </div>
 
@@ -63,7 +63,7 @@ export function PortfolioCard({ portfolio, onUpdate, onDelete, role }) {
             value={portfolio.description}
             onChange={(e) => !readOnly && onUpdate(portfolio.id, 'description', e.target.value)}
             readOnly={readOnly}
-            className={`w-full border rounded px-3 py-2 ${roClass}`}
+            className={`w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${roClass}`}
             rows="3"
           />
         </div>
