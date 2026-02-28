@@ -1,8 +1,9 @@
 import React from 'react';
+import { status as statusColors } from '../../constants/design';
 export function DependencyMatrix({ initiatives, dependencies, teams }) {
   const TEAMS = teams || [];
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 col-span-2">
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 border-l-4 border-l-indigo-500 col-span-2">
       <h3 className="font-bold mb-4">Dependency Matrix</h3>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
@@ -32,32 +33,27 @@ export function DependencyMatrix({ initiatives, dependencies, teams }) {
                   {TEAMS.map(team => {
                     const dep = deps.find(d => d.dependsOnTeam === team);
                     if (!dep) {
-                      return <td key={team} className="border bg-gray-100"></td>;
+                      return <td key={team} className="border bg-white"></td>;
                     }
 
-                    let bg = 
-                      dep.status === "Can't Commit" ? 'bg-red-200' :
-                      dep.status === 'Under Discussion' ? 'bg-yellow-200' :
-                      dep.status === 'Pending' ? 'bg-indigo-100' :
-                      'bg-green-200';
+                    const s = statusColors[dep.status];
 
                     return (
-                      <td key={team} className={`border p-2 ${bg}`}>
-                        {dep.effort && dep.effort !== 'TBD' && (
-                          <div className="text-xs text-gray-700">Effort: {dep.effort}</div>
-                        )}
-                        {dep.quarters && dep.quarters.length > 0 && (
-                          <div className="text-xs text-gray-700">
-                            {dep.quarters.join(',')}
-                          </div>
-                        )}
-                        <div className="text-xs mt-1 font-semibold">
-                          {dep.status === 'Committed' ? '✓' :
-                           dep.status === 'Pending' ? '⏳' :
-                           dep.status === 'Under Discussion' ? '💬' :
-                           '🚫'}{' '}
+                      <td key={team} className={`border p-2 ${s?.bgMedium}`}>
+                        <div className="text-xs font-semibold text-center">
+                          {s?.icon}{' '}
                           {dep.status}
                         </div>
+                        {(dep.effort && dep.effort !== 'TBD' || dep.quarters?.length > 0) && (
+                          <div className="flex gap-2 justify-center mt-1">
+                            {dep.effort && dep.effort !== 'TBD' && (
+                              <span className="text-xs text-gray-600">{dep.effort}</span>
+                            )}
+                            {dep.quarters && dep.quarters.length > 0 && (
+                              <span className="text-xs text-gray-600">{dep.quarters.join(', ')}</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                     );
                   })}
