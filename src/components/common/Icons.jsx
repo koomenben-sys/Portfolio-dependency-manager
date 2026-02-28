@@ -22,8 +22,13 @@ export const Target = ({ size }) => (
   </svg>
 );
 
-export const GitBranch = ({ size }) => (
-  <Icon d="M6 3v12m0 0a3 3 0 100 6 3 3 0 000-6zm12-3a3 3 0 100 6 3 3 0 000-6zm0 3a9 9 0 01-9 9" size={size} />
+export const GitBranch = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="6" y1="3" x2="6" y2="15" />
+    <circle cx="18" cy="6" r="3" />
+    <circle cx="6" cy="18" r="3" />
+    <path d="M18 9a9 9 0 0 1-9 9" />
+  </svg>
 );
 
 export const Calendar = ({ size }) => (
