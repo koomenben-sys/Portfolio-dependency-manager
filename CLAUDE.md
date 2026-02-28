@@ -19,13 +19,10 @@ _Updated by Claude at the end of each session._
 
 - **Last session:** 2026-02-28
 - **Worked on:**
-  - Full visual refresh (PR #14, merged): indigo palette, card contrast, left accent borders, input styling
-  - Alignment tab: Teams Requiring Alignment colour-coded (red = can't commit, yellow = under discussion); Portfolio Health dynamic border (green/red); Dependency status order (Committed first); accent borders on all four panel cards
-  - Dependency Matrix: status/icon centred, effort+quarter below side-by-side; empty cells white; cell bg uses `bgMedium` from design system
-  - Design system created at `src/constants/design.js` — card styles, status colours (bg/bgMedium/bgStrong/badge/text/button/icon), buttons, inputs, typography, accent borders, nav
-  - Status colours harmonized across AlignmentView, DependencyMatrix, DependencyItem, DependenciesView
-  - `.env` moved to repo root; worktrees use symlinks (`ln -s ../../../.env .env`)
-  - Logo deferred (knight unicode attempt reverted)
+  - Portfolio Overview: added Pending status badge to initiative list; fixed right-alignment of status labels (`shrink-0 ml-4 text-right`)
+  - Fixed broken GitBranch icon in Dependencies tab (malformed arc path → explicit SVG elements)
+  - Simplified dev server setup: retired `eloquent-jennings` worktree; root repo (`main`) now runs dev server on port 5173
+  - Feature backlog brainstorm saved to `BACKLOG.md`
 - **Next steps:**
   - Nothing pending — app is stable and clean
 - **Future feature ideas (brainstormed, not started):**
