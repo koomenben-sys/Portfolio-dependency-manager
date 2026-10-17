@@ -14,6 +14,10 @@ import { AttentionView } from './views/AttentionView';
 import { SettingsView } from './views/SettingsView';
 import { input } from './components/plan/ui';
 import { ErrorBoundary } from './components/plan/ErrorBoundary';
+import { OnboardingWizard } from './components/plan/OnboardingWizard';
+import { TourLauncher, TourPanel } from './components/plan/TourPanel';
+import { useT, LANGUAGES } from './i18n';
+import { isAdmin } from './data/repository';
 
 const NAV = [
   ['overview', 'Overview'], ['board', 'Board'], ['dependencies', 'Dependencies'], ['session', 'Session'],
@@ -44,13 +48,17 @@ function Shell({ onSignOut }) {
 }
 
 function ShellInner({ ctx, onSignOut }) {
-  const { state, actor, chooseActor, personas, quarter, quarterId, setQuarterId, error, dataSource } = ctx;
+  const { state, actor, chooseActor, personas, quarter, quarterId, setQuarterId, error, dataSource, run } = ctx;
+  const t = useT();
+  const [tour, setTour] = useState(null);
+  const [skipWizard, setSkipWizard] = useState(false);
   const [view, setViewState] = useState(viewFromHash);
   const setView = (id) => { setViewState(id); window.location.hash = id; };
   useEffect(() => { const on = () => setViewState(viewFromHash()); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
   if (error) return <div className="p-8 text-red-700">Could not load data: {error}</div>;
   if (!state) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>;
   const attentionCount = attention(state, actor, quarterId).length;
+  const needsSetup = !state.settings.setupComplete && isAdmin(actor) && !skipWizard;
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900">
@@ -63,39 +71,45 @@ function ShellInner({ ctx, onSignOut }) {
           <nav className="flex flex-wrap gap-1">
             {NAV.map(([id, label]) => (
               <button key={id} onClick={() => setView(id)} className={`px-3 py-1.5 rounded text-sm ${view === id ? 'bg-indigo-600 text-white' : 'hover:bg-gray-100'}`}>
-                {label}{id === 'attention' && attentionCount > 0 && <span className={`ml-1 text-[11px] px-1.5 rounded-full ${view === id ? 'bg-white text-indigo-700' : 'bg-indigo-600 text-white'}`}>{attentionCount}</span>}
+                {t(label)}{id === 'attention' && attentionCount > 0 && <span className={`ml-1 text-[11px] px-1.5 rounded-full ${view === id ? 'bg-white text-indigo-700' : 'bg-indigo-600 text-white'}`}>{attentionCount}</span>}
               </button>
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
-            <label className="flex items-center gap-1">Quarter
+            {dataSource === 'mock' && state.settings.setupComplete && <TourLauncher onStart={(id) => { setSkipWizard(true); setTour(id); }} />}
+            <select aria-label={t('Language')} className={`${input} !w-auto`} value={state.settings.language || 'nl'} onChange={(e) => run('updateSettings', { language: e.target.value })}>
+              {LANGUAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+            <label className="flex items-center gap-1">{t('Quarter')}
               <select className={`${input} !w-auto`} value={quarterId || ''} onChange={(e) => setQuarterId(e.target.value)}>
                 {state.quarters.length === 0 && <option value="">no quarter yet</option>}
                 {state.quarters.map((q) => <option key={q.id} value={q.id}>{quarterLabel(q)} · {PHASES.find((p) => p.id === q.phase)?.label}</option>)}
               </select>
             </label>
             {dataSource === 'mock' ? (
-              <label className="flex items-center gap-1" title="Demo mode: switch persona to see role-based editing">Viewing as
+              <label className="flex items-center gap-1" title={t('Demo mode: switch persona to see role-based editing')}>{t('Viewing as')}
                 <select className={`${input} !w-auto`} value={actor.id} onChange={(e) => chooseActor(e.target.value)}>
                   {personas.map((p) => <option key={p.id} value={p.id}>{p.name} — {p.title}</option>)}
                 </select>
               </label>
             ) : (
-              <span className="text-gray-600">{actor.name} · {actor.role}{actor.canRank ? ' · can rank' : ''} <button className="text-indigo-700 hover:underline ml-2" onClick={onSignOut}>Sign out</button></span>
+              <span className="text-gray-600">{actor.name} · {t(actor.role)}{actor.canRank ? ` · ${t('can rank')}` : ''} <button className="text-indigo-700 hover:underline ml-2" onClick={onSignOut}>{t('Sign out')}</button></span>
             )}
           </div>
         </div>
-        {dataSource === 'mock' && <div className="bg-amber-50 border-t border-amber-200 text-amber-900 text-xs px-4 py-1">Demo mode — fictional data for "Oranje Verzekeringen", stored in this browser only. Switch "Viewing as" to try the roles.</div>}
+        {dataSource === 'mock' && state.settings.setupComplete && <div className="bg-amber-50 border-t border-amber-200 text-amber-900 text-xs px-4 py-1">{t('Demo mode — fictional data for "Oranje Verzekeringen", stored in this browser only. Switch "Viewing as" to try the roles.')}</div>}
       </header>
       <main className="p-6">
-        {view === 'overview' && <OverviewView />}
-        {view === 'board' && <BoardView />}
-        {view === 'dependencies' && <DependenciesView />}
-        {view === 'session' && <SessionView />}
-        {view === 'inquarter' && <InQuarterView />}
-        {view === 'attention' && <AttentionView />}
-        {view === 'settings' && <SettingsView />}
+        {needsSetup && <OnboardingWizard onDone={() => { setSkipWizard(true); setView('board'); }} />}
+        {!needsSetup && view === 'overview' && <OverviewView />}
+        {!needsSetup && view === 'board' && <BoardView />}
+        {!needsSetup && view === 'dependencies' && <DependenciesView />}
+        {!needsSetup && view === 'session' && <SessionView />}
+        {!needsSetup && view === 'inquarter' && <InQuarterView />}
+        {!needsSetup && view === 'attention' && <AttentionView />}
+        {!needsSetup && view === 'settings' && <SettingsView />}
       </main>
+      {tour && <TourPanel scenarioId={tour} onClose={() => setTour(null)} setView={setView} />}
     </div>
   );
 }

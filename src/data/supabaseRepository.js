@@ -33,7 +33,7 @@ const TABLES = {
 // Trigger-written delete events (005 log_delete) use the table name; the app uses the mock's names.
 const EVENT_ACTIONS = { epic_plans_removed: 'plan_removed', dependencies_removed: 'dependency_removed' };
 const DEFAULT_SETTINGS = {
-  orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5,
+  language: 'nl', orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5,
   voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 },
 };
 // Postgres error texts that users should not have to decode.
@@ -113,10 +113,15 @@ export class SupabaseRepository {
     const [teams, themes, quarters, capacity, epics, plans, dependencies, votes, discussions, checkIns, impediments, events] = rows;
     const names = new Map(members.map((m) => [m.id, m.name]));
     const os = osRes.data;
+    const personalLanguage = this.settings.personalLanguage;
     this.settings = {
       ...DEFAULT_SETTINGS, orgName: orgRes.data?.name || '', ...(os?.profile || {}),
       ...(os ? { staleDays: os.stale_days, voteBlocksLock: os.vote_blocks_lock } : {}),
     };
+    // Wizard (PR #16): an organisation with teams and a quarter counts as set up unless the profile says otherwise.
+    if (this.settings.setupComplete === undefined) this.settings.setupComplete = teams.length > 0 && quarters.length > 0;
+    // Language is a personal choice for non-admins (they cannot write org_settings); kept for the session.
+    if (personalLanguage) { this.settings.language = personalLanguage; this.settings.personalLanguage = personalLanguage; }
     this.state = {
       teams: teams.sort(byCreated('createdAt')),
       themes: themes.sort((a, b) => a.position - b.position),
@@ -446,10 +451,15 @@ export class SupabaseRepository {
     return this.load();
   }
   async updateSettings(actor, patch) {
+    if (Object.keys(patch).every((k) => k === 'language') && !isAdmin(actor)) {
+      this.settings = { ...this.settings, language: patch.language, personalLanguage: patch.language };
+      this.state = { ...this.state, settings: { ...this.settings } };
+      return this.state;
+    }
     if (!isAdmin(actor)) throw new PermissionError('Admin only');
     const org = await this._org();
     const next = { ...this.settings, ...patch };
-    const { staleDays, voteBlocksLock, ...profile } = next;
+    const { staleDays, voteBlocksLock, personalLanguage, ...profile } = next;
     // stale_days / vote_blocks_lock are columns (005); the organisation profile is a jsonb document (006).
     this._throw((await supabase.from('org_settings').upsert({ org_id: org, stale_days: staleDays, vote_blocks_lock: voteBlocksLock, profile })).error);
     if (patch.orgName !== undefined) this._throw((await supabase.from('organisations').update({ name: patch.orgName }).eq('id', org)).error);

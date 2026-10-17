@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { createRepository, DATA_SOURCE } from '../data/repository';
 import { PERSONAS } from '../data/seed';
+import { I18nContext } from '../i18n';
 
 const PlanContext = createContext(null);
 
@@ -31,7 +32,8 @@ export function PlanProvider({ children, authUser }) {
   }, [repo]);
 
   useEffect(() => {
-    if (!state || quarterId) return;
+    if (!state) return;
+    if (quarterId && state.quarters.some((q) => q.id === quarterId)) return; // keep a valid selection; re-pick after a reset
     const preferred = state.quarters.find((q) => !['closed', 'active'].includes(q.phase)) || state.quarters.find((q) => q.phase === 'active') || state.quarters[0];
     setQuarterId(preferred?.id ?? null);
   }, [state, quarterId]);
@@ -67,7 +69,8 @@ export function PlanProvider({ children, authUser }) {
   const value = useMemo(() => ({ state, actor, chooseActor, personas: PERSONAS, quarter, quarterId, setQuarterId, run, reset, error, dataSource: DATA_SOURCE, markAttentionSeen }),
     [state, actor, chooseActor, quarter, quarterId, run, reset, error, markAttentionSeen]);
 
-  return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
+  const lang = state?.settings?.language || 'nl';
+  return <PlanContext.Provider value={value}><I18nContext.Provider value={lang}>{children}</I18nContext.Provider></PlanContext.Provider>;
 }
 
 export const usePlan = () => useContext(PlanContext);
