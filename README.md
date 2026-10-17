@@ -13,9 +13,10 @@ Open `http://localhost:5173/Portfolio-dependency-manager/`. Without `VITE_DATA_S
 
 ## Supabase mode
 
-1. Run `db/migrations/001_core.sql` … `004_bootstrap.sql` in the Supabase SQL editor (001 drops the old Feb-2026 tables).
-2. `.env`: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_DATA_SOURCE=supabase`.
-3. Sign in once, re-run 004 so your user becomes admin.
+1. Run `db/migrations/001_core.sql` … `006_live_test.sql` in order in the Supabase SQL editor (001 drops the old Feb-2026 tables; 004 needs your e-mail; all files are re-runnable).
+2. `.env` in the repo root: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (the anon or publishable key), `VITE_DATA_SOURCE=supabase`. For a one-off run: `VITE_DATA_SOURCE=supabase npm run dev`.
+3. Sign in once (create the account from the login screen if needed), then re-run 004 so your user becomes admin. Rename yourself in `memberships.display_name` if the e-mail local part is not what you want shown in history.
+4. Settings → Organisation profile, planning units, quarters and capacity; or import epics from Azure DevOps (demo data).
 
 ## Docs
 
@@ -34,5 +35,5 @@ src/
   views/         Overview, Board, Dependencies, Session, InQuarter, Attention, Settings, Login
   components/plan/  shared UI (pills, capacity bar, modals), EpicPanel, DependencyForm
   integrations/azureDevOps/  mapper (pure), REST client (credentials as arguments), mock response
-db/migrations/   tenant-ready schema, RLS, triggers, bootstrap
+db/migrations/   tenant-ready schema, RLS, triggers, bootstrap, round-2 changes, live-test changes (001-006)
 ```

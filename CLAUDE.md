@@ -20,8 +20,8 @@ _Updated by Claude at the end of each session._
 - **Last session:** 2026-10-17 — MVP iteration "Kwartaalplan" (branch `claude/enterprise-planning-mvp-23669e`)
 - **What changed:** the app was rebuilt around quarterly planning: team lanes by strategic rank, capacity (derived person-weeks, cut line), dependency asks with answers, session phases + confidence vote + lock/diff, in-quarter check-ins and impediments, director overview, "My attention" inbox, mock Azure DevOps import. Old Feb views/hooks removed.
 - **Read first:** `docs/design.md` (decisions D1-D22, build log in section 16), `docs/acceptance.md`.
-- **Data layer:** `src/data/repository.js` contract; `MockRepository` (default, localStorage) and `SupabaseRepository` (untested against a live DB). Views never call Supabase directly.
-- **Open follow-ups:** migration `005_rpc_reason.sql` (RPC so rank changes pass the reason to the trigger), `org_settings` table, pgTAP tenant-isolation tests, Edge Function for the real ADO sync, Dutch UI strings.
+- **Data layer:** `src/data/repository.js` contract; `MockRepository` (default, localStorage) and `SupabaseRepository` (desk-checked and live-tested 2026-10-17, see `docs/design.md` section 16 "Supabase mode"). Views never call Supabase directly. Start Supabase mode locally with `VITE_DATA_SOURCE=supabase npm run dev` (launch config `mvp-supabase`, port 5175).
+- **Open follow-ups:** invite UI for memberships, Supabase Realtime instead of 30 s polling, pgTAP tenant-isolation tests, Edge Function for the real ADO sync, Dutch UI strings.
 - **Owner decisions 2026-10-17:** English terminology in UI; Feb tables may be dropped; name "Kwartaalplan"; old views replaced.
 
 ## Project Overview
@@ -43,7 +43,7 @@ src/
   views/       OverviewView, BoardView, DependenciesView, SessionView, InQuarterView, AttentionView, SettingsView, LoginView
   components/plan/  ui.jsx (Pill, CapacityBar, Modal, ReasonPrompt), EpicPanel.jsx, DependencyForm.jsx
   integrations/azureDevOps/  mapper.js, client.js, mock.js
-db/migrations/ 001_core, 002_rls, 003_functions_and_triggers, 004_bootstrap
+db/migrations/ 001_core, 002_rls, 003_functions_and_triggers, 004_bootstrap, 005_review_round2, 006_live_test (run in order; all re-runnable)
 ```
 
 ### Adding a feature (pattern)

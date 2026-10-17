@@ -47,9 +47,9 @@ export function AuthProvider({ children }) {
 
   // New schema (db/migrations/002): membership row drives role, team and rank permission.
   async function loadMembership(u) {
-    const { data } = await supabase.from('memberships').select('org_id, role, team_id, can_rank').eq('user_id', u.id).limit(1).maybeSingle();
+    const { data } = await supabase.from('memberships').select('*').eq('user_id', u.id).limit(1).maybeSingle();
     if (!data) return null;
-    return { id: u.id, name: u.email, role: data.role, teamId: data.team_id, canRank: data.can_rank, orgId: data.org_id };
+    return { id: u.id, name: data.display_name || u.email, role: data.role, teamId: data.team_id, canRank: data.can_rank, orgId: data.org_id };
   }
 
   useEffect(() => {
