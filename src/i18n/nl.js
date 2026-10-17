@@ -797,6 +797,14 @@ export const nl = {
   'Team matrix': 'Teammatrix',
   'To discuss': 'Te bespreken',
   'asks ↓ provides →': 'vraagt ↓ levert →',
+  // ── iteration 1: Afstemmen ──
+  'Top {n}': 'Top {n}',
+  '{n} at risk': '{n} in gevaar',
+  'rank': 'rang',
+  'Show rank {rank} in the list': 'Toon rang {rank} in de lijst',
+  'Discussed': 'Besproken',
+  'Show matrix': 'Matrix tonen',
+  'Hide matrix': 'Matrix verbergen',
   // ── reset: wizard and tour ──
   'Organisation': 'Organisatie',
   'Quarter and epics': 'Kwartaal en epics',
