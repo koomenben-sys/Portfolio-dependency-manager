@@ -462,6 +462,11 @@ Four fictive users (director, team lead / planner, facilitator, viewer) walked t
 
 Deliberate deviations: the optional reason for "Bespreken" has no entry point in the core screens yet (the panel is read-only for asks; adding a field there would be new UI) — the reason survives from an earlier "Kan niet" answer and is shown wherever it exists. The "Besproken" check is per browser, as the list asked.
 
+### Visual polish (2026-10-18)
+
+CSS/Tailwind only, no new UI or text (review: `polish-review.md` in the side-session notes). Rows 48 → 44px; epic titles regular weight and team names muted so the dependency cell is the one medium-weight element per row; table header "#" aligned to the rank badge. Chips are tint-only (no 1px border; `toneBorder()` exists for buttons such as matrix cells); zero-count chips go grey instead of translucent. Nav: active item = ink text + filled number, no tinted pill. Afstemmen: icon inline before the tile label, 32px counts for Kan niet / Bespreken (quiet at zero), 24px muted for the rest; pairs are one card with `divide-y`, expanded asks on the canvas background. `--color-muted` nudged to `#5f6b80` so muted text stays ≥ 4.5:1 on canvas and surface-2.
+Wow detail: FLIP reorder on Prioriteren — displaced rows glide 260ms (`useLayoutEffect` measuring `getBoundingClientRect`, skipped under `prefers-reduced-motion`).
+
 ## 20. P1: invites, RLS tests, realtime (built 2026-10-17, branch `claude/p1-invites-rls-realtime`)
 
 Migrations `007_invitations.sql` and `008_realtime.sql` (both additive and re-runnable), test `db/tests/rls_test.sql`.
