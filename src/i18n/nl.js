@@ -784,6 +784,11 @@ export const nl = {
   'What do we need?': 'Wat hebben we nodig?',
   'What stands in the way?': 'Wat staat in de weg?',
   'Yes': 'Ja',
+  // ── iteration 1: Afhankelijkheden ──
+  'Requested {n} pw': 'Gevraagd {n} pw',
+  'available {n} pw': 'beschikbaar {n} pw',
+  '{n} epics without asks': '{n} epics zonder verzoeken',
+  'Filter by answer': 'Filter op antwoord',
   // ── reset: Afstemmen ──
   'Matrix': 'Matrix',
   'Nothing here.': 'Niets hier.',
