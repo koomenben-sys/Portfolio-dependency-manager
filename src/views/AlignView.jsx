@@ -136,7 +136,7 @@ export function AlignView() {
       </section>
 
       <div className="mt-6 flex items-center gap-3">
-        <button className={`${cls.quiet} text-accent hover:text-accent-700`} aria-expanded={showMatrix} aria-controls="align-matrix" onClick={() => setShowMatrix((v) => !v)}>{showMatrix ? t('Hide matrix') : t('Show matrix')}</button>
+        <button className="inline-flex items-center h-7 px-1.5 rounded-control text-caption font-medium text-accent hover:underline focus-ring" aria-expanded={showMatrix} aria-controls="align-matrix" onClick={() => setShowMatrix((v) => !v)}>{showMatrix ? t('Hide matrix') : t('Show matrix')}</button>
       </div>
       {showMatrix && (
         <section id="align-matrix" className={`${cls.card} mt-2 p-3 overflow-x-auto anim-slide-in-up`} aria-label={t('Team matrix')} data-tour="matrix">

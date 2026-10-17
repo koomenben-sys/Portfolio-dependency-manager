@@ -5,7 +5,7 @@ import { canWriteTeam, canRank } from '../../data/repository';
 import { quarterLabel, isLockedPhase } from '../../domain/model';
 import { planFor, epicDeps } from '../../domain/plan';
 import { useT } from '../../i18n';
-import { cls, StatusChip, RankNo, InlineReason, Disclosure, ErrorLine, fmtDate } from './core';
+import { cls, StatusChip, InlineReason, Disclosure, ErrorLine, fmtDate } from './core';
 import { describeEvent } from './EpicPanel';
 
 // Simplified epic panel (docs/design.md section 19): title, team, quarter, rank, effort, asks, "Meer", "Historie".
@@ -73,7 +73,7 @@ export function SimpleEpicPanel({ epicId, onClose }) {
             {mayRank ? (
               <input type="number" min="1" max={ranked.length + 1} className={`${cls.input} !w-20 tnum`} value={rankDraft ?? plan.rank ?? ''} aria-label={t('Strategic rank')} placeholder="–"
                 onChange={(e) => setRankDraft(e.target.value === '' ? null : Number(e.target.value))} onKeyDown={(e) => { if (e.key === 'Enter' && rankDraft != null && rankDraft !== plan.rank) applyRank(''); }} />
-            ) : <RankNo rank={plan?.rank} size="sm" />}
+            ) : <span className="tnum">{plan?.rank ?? '–'}</span>}
           </dd>
           {rankDraft != null && rankDraft !== plan.rank && (
             <dd className="col-span-2"><InlineReason required={locked} autoFocus={false} onSave={applyRank} onCancel={() => setRankDraft(null)} /></dd>
@@ -111,8 +111,17 @@ export function SimpleEpicPanel({ epicId, onClose }) {
 
         <Disclosure summary={t('More')}>
           <div className="space-y-3">
-            <label className="block"><span className={cls.label}>{t('Description')}</span><textarea className={cls.textarea} rows={3} defaultValue={epic.description || ''} disabled={!mayEdit} onBlur={(e) => e.target.value !== (epic.description || '') && saveEpic({ description: e.target.value })} /></label>
-            <label className="block"><span className={cls.label}>{t('Label')}</span><input className={cls.input} defaultValue={epic.label || ''} disabled={!mayEdit} onBlur={(e) => e.target.value !== (epic.label || '') && saveEpic({ label: e.target.value })} /></label>
+            {mayEdit ? (
+              <>
+                <label className="block"><span className={cls.label}>{t('Description')}</span><textarea className={cls.textarea} rows={3} defaultValue={epic.description || ''} onBlur={(e) => e.target.value !== (epic.description || '') && saveEpic({ description: e.target.value })} /></label>
+                <label className="block"><span className={cls.label}>{t('Label')}</span><input className={cls.input} defaultValue={epic.label || ''} onBlur={(e) => e.target.value !== (epic.label || '') && saveEpic({ label: e.target.value })} /></label>
+              </>
+            ) : (
+              <dl className="grid grid-cols-[96px_1fr] gap-y-2 gap-x-3 text-body">
+                <dt className="text-muted text-label">{t('Description')}</dt><dd className="whitespace-pre-wrap">{epic.description || '–'}</dd>
+                <dt className="text-muted text-label">{t('Label')}</dt><dd>{epic.label || '–'}</dd>
+              </dl>
+            )}
             {mayEdit && <label className="block"><span className={cls.label}>{t('Team')}</span><select className={cls.input} value={epic.teamId} onChange={(e) => saveEpic({ teamId: e.target.value })}>{state.teams.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>}
             {plan && mayEdit && !removing && <button className={`${cls.quiet} text-danger-fg`} onClick={() => (locked ? setRemoving(true) : act('removePlan', plan.id).then((r) => r.ok && onClose()))}>{t('Remove from this quarter')}</button>}
             {removing && <InlineReason required saveLabel={t('Remove')} onSave={async (reason) => { const r = await act('removePlan', plan.id, reason); if (r.ok) onClose(); }} onCancel={() => setRemoving(false)} />}

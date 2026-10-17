@@ -788,6 +788,7 @@ export const nl = {
   'Requested {n} pw': 'Gevraagd {n} pw',
   'available {n} pw': 'beschikbaar {n} pw',
   '{n} epics without asks': '{n} epics zonder verzoeken',
+  '1 epic without asks': '1 epic zonder verzoeken',
   'Filter by answer': 'Filter op antwoord',
   // ── reset: Afstemmen ──
   'Matrix': 'Matrix',
