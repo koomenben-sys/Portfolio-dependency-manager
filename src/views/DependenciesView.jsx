@@ -1,22 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePlan } from '../context/PlanContext';
 import { canWriteTeam } from '../data/repository';
 import { teamLoad, rankedLoad, incomingEffort, simulateAsk } from '../domain/capacity';
 import { planFor, timingConflict, noResponseDays, daysSince, worstResponse, phaseAllows } from '../domain/plan';
 import { RESPONSE_META, quarterLabel } from '../domain/model';
 import { ResponsePill, Panel, btn, input, Modal, Empty, Pill, RankBadge, fmtDate } from '../components/plan/ui';
+import { NoQuarter } from '../components/plan/NoQuarter';
 import { EpicPanel } from '../components/plan/EpicPanel';
 import { AnswerModal } from '../components/plan/AnswerModal';
 
 // Dependencies: provider intake queue + team x team matrix (AC C2-C8).
 export function DependenciesView() {
   const { state, actor, quarter } = usePlan();
-  const [teamId, setTeamId] = useState(actor.teamId || state.teams[0].id);
+  const [teamId, setTeamId] = useState(actor.teamId || state.teams[0]?.id || '');
+  useEffect(() => { setTeamId(actor.teamId || state.teams[0]?.id || ''); }, [actor.id]); // persona / user switch
   const [sort, setSort] = useState('rank');
   const [cell, setCell] = useState(null);
   const [openEpic, setOpenEpic] = useState(null);
   const [answering, setAnswering] = useState(null);
-  if (!quarter) return null;
+  if (!quarter) return <NoQuarter />;
   const team = state.teams.find((t) => t.id === teamId);
   const deps = state.dependencies.filter((d) => d.quarterId === quarter.id);
   const queue = deps.filter((d) => d.providerTeamId === teamId).map((d) => ({ d, plan: planFor(state, d.epicId, quarter.id), epic: state.epics.find((e) => e.id === d.epicId) }))

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePlan } from '../context/PlanContext';
 import { isAdmin, canWriteTeam } from '../data/repository';
 import { PHASES, PHASE_INDEX, quarterLabel, ROAM, COMMITMENT_META } from '../domain/model';
 import { readiness, diffAgainstBaseline, planFor, phaseAllows, teamPlans } from '../domain/plan';
 import { teamLoad } from '../domain/capacity';
 import { Panel, btn, input, Field, ErrorNote, ReasonPrompt, Modal, Empty, ResponsePill, RankBadge } from '../components/plan/ui';
+import { NoQuarter } from '../components/plan/NoQuarter';
 import { EpicPanel } from '../components/plan/EpicPanel';
 
 // Facilitator screen: phases, readiness, discussion queue, confidence vote, lock + diff, plan of record (AC D1-D7).
@@ -17,7 +18,7 @@ export function SessionView() {
   const [openEpic, setOpenEpic] = useState(null);
   const [print, setPrint] = useState(false);
   const [lockOverride, setLockOverride] = useState(false);
-  if (!quarter) return null;
+  if (!quarter) return <NoQuarter />;
   const admin = isAdmin(actor);
   const idx = PHASE_INDEX[quarter.phase];
   const ready = readiness(state, quarter.id);
@@ -143,6 +144,7 @@ function VoteForm() {
   const { state, actor, quarter, run } = usePlan();
   const teams = state.teams.filter((t) => canWriteTeam(actor, t.id));
   const [teamId, setTeamId] = useState(teams[0]?.id);
+  useEffect(() => { setTeamId(teams[0]?.id); }, [actor.id]);
   const [vote, setVote] = useState(4);
   const [reason, setReason] = useState('');
   const [err, setErr] = useState(null);

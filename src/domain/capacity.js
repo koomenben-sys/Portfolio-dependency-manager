@@ -71,7 +71,7 @@ export function rankedLoad(state, teamId, quarterId) {
   const asks = state.dependencies
     .filter((d) => d.providerTeamId === teamId && d.quarterId === quarterId && ['accepted', 'partial'].includes(d.response))
     .map((d) => { const e = incomingEffort(d); return { kind: 'ask', id: d.id, epicId: d.epicId, rank: planByEpic.get(d.epicId)?.rank ?? null, low: e.low, high: e.high }; });
-  const items = [...own, ...asks].sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9) || (a.kind === 'epic' ? -1 : 1));
+  const items = [...own, ...asks].sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9) || (a.kind === b.kind ? 0 : a.kind === 'epic' ? -1 : 1));
   const available = availableWeeks(state.capacity.find((c) => c.teamId === teamId && c.quarterId === quarterId));
   let cum = 0;
   for (const it of items) { cum += it.high; it.cum = round1(cum); it.fits = cum <= available; }

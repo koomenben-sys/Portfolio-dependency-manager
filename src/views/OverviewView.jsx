@@ -3,13 +3,14 @@ import { usePlan } from '../context/PlanContext';
 import { overview } from '../domain/plan';
 import { quarterLabel, BAND_META } from '../domain/model';
 import { Kpi, Panel, CapacityBar, CapacityLegend, Empty, btn, fmtDate, CommitmentPill } from '../components/plan/ui';
+import { NoQuarter } from '../components/plan/NoQuarter';
 import { EpicPanel } from '../components/plan/EpicPanel';
 
 // Director one-pager, derived entirely from board data (AC E1-E6, D11).
 export function OverviewView() {
   const { state, quarter } = usePlan();
   const [openEpic, setOpenEpic] = useState(null);
-  if (!quarter) return null;
+  if (!quarter) return <NoQuarter />;
   const o = overview(state, quarter.id);
   const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
   return (

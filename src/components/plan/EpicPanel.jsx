@@ -64,7 +64,7 @@ export function EpicPanel({ epicId, onClose }) {
             </select>
           </Field>
           <Field l="Strategic theme">
-            <select className={input} value={epic.themeId || ''} disabled={!mayEdit && !mayRank} onChange={(e) => saveEpic({ themeId: e.target.value || null })}>
+            <select className={input} value={epic.themeId || ''} disabled={!mayEdit} onChange={(e) => saveEpic({ themeId: e.target.value || null })}>
               <option value="">— unaligned —</option>
               {state.themes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>

@@ -127,7 +127,7 @@ export function diffAgainstBaseline(state, quarterId) {
   }
   for (const b of base.plans) {
     if (!curPlans.some((p) => p.epicId === b.epicId)) {
-      const ev = state.events.filter((e) => e.action === 'plan_removed' && e.quarterId === quarterId && e.before?.epicId === b.epicId).sort((x, y) => y.at.localeCompare(x.at))[0];
+      const ev = state.events.filter((e) => e.action === 'plan_removed' && e.quarterId === quarterId && (e.before?.epicId === b.epicId || e.before?.epic_id === b.epicId)).sort((x, y) => y.at.localeCompare(x.at))[0];
       out.push({ kind: 'epic dropped', epicId: b.epicId, text: `${title(b.epicId)} dropped from the quarter`, reason: ev?.reason || '' });
     }
   }
@@ -144,7 +144,8 @@ export function diffAgainstBaseline(state, quarterId) {
   for (const c of state.capacity.filter((x) => x.quarterId === quarterId)) {
     const b = (base.capacity || []).find((x) => x.teamId === c.teamId);
     if (b && ['headcount', 'weeks', 'focusFactor', 'absenceWeeks', 'reservePct'].some((k) => b[k] !== c[k])) {
-      out.push({ kind: 'capacity', epicId: null, text: `${teams.get(c.teamId)?.name}: capacity assumptions changed (headcount ${b.headcount} → ${c.headcount}, absence ${b.absenceWeeks} → ${c.absenceWeeks}, reserve ${b.reservePct}% → ${c.reservePct}%)`, reason: lastReason(state, c.id, ['capacity_changed']) });
+      const ev = state.events.filter((e) => e.action === 'capacity_changed' && e.quarterId === quarterId && (e.entityId === c.id || e.after?.teamId === c.teamId || e.after?.team_id === c.teamId)).sort((x, y) => y.at.localeCompare(x.at))[0];
+      out.push({ kind: 'capacity', epicId: null, text: `${teams.get(c.teamId)?.name}: capacity assumptions changed (headcount ${b.headcount} → ${c.headcount}, absence ${b.absenceWeeks} → ${c.absenceWeeks}, reserve ${b.reservePct}% → ${c.reservePct}%)`, reason: ev?.reason || '' });
     }
   }
   return out;

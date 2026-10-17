@@ -95,7 +95,9 @@ export function ErrorNote({ error }) { return error ? <p role="alert" className=
 // Accessible modal: role=dialog, Escape closes, focus moves in and returns, simple focus trap.
 export function Modal({ title, onClose, children, wide = false }) {
   const ref = useRef(null);
+  const closeRef = useRef(onClose); closeRef.current = onClose;
   useEffect(() => {
+    const onClose = (...a) => closeRef.current?.(...a);
     const prev = document.activeElement;
     const first = ref.current?.querySelector('input, textarea, select, button');
     first?.focus();
@@ -111,7 +113,7 @@ export function Modal({ title, onClose, children, wide = false }) {
     };
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('keydown', onKey); prev?.focus?.(); };
-  }, [onClose]);
+  }, []);
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : 'Dialog'} className={`bg-white rounded-lg shadow-xl ${wide ? 'w-[760px]' : 'w-[480px]'} max-w-[95vw] max-h-[90vh] overflow-auto`} onClick={(e) => e.stopPropagation()}>

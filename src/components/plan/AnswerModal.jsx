@@ -10,7 +10,7 @@ export function AnswerModal({ dep, onClose }) {
   const [response, setResponse] = useState(dep.response === 'proposed' ? 'accepted' : dep.response);
   const [reason, setReason] = useState(dep.responseReason || '');
   const [to, setTo] = useState(dep.deferredToQuarterId || '');
-  const [granted, setGranted] = useState({ low: dep.grantedLow ?? '', high: dep.grantedHigh ?? '' });
+  const [granted, setGranted] = useState({ low: dep.grantedLow ?? 0, high: dep.grantedHigh ?? '' });
   const [err, setErr] = useState(null);
   const later = state.quarters.filter((q) => q.id !== dep.quarterId && q.phase !== 'closed');
   const epic = state.epics.find((e) => e.id === dep.epicId);

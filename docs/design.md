@@ -285,6 +285,10 @@ Reviewers: director, product owner, engineering manager (platform team), agile c
 
 Rejected / deferred from round 3: regulation as a configured list with 2nd-line owner and audit export (follow-up, section 17.4); per-skill capacity pools (D23); provider-side work-item link (follow-up).
 
+### Code review (Fable, correctness only) and what changed
+
+25 findings, 24 fixed in commit "Fix code-review findings": lazy Supabase client so demo mode runs with no env (AC A1); partial updates in the Supabase adapter use `update` instead of `upsert` (epics, impediments); `createEpic` returns the created epic (board no longer guesses the last row); ROAM changes no longer fail on the title check; empty-state safety (no teams, no quarter, hooks order); cross-cutting discussion items allowed in SQL; stable comparator for the ranked cut; epic team change re-routes its asks and refuses a self-dependency (mock + SQL trigger); rank permission may change the rank only (mock + trigger, closes an RLS hole); `update_with_reason` whitelist and empty-patch guard; `deleteTeam` refuses while asks reference the team; impediments require an epic; partial answers default granted-low to 0 in both adapters; answers blocked in closed quarters; team selectors follow a persona switch; modal focus handling no longer re-runs on every render; DB event names normalised for the diff; `updated_at` bumps only on real changes; settings merge instead of overwrite. Not changed: theme assignment stays with the epic's team (rank holders steer themes via the theme list, not per epic).
+
 ### Owner questions during the build
 - "Which agent is the coordinator?" - this session; the role agents are one-shot reviewers.
 - Model: switched to Fable 5.1 mid-session by the owner.

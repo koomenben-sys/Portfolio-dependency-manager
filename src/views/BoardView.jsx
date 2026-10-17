@@ -5,6 +5,7 @@ import { teamLoad, rankedLoad } from '../domain/capacity';
 import { teamPlans, teamCutEpicId, belowCutSet, epicDeps, worstResponse, incomingForTeam, changedSinceBaseline, latestCheckIn, daysUntil } from '../domain/plan';
 import { COMMITMENTS, COMMITMENT_META, RESPONSE_META, quarterLabel } from '../domain/model';
 import { CommitmentPill, CapacityBar, CapacityLegend, Pill, RankBadge, btn, input, Modal, Field, ErrorNote, Empty, fmtDate } from '../components/plan/ui';
+import { NoQuarter } from '../components/plan/NoQuarter';
 import { EpicPanel } from '../components/plan/EpicPanel';
 
 // Quarter board: team lanes, epics by strategic rank, capacity bar + cut line (AC B1-B8).
@@ -16,10 +17,9 @@ export function BoardView() {
   const [addFor, setAddFor] = useState(null);
   const [showAssumptions, setShowAssumptions] = useState(null);
   const [showLegend, setShowLegend] = useState(false);
-  if (!quarter) return null;
-
   const labels = useMemo(() => [...new Set(state.epics.map((e) => e.label).filter(Boolean))].sort(), [state.epics]);
   const epicsById = useMemo(() => new Map(state.epics.map((e) => [e.id, e])), [state.epics]);
+  if (!quarter) return <NoQuarter />;
 
   const passes = (e) => (!filters.label || e.label === filters.label) && (!filters.theme || e.themeId === filters.theme)
     && (!filters.regulatory || e.regulatory) && (!filters.unaligned || !e.themeId);
@@ -140,9 +140,9 @@ function AddEpicModal({ team, onClose, onCreated }) {
   const locked = !!quarter.baseline;
   const submit = async () => {
     if (locked && !reason.trim()) return setErr('The quarter is locked: give a reason for adding an epic');
-    const r = await run('upsertEpic', { teamId: team.id, title, themeId: themeId || null, ownerName: actor.name });
+    const r = await run('createEpic', { teamId: team.id, title, themeId: themeId || null, ownerName: actor.name });
     if (!r.ok) return setErr(r.error);
-    const created = r.result.epics[r.result.epics.length - 1];
+    const created = r.result;
     const r2 = await run('upsertPlan', { epicId: created.id, quarterId: quarter.id, commitment: 'draft', effortLow: 0, effortHigh: 0 }, reason);
     if (!r2.ok) return setErr(r2.error);
     onCreated(created.id);

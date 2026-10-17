@@ -49,7 +49,7 @@ function ShellInner({ ctx, onSignOut }) {
   const setView = (id) => { setViewState(id); window.location.hash = id; };
   useEffect(() => { const on = () => setViewState(viewFromHash()); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
   if (error) return <div className="p-8 text-red-700">Could not load data: {error}</div>;
-  if (!state || !quarter) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>;
+  if (!state) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>;
   const attentionCount = attention(state, actor, quarterId).length;
 
   return (
@@ -69,7 +69,8 @@ function ShellInner({ ctx, onSignOut }) {
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
             <label className="flex items-center gap-1">Quarter
-              <select className={`${input} !w-auto`} value={quarterId} onChange={(e) => setQuarterId(e.target.value)}>
+              <select className={`${input} !w-auto`} value={quarterId || ''} onChange={(e) => setQuarterId(e.target.value)}>
+                {state.quarters.length === 0 && <option value="">no quarter yet</option>}
                 {state.quarters.map((q) => <option key={q.id} value={q.id}>{quarterLabel(q)} · {PHASES.find((p) => p.id === q.phase)?.label}</option>)}
               </select>
             </label>

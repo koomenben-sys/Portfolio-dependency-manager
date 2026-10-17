@@ -4,6 +4,7 @@ import { canWriteTeam, isPlanner } from '../data/repository';
 import { latestCheckIn, isStale, daysSince, teamPlans } from '../domain/plan';
 import { quarterLabel, ROAM, IMPEDIMENT_AGING_DAYS, CONFIDENCE } from '../domain/model';
 import { Panel, btn, input, Field, Modal, ErrorNote, Empty, ConfidenceMark, CommitmentPill } from '../components/plan/ui';
+import { NoQuarter } from '../components/plan/NoQuarter';
 import { EpicPanel } from '../components/plan/EpicPanel';
 
 // In-quarter: quick check-ins, impediments/risks, stale panel (AC F1-F3).
@@ -13,7 +14,7 @@ export function InQuarterView() {
   const [raise, setRaise] = useState(false);
   const [quick, setQuick] = useState(null); // epic for quick check-in
   const [err, setErr] = useState(null);
-  if (!quarter) return null;
+  if (!quarter) return <NoQuarter />;
   const active = quarter.phase === 'active';
   const open = state.impediments.filter((i) => i.status === 'open');
   const resolved = state.impediments.filter((i) => i.status === 'resolved');
@@ -109,8 +110,9 @@ function RaiseImpediment({ onClose }) {
       <div className="mt-2"><Field l="Title"><input className={input} value={form.title} onChange={set('title')} autoFocus /></Field></div>
       <div className="mt-2"><Field l="Epic"><select className={input} value={form.epicId} onChange={set('epicId')}>{plans.map((p) => { const e = state.epics.find((x) => x.id === p.epicId); return <option key={p.id} value={e.id}>{e.refCode} {e.title}</option>; })}</select></Field></div>
       {form.kind === 'risk' && <div className="mt-2"><Field l="ROAM"><select className={input} value={form.roam || ''} onChange={(e) => setForm({ ...form, roam: e.target.value || null })}><option value="">–</option>{ROAM.map((r) => <option key={r} value={r}>{r}</option>)}</select></Field></div>}
+      {plans.length === 0 && <p className="text-xs text-amber-900 mt-2">Plan an epic in this quarter first; impediments are linked to an epic.</p>}
       <ErrorNote error={err} />
-      <div className="flex justify-end gap-2 mt-3"><button className={btn.secondary} onClick={onClose}>Cancel</button><button className={btn.primary} onClick={async () => { const r = await run('upsertImpediment', { ...form, roam: form.kind === 'risk' ? form.roam : null }); if (r.ok) onClose(); else setErr(r.error); }}>Raise</button></div>
+      <div className="flex justify-end gap-2 mt-3"><button className={btn.secondary} onClick={onClose}>Cancel</button><button className={btn.primary} disabled={!form.epicId} onClick={async () => { const r = await run('upsertImpediment', { ...form, roam: form.kind === 'risk' ? form.roam : null }); if (r.ok) onClose(); else setErr(r.error); }}>Raise</button></div>
     </Modal>
   );
 }

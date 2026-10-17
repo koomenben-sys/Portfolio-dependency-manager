@@ -332,6 +332,16 @@ Feature: Round-2 behaviours
     Then the quarter is locked and the reason is in the history
 ```
 
+## G3. Changes from validation round 3 and the code review (implemented)
+
+- C14. Open and priority-call asks in the intake queue and the answer dialog are judged by inserting them at the requesting epic's rank: "fits at rank N (cum. X)", "pushes EP-… below the cut line", or "lands below the cut line". The "+N pw if all accepted" figure includes priority-call asks.
+- C15. The requesting team can acknowledge a declined / deferred / priority-call answer; acknowledged answers no longer count against the team's readiness.
+- C16. Capacity formula: available = (headcount × weeks − absence weeks) × focus factor × (1 − reserve %).
+- D11. Phases advance one step at a time (rewinds need a reason); the confidence average on the Overview and the votes in the Plan of record stay hidden until revealed or locked; rewinding to Vote or earlier hides votes again.
+- E8. Regulatory epics whose deadline falls before the start of the selected quarter, and that are not planned in an earlier quarter, are flagged "deadline before quarter start" in the register and the red flags.
+- F6. My attention is scoped to the selected quarter, remembers when you last looked (for "new since your last visit"), lists your own unanswered asks, and offers Answer / Acknowledge actions.
+- A11. Demo mode runs with no Supabase environment variables at all; the app renders a "No quarter yet" notice instead of hanging when an organisation has no quarter.
+
 ## H. Out of scope (explicit)
 
 Multi-tenant signup/billing, SSO, Jira/Trello, e-mail notifications, real-time presence, change-request workflow, cross-quarter heatmap, network graph, Program/Portfolio entities, Dutch UI text.

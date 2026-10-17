@@ -56,6 +56,11 @@ export class MockRepository {
     const teamId = epic.teamId ?? existing?.teamId;
     if (!canWriteTeam(actor, teamId) || (existing && !canWriteTeam(actor, existing.teamId))) throw new PermissionError('You can only edit epics of your own team');
     if ((!existing || epic.title !== undefined) && !epic.title?.trim()) throw new ValidationError('Title is required');
+    if (existing && epic.teamId && epic.teamId !== existing.teamId) {
+      const deps = this.state.dependencies.filter((d) => d.epicId === existing.id);
+      if (deps.some((d) => d.providerTeamId === epic.teamId)) throw new ValidationError('This epic asks the new team for something; remove that ask first');
+      deps.forEach((d) => { d.requesterTeamId = epic.teamId; });
+    }
     if (existing) {
       if (existing.externalSource) { // imported fields are mastered by the source (D20)
         epic = { ...epic, title: existing.title, externalSource: existing.externalSource, externalId: existing.externalId, externalUrl: existing.externalUrl };
@@ -65,6 +70,11 @@ export class MockRepository {
       this.state.epics.push({ id: uid(), refCode: this._ref('epic'), description: '', ownerName: '', label: '', regulatory: false, regulatoryDeadline: null, themeId: null, externalSource: null, externalId: null, externalUrl: null, ...epic });
     }
     return this._persist();
+  }
+  // Returns the created epic (not the state) so the caller can plan it right away.
+  async createEpic(actor, epic) {
+    await this.upsertEpic(actor, { ...epic, id: undefined });
+    return this.state.epics[this.state.epics.length - 1];
   }
   async deleteEpic(actor, epicId) {
     const e = this._epic(epicId);
@@ -90,6 +100,10 @@ export class MockRepository {
       if (!reason.trim()) throw new ValidationError('A reason is required to change the strategic rank');
     }
     if (!teamWrite && !(canRank(actor) && existing)) throw new PermissionError('You can only plan epics of your own team');
+    if (!teamWrite && existing) {
+      const other = Object.keys(plan).filter((k) => !['id', 'epicId', 'quarterId', 'rank'].includes(k) && plan[k] !== existing[k]);
+      if (other.length) throw new PermissionError('Rank permission lets you change the strategic rank only');
+    }
     if (plan.effortLow != null && plan.effortHigh != null && plan.effortHigh < plan.effortLow) throw new ValidationError('High estimate must be at least the low estimate');
     if (existing && isLockedPhase(q.phase) && !reason.trim()) {
       const changed = ['commitment', 'rank', 'effortLow', 'effortHigh'].some((k) => plan[k] !== undefined && plan[k] !== existing[k]);
@@ -142,11 +156,13 @@ export class MockRepository {
     if (!d) throw new ValidationError('Unknown dependency');
     if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can answer');
     const q = this._quarter(d.quarterId);
-    if (['prep', 'draft'].includes(q.phase)) throw new ValidationError(`Answers open in the negotiate phase (now: ${q.phase})`);
+    if (!phaseAllows(q.phase, 'answer')) throw new ValidationError(`Answers are open from the Negotiate phase until the quarter closes (now: ${q.phase})`);
     if (response !== 'accepted' && response !== 'proposed' && !reason.trim()) throw new ValidationError('A reason is required for this answer');
     if (response === 'deferred' && !deferredToQuarterId) throw new ValidationError('Choose the quarter to defer to');
     if (response === 'partial') {
-      if (!(grantedHigh > 0) || grantedLow == null) throw new ValidationError('Say how much you can do (granted person-weeks)');
+      if (!(grantedHigh > 0)) throw new ValidationError('Say how much you can do (granted person-weeks)');
+      grantedLow = grantedLow ?? 0;
+      if (grantedLow > grantedHigh) throw new ValidationError('Granted low cannot exceed granted high');
       if (grantedHigh > d.effortHigh) throw new ValidationError('Granted effort cannot exceed the ask');
     }
     this._event(actor, 'dependency_answered', 'dependencies', d.id, d.quarterId, reason, { response: d.response }, { response, grantedLow, grantedHigh });
@@ -259,8 +275,9 @@ export class MockRepository {
   }
   async upsertImpediment(actor, imp) {
     if (!isPlanner(actor)) throw new PermissionError('Viewers cannot raise impediments');
-    if (!imp.title?.trim()) throw new ValidationError('Title is required');
     const existing = imp.id && this.state.impediments.find((x) => x.id === imp.id);
+    if ((!existing || imp.title !== undefined) && !imp.title?.trim()) throw new ValidationError('Title is required');
+    if (!existing && !imp.epicId && !imp.depId) throw new ValidationError('Link the impediment to an epic');
     if (existing) Object.assign(existing, imp);
     else this.state.impediments.push({ id: uid(), refCode: this._ref('impediment'), kind: 'impediment', ownerName: actor.name, status: 'open', roam: null, raisedAt: now(), resolvedAt: null, depId: null, ...imp });
     return this._persist();
@@ -292,6 +309,8 @@ export class MockRepository {
   async deleteTeam(actor, id) {
     if (!isAdmin(actor)) throw new PermissionError('Admin only');
     if (this.state.epics.some((e) => e.teamId === id)) throw new ValidationError('Move or delete the team\'s epics first');
+    if (this.state.dependencies.some((d) => d.providerTeamId === id)) throw new ValidationError('Other teams still have asks for this team; remove or re-route them first');
+    (this.state.members || []).forEach((m) => { if (m.teamId === id) m.teamId = null; });
     this.state.teams = this.state.teams.filter((t) => t.id !== id);
     this.state.capacity = this.state.capacity.filter((c) => c.teamId !== id);
     return this._persist();

@@ -18,7 +18,6 @@ const fromRow = (r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [cam
 const toRow = (o, orgId) => ({ ...Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined).map(([k, v]) => [snake(k), v])), org_id: orgId });
 
 // app field -> db field where they differ from plain snake_case
-const RENAME = { plans: { rank: 'strategic_rank' }, discussions: { depId: 'dependency_id' }, impediments: { depId: 'dependency_id' } };
 const TABLES = {
   teams: 'teams', themes: 'themes', quarters: 'quarters', capacity: 'team_capacity', epics: 'epics', plans: 'epic_plans',
   dependencies: 'dependencies', votes: 'confidence_votes', discussions: 'discussion_items', checkIns: 'check_ins',
@@ -50,14 +49,14 @@ export class SupabaseRepository {
     const [teams, themes, quarters, capacity, epics, plans, dependencies, votes, discussions, checkIns, impediments, events] =
       await Promise.all(Object.values(TABLES).map((t) => this._all(t)));
     const { data: os } = await supabase.from('org_settings').select('*').eq('org_id', await this._org()).maybeSingle();
-    if (os) this.settings = { staleDays: os.stale_days, voteBlocksLock: os.vote_blocks_lock };
+    if (os) Object.assign(this.settings, { staleDays: os.stale_days, voteBlocksLock: os.vote_blocks_lock });
     return {
       teams, themes: themes.sort((a, b) => a.position - b.position), quarters: quarters.sort((a, b) => a.year * 4 + a.q - (b.year * 4 + b.q)),
       capacity, epics,
       plans: plans.map((p) => ({ ...p, rank: p.strategicRank })),
       dependencies, votes, discussions: discussions.map((d) => ({ ...d, depId: d.dependencyId })), checkIns,
       impediments: impediments.map((i) => ({ ...i, depId: i.dependencyId })),
-      events: events.map((e) => ({ ...e, actorName: e.actorId })),
+      events: events.map((e) => ({ ...e, actorName: e.actorId, action: ({ epic_plans_removed: 'plan_removed', dependencies_removed: 'dependency_removed' })[e.action] || e.action })),
       members: (await this._all('memberships')).map((m) => ({ id: m.userId, name: m.userId, title: '', role: m.role, teamId: m.teamId, canRank: m.canRank })),
       settings: { orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', noResponseDays: 5, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, ...this.settings },
     };
@@ -76,11 +75,23 @@ export class SupabaseRepository {
   async upsertEpic(actor, epic) {
     if (!epic.title?.trim() && !epic.id) throw new ValidationError('Title is required');
     const org = await this._org();
-    const row = toRow(epic, org);
-    if (!epic.id) row.ref_code = await this._ref('epic');
-    const { error } = await supabase.from('epics').upsert(row, { onConflict: 'org_id,id' });
-    this._throw(error);
+    const { id, ...rest } = epic;
+    const row = toRow(rest, org);
+    if (id) {
+      // Partial update; team changes also re-route the epic's asks (mirrors the mock and the 005 trigger).
+      delete row.org_id;
+      this._throw((await supabase.from('epics').update(row).eq('id', id)).error);
+    } else {
+      row.ref_code = await this._ref('epic');
+      const { data, error } = await supabase.from('epics').insert(row).select('id').single();
+      this._throw(error);
+      this.lastCreatedEpicId = data.id;
+    }
     return this.load();
+  }
+  async createEpic(actor, epic) {
+    const s = await this.upsertEpic(actor, { ...epic, id: undefined });
+    return s.epics.find((e) => e.id === this.lastCreatedEpicId);
   }
   async deleteEpic(actor, epicId) { this._throw((await supabase.from('epics').delete().eq('id', epicId)).error); return this.load(); }
 
@@ -118,6 +129,7 @@ export class SupabaseRepository {
     if (response !== 'accepted' && !reason.trim()) throw new ValidationError('A reason is required for this answer');
     if (response === 'deferred' && !deferredToQuarterId) throw new ValidationError('Choose the quarter to defer to');
     if (response === 'partial' && !(grantedHigh > 0)) throw new ValidationError('Say how much you can do (granted person-weeks)');
+    if (response === 'partial') grantedLow = grantedLow ?? 0;
     this._throw((await supabase.from('dependencies').update({ response, response_reason: reason, deferred_to_quarter_id: deferredToQuarterId,
       granted_low: response === 'partial' ? grantedLow : null, granted_high: response === 'partial' ? grantedHigh : null }).eq('id', depId)).error);
     if (response === 'needs_priority_call') {
@@ -132,6 +144,9 @@ export class SupabaseRepository {
   }
   async updateDependency(actor, depId, patch) {
     const { reason, ...rest } = patch; const { org_id, ...row } = toRow(rest, await this._org());
+    const s = await this.load(); const cur = s.dependencies.find((d) => d.id === depId);
+    const scopeChanged = cur && ['ask', 'effortLow', 'effortHigh'].some((k) => rest[k] !== undefined && rest[k] !== cur[k]);
+    if (scopeChanged && cur.response !== 'proposed') Object.assign(row, { response: 'proposed', response_reason: '', granted_low: null, granted_high: null, responded_at: null, resent_at: new Date().toISOString() });
     if (reason) await this._withReason('dependencies', depId, row, reason);
     else this._throw((await supabase.from('dependencies').update(row).eq('id', depId)).error);
     return this.load();
@@ -185,9 +200,10 @@ export class SupabaseRepository {
   async addCheckIn(actor, c) { this._throw((await supabase.from('check_ins').insert({ ...toRow(c, await this._org()), author_id: actor.id })).error); return this.load(); }
   async upsertImpediment(actor, imp) {
     const { depId, ...rest } = imp; const org = await this._org();
-    const row = { ...toRow(rest, org), dependency_id: depId ?? undefined };
-    if (!imp.id) row.ref_code = await this._ref('impediment');
-    this._throw((await supabase.from('impediments').upsert(row, { onConflict: 'org_id,id' })).error);
+    const { id, ...fields } = rest;
+    const row = { ...toRow(fields, org), dependency_id: depId ?? undefined };
+    if (id) { delete row.org_id; this._throw((await supabase.from('impediments').update(row).eq('id', id)).error); }
+    else { row.ref_code = await this._ref('impediment'); this._throw((await supabase.from('impediments').insert(row)).error); }
     return this.load();
   }
   async resolveImpediment(actor, id) { this._throw((await supabase.from('impediments').update({ status: 'resolved', resolved_at: new Date().toISOString() }).eq('id', id)).error); return this.load(); }
@@ -195,7 +211,12 @@ export class SupabaseRepository {
   // ── setup ──────────────────────────────────────────────────────────────────
   async upsertCapacity(actor, cap) { const { id, reason, ...rest } = cap; this._throw((await supabase.from('team_capacity').upsert(toRow(rest, await this._org()), { onConflict: 'org_id,team_id,quarter_id' })).error); if (reason) await this._event(actor, 'capacity_changed', 'team_capacity', id || null, cap.quarterId, reason, null, rest); return this.load(); }
   async upsertTeam(actor, t) { this._throw((await supabase.from('teams').upsert(toRow(t, await this._org()), { onConflict: 'org_id,id' })).error); return this.load(); }
-  async deleteTeam(actor, id) { this._throw((await supabase.from('teams').delete().eq('id', id)).error); return this.load(); }
+  async deleteTeam(actor, id) {
+    const s = await this.load();
+    if (s.epics.some((e) => e.teamId === id)) throw new ValidationError('Move or delete the team\'s epics first');
+    if (s.dependencies.some((d) => d.providerTeamId === id)) throw new ValidationError('Other teams still have asks for this team; remove or re-route them first');
+    this._throw((await supabase.from('teams').delete().eq('id', id)).error); return this.load();
+  }
   async upsertTheme(actor, t) { this._throw((await supabase.from('themes').upsert(toRow(t, await this._org()), { onConflict: 'org_id,id' })).error); return this.load(); }
   async deleteTheme(actor, id) { this._throw((await supabase.from('themes').delete().eq('id', id)).error); return this.load(); }
   async upsertQuarter(actor, q) { this._throw((await supabase.from('quarters').upsert(toRow(q, await this._org()), { onConflict: 'org_id,id' })).error); return this.load(); }
