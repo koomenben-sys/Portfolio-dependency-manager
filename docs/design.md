@@ -337,7 +337,8 @@ Live walk-through (2026-10-17, owner's project, migrations 001-006 run by the ow
 | Import | mock ADO: 6 created, 2 suggestions; re-import updates title/state and keeps rank/effort/commitment; title edits on imported epics ignored (D20): ok. |
 | Deletes | `deleteTeam` with epics refused; theme delete nulls `themeId`; epic delete cascades and keeps events: ok. |
 | Screens | Overview, Board, Dependencies, Session, In-quarter, My attention, Settings render the live data; polling picks up changes within 30 s. |
-| Not tested live | planner / viewer accounts (only the owner's admin account exists): RLS for non-admins is desk-checked and mirrored in JS but not exercised against the database — invite a second user to verify (follow-up, section 17.4). A write through the UI forms was not repeated separately; the forms call the same `run()` path. |
+| UI forms (after merging `main` with the Dutch UI and onboarding wizard, PR #15 and #16) | wizard in Dutch with the profile from Supabase; team added through the form, duplicate name shows the Dutch message; capacity saved through the form with the profile defaults; "Open het bord" stores `setupComplete` (wizard does not return after reload); check-in through the dialog; admin language switch to English and back persists across reloads: ok. |
+| Not tested live | planner / viewer accounts (only the owner's admin account exists): RLS for non-admins is desk-checked and mirrored in JS but not exercised against the database — invite a second user to verify (follow-up, section 17.4). |
 
 
 ### Owner questions during the build
