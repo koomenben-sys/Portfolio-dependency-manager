@@ -248,9 +248,9 @@ Built 2026-10-17 on branch `claude/enterprise-planning-mvp-23669e`.
 - Source layout: `src/domain/` (pure model, capacity, selectors), `src/data/` (repository contract, mock, Supabase, seed), `src/context/PlanContext.jsx`, `src/views/*View.jsx`, `src/components/plan/`, `src/integrations/azureDevOps/`.
 - `VITE_DATA_SOURCE` unset or `mock` = demo mode without login, persona switcher in the header, data in localStorage. `supabase` = existing auth flow + `memberships`.
 - Verified: `npm run build` passes; all screens render against the mock in the browser; a scripted contract test in the browser confirmed the authorisation and validation rules (viewer read-only, planner own-team only, rank needs permission + reason, decline/defer need reason/quarter, phase gating, vote <=3 needs reason, lock stores baseline, locked edits need a reason and show in the diff, import keeps planning fields).
-- Deviation (D17/D6 in the Supabase adapter): supabase-js cannot set the `app.reason` GUC that the rank trigger reads. The adapter calls an RPC `update_plan_with_reason` that does not exist yet and falls back to writing the event itself; a follow-up migration `005_rpc_reason.sql` should add that RPC (set_config + update in one function). Until then rank changes through the Supabase adapter will be rejected by the trigger. The mock adapter is unaffected.
-- Deviation: org-level settings (check-in cadence, vote-blocks-lock) live in memory in the Supabase adapter; an `org_settings` table is a follow-up.
-- Deviation: `plan_events.actor_name` is not stored in Postgres (only `actor_id`); the UI shows the id in Supabase mode.
+- Deviation (D17/D6 in the Supabase adapter): supabase-js cannot set the `app.reason` GUC that the rank trigger reads. Resolved in 005 (`update_with_reason` / `delete_with_reason`): the adapter sends reason-carrying writes through those RPCs.
+- Deviation: org-level settings lived in memory in the Supabase adapter. Resolved: `org_settings` (005) plus the `profile` document (006).
+- Deviation: `plan_events.actor_name` is not stored in Postgres (only `actor_id`). Resolved: names come from `memberships.display_name` via `member_directory` (006).
 - Not done: live Azure DevOps call (CORS blocks it from the browser anyway; Edge Function is the path), Supabase adapter against a real database, automated tests.
 
 ### Validation round 2 (built MVP, five role agents) and what changed
@@ -288,6 +288,57 @@ Rejected / deferred from round 3: regulation as a configured list with 2nd-line 
 ### Code review (Fable, correctness only) and what changed
 
 25 findings, 24 fixed in commit "Fix code-review findings": lazy Supabase client so demo mode runs with no env (AC A1); partial updates in the Supabase adapter use `update` instead of `upsert` (epics, impediments); `createEpic` returns the created epic (board no longer guesses the last row); ROAM changes no longer fail on the title check; empty-state safety (no teams, no quarter, hooks order); cross-cutting discussion items allowed in SQL; stable comparator for the ranked cut; epic team change re-routes its asks and refuses a self-dependency (mock + SQL trigger); rank permission may change the rank only (mock + trigger, closes an RLS hole); `update_with_reason` whitelist and empty-patch guard; `deleteTeam` refuses while asks reference the team; impediments require an epic; partial answers default granted-low to 0 in both adapters; answers blocked in closed quarters; team selectors follow a persona switch; modal focus handling no longer re-runs on every render; DB event names normalised for the diff; `updated_at` bumps only on real changes; settings merge instead of overwrite. Not changed: theme assignment stays with the epic's team (rank holders steer themes via the theme list, not per epic).
+
+### Supabase mode: live test against the owner's project (2026-10-17, branch `claude/pensive-nobel-5232db`)
+
+Status at the time of writing: the owner's project is reachable (new-style publishable key in `.env`; note that the
+PostgREST root `/rest/v1/` answers "Secret API key required" to such a key, table endpoints work normally), but
+**migrations 001-005 had not been run**: the Feb-2026 tables (`portfolios`, `initiatives`, `counters`, `user_roles`,
+the June `quarters` with `quarter`/`stage` columns) were still present and none of the new tables or RPCs existed.
+The adapter was therefore first desk-checked against the schema and the mock; the live walk-through follows once
+the owner has run 001-006 (001 drops the Feb tables, data loss accepted by the owner).
+
+Desk-check findings and what changed in `src/data/supabaseRepository.js`:
+
+| Finding | Change |
+|---|---|
+| PostgREST updates zero rows **without an error** when RLS denies an UPDATE, so a planner editing another team's epic saw "saved" and nothing happened | every command mirrors the mock's JS permission and validation checks (same error text in both modes); Postgres texts such as "row-level security" are translated |
+| Phase rules (closed quarter read-only, locked quarter needs a reason for removals / asks / capacity) existed only in the mock | `_guardPhase()` on a fresh row from the database, as in the mock |
+| Events the triggers do not write were missing: `plan_added`, `dependency_added/edited/acknowledged`, `vote_cast`, `votes_revealed`, `discussion_resolved`, `baseline_replaced`, `import_run` | written by the adapter after the successful write (`_event`, best-effort) |
+| History showed the user id instead of a name; check-ins had no author name; the members list showed ids | `memberships.display_name` + `member_directory` view (006); names mapped in `load()` |
+| Organisation profile (name, planning-unit label, capacity unit, fiscal year start, no-response days, capacity defaults) lived in memory only | `org_settings.profile` jsonb (006) and `organisations.name` (admin update policy, 006) |
+| `capacity_changed` events used a composite id as `entity_id` (uuid column) | `entity_id` null; the diff matches on `after.teamId` as before |
+| Capacity and vote rows have no surrogate key in SQL, the UI keys on `id` | `id` synthesised as `team:quarter` in `load()` |
+| Rows came back in arbitrary order (the mock keeps insertion order) | sorted by creation time (teams, epics, asks, discussion items, check-ins, impediments), events by time |
+| Imported epics: `external_state` not stored, no dependency suggestions, imported title editable | aligned with the mock (AC G3-G5) |
+| `resolveImpediment` did not set ROAM to resolved for risks; `requester_name` defaulted to the actor instead of the epic owner | aligned with the mock |
+
+Differences that remain between mock mode and Supabase mode (by design or accepted):
+
+- Reasons for rank / commitment / effort / phase changes reach the triggers through `update_with_reason` (005); a write without a reason is a plain PostgREST update and the trigger logs an empty reason, exactly as the mock does.
+- When an answered ask is edited with a reason, the dependency trigger also logs `dependency_answered` (accepted → proposed) next to `dependency_edited`; the mock logs only the edit.
+- Deleting an epic cascades in SQL and leaves `epic_plans_removed` / `dependencies_removed` events with an empty reason; the mock deletes silently.
+- `plan_events` carry `strategic_rank` (trigger) or `rank` (adapter / mock) in before/after; the UI reads both.
+- Each command re-reads the whole state after the write (one request per table); mock mode is in-memory. Screens refresh every 30 s in Supabase mode; there is no realtime (follow-up).
+- Settings: `staleDays` and `voteBlocksLock` are columns, the rest of the profile is a jsonb document; the mock keeps one object.
+- `members` comes from `member_directory` (006); without 006 a non-admin sees only their own row and history falls back to "former member" for other actors.
+- Reload keeps the session (the Feb-era sign-out-on-reload was removed with the auth-lock fix).
+
+Live walk-through (2026-10-17, owner's project, migrations 001-006 run by the owner, signed in as admin):
+
+| Area | Result |
+|---|---|
+| Auth | **Blocker found and fixed**: every request after the first token refresh hung because `AuthContext` awaited Supabase calls inside `onAuthStateChange` (supabase-js holds its auth lock while the callback runs; `navigator.locks.query()` showed `lock:sb-…-auth-token` held forever). The callback now defers its work to the next tick, ignores `TOKEN_REFRESHED`, reads the role from `memberships` only (`user_roles` was dropped by 001) and no longer signs the user out on reload (that workaround existed for this very hang). Reload keeps the session. |
+| Setup | teams, themes, quarters (duplicate → "Quarter exists"), organisation profile (`org_settings.profile` + `organisations.name`), capacity incl. change event: all ok; display name from 006 shown in the header. |
+| Epics / plans | create (EP-0001…), validation, partial updates, `plan_added` / `effort_changed` / `commitment_changed` / `rank_changed` events; rank without reason rejected, rank with reason through `update_with_reason`: ok. |
+| Dependencies | add (requester team and contact from the epic), self-dependency and zero-effort rejected, answers in Prep rejected by phase rule, decline/defer/partial validations, partial granted effort, priority call creates the discussion item, defer + acknowledge, scope edit resets to Proposed with `resentAt`, delete with reason via `delete_with_reason`: ok. |
+| Session | one-step phase rule, votes only in Vote, reason at ≤3, hidden until reveal, cross-cutting discussion item, resolve needs outcome, lock blocked until override reason, baseline stored (plans/deps/capacity), locked-quarter rules for plan / removal / ask / capacity, rewind needs reason and hides votes, vote-blocks-lock setting, re-lock takes a fresh baseline with `baseline_replaced`: ok. |
+| In-quarter | check-in with author name, impediment + risk with ROAM, resolve sets ROAM to resolved, `IMP-0001…`: ok. |
+| Import | mock ADO: 6 created, 2 suggestions; re-import updates title/state and keeps rank/effort/commitment; title edits on imported epics ignored (D20): ok. |
+| Deletes | `deleteTeam` with epics refused; theme delete nulls `themeId`; epic delete cascades and keeps events: ok. |
+| Screens | Overview, Board, Dependencies, Session, In-quarter, My attention, Settings render the live data; polling picks up changes within 30 s. |
+| Not tested live | planner / viewer accounts (only the owner's admin account exists): RLS for non-admins is desk-checked and mirrored in JS but not exercised against the database — invite a second user to verify (follow-up, section 17.4). A write through the UI forms was not repeated separately; the forms call the same `run()` path. |
+
 
 ### Owner questions during the build
 - "Which agent is the coordinator?" - this session; the role agents are one-shot reviewers.

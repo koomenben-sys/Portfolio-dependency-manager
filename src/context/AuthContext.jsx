@@ -19,102 +19,37 @@ export function AuthProvider({ children }) {
     );
   }
 
-  async function loadRole(userId) {
-    try {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .single();
-      if (error) {
-        // JWT expired/invalid — stored session is stale. Sign out so
-        // onAuthStateChange fires with null and the user sees the login screen.
-        if (error.code === 'PGRST301' || error.code === 'PGRST302') {
-          supabase.auth.signOut();
-        }
-        return 'viewer';
-      }
-      return data?.role ?? 'viewer';
-    } catch (err) {
-      // Likely an AbortError from the 8s fetch timeout. Schedule one retry so
-      // the role updates to the correct value once the connection recovers.
-      setTimeout(() => {
-        loadRole(userId).then(r => setRole(r)).catch(() => {});
-      }, 6000);
-      throw err; // re-throw so the caller's .catch(() => 'viewer') fires immediately
-    }
-  }
-
-  // New schema (db/migrations/002): membership row drives role, team and rank permission.
+  // Membership row (db/migrations/002, 006) drives role, team, rank permission and the display name.
   async function loadMembership(u) {
-    const { data } = await supabase.from('memberships').select('org_id, role, team_id, can_rank').eq('user_id', u.id).limit(1).maybeSingle();
+    const { data } = await supabase.from('memberships').select('*').eq('user_id', u.id).limit(1).maybeSingle();
     if (!data) return null;
-    return { id: u.id, name: u.email, role: data.role, teamId: data.team_id, canRank: data.can_rank, orgId: data.org_id };
+    return { id: u.id, name: data.display_name || u.email, role: data.role, teamId: data.team_id, canRank: data.can_rank, orgId: data.org_id };
   }
 
   useEffect(() => {
-    // Detect page reloads (F5 / Ctrl+R) using sessionStorage, which survives
-    // reloads within the same tab but is cleared when the tab is closed.
-    // On reload, sign out immediately so the user gets a clean login instead of
-    // a broken state (empty data, null role, broken sign-out button).
-    const isReload = sessionStorage.getItem('app_initialized') === '1';
-    sessionStorage.setItem('app_initialized', '1');
-    if (isReload) {
-      setUser(null);
-      setRole(null);
-      setLoading(false);
-      supabase.auth.signOut(); // clears localStorage; don't await — login screen shows already
-    }
-
-    let settled = false;
-
-    // Safety net: if onAuthStateChange doesn't fire within 5s (e.g. expired
-    // token causes a silent network hang), unblock the UI so the user sees
-    // the login screen instead of a stuck "Loading…".
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        setUser(null);
-        setRole(null);
-        setLoading(false);
-      }
-    }, 5000);
-
-    // On reload, block ALL events until our signOut() confirms with SIGNED_OUT.
-    // Only then do we allow SIGNED_IN (the user's explicit re-login) through.
-    // Supabase fires SIGNED_IN on session restoration, so we can't use it as
-    // a safe "allow" event — we must wait for the signOut gate to open first.
-    let reloadSignoutConfirmed = !isReload;
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!reloadSignoutConfirmed) {
-          if (event === 'SIGNED_OUT') {
-            reloadSignoutConfirmed = true;
-          }
-          // Don't process any event until signOut is confirmed — state is
-          // already null/false from the isReload block above.
-          return;
-        }
-
-        settled = true;
+    let alive = true;
+    // Safety net: if no auth event arrives within 5 s, show the login screen instead of "Loading…".
+    const timeout = setTimeout(() => { if (alive) setLoading(false); }, 5000);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED') return; // nothing to reload
+      // Never await Supabase calls inside this callback: supabase-js holds its auth lock while the
+      // callback runs, and a nested query waits for that same lock (live test 2026-10-17: every
+      // request after the first token refresh hung). Defer the work to the next tick instead.
+      setTimeout(() => {
+        if (!alive) return;
         clearTimeout(timeout);
         if (session?.user) {
           setUser(session.user);
-          setLoading(false); // unblock UI immediately; role loads in background
-          setRole(await loadRole(session.user.id).catch(() => 'viewer'));
-          loadMembership(session.user).then(setMembership).catch(() => {});
+          setLoading(false); // unblock UI immediately; membership loads in the background
+          loadMembership(session.user)
+            .then((m) => { if (alive) { setMembership(m); setRole(m?.role ?? 'viewer'); } })
+            .catch(() => { if (alive) setRole('viewer'); });
         } else {
-          setUser(null);
-          setRole(null);
-          setLoading(false);
+          setUser(null); setRole(null); setMembership(null); setLoading(false);
         }
-      }
-    );
-
-    return () => {
-      clearTimeout(timeout);
-      subscription.unsubscribe();
-    };
+      }, 0);
+    });
+    return () => { alive = false; clearTimeout(timeout); subscription.unsubscribe(); };
   }, []);
 
   const signOut = async () => {
@@ -125,6 +60,7 @@ export function AuthProvider({ children }) {
     }
     setUser(null);
     setRole(null);
+    setMembership(null);
   };
 
   return (

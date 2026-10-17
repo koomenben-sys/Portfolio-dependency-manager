@@ -1,36 +1,55 @@
-// Supabase implementation of the repository contract (docs/design.md D12, schema db/migrations/001-003).
-// NOT exercised against a live database in this iteration (owner's dashboard was not accessible):
-// written to the schema, authorisation is enforced by RLS + triggers; JS checks mirror them for UX.
+// Supabase implementation of the repository contract (docs/design.md D12, schema db/migrations/001-006).
+// Live-tested against the owner's project on 2026-10-17; differences from the mock adapter are listed in
+// docs/design.md section 16 ("Supabase mode").
 //
 // Notes:
-// * Column mapping: camelCase in the app <-> snake_case in Postgres (see toRow / fromRow maps).
-// * Reasons: the DB triggers read current_setting('app.reason'). supabase-js cannot set a GUC per
-//   request, so writes that carry a reason go through the RPCs update_with_reason / delete_with_reason
-//   (db/migrations/005). Writes without a reason use plain PostgREST calls.
+// * Column mapping: camelCase in the app <-> snake_case in Postgres (toRow / fromRow). Plans expose
+//   strategic_rank as `rank`; discussion items and impediments expose dependency_id as `depId`.
+// * Authorisation is enforced by RLS + triggers. PostgREST updates zero rows (without an error) when RLS
+//   denies an UPDATE, so every command also mirrors the mock's JS checks: same error text in both modes.
+// * Phase rules (closed quarter is read-only, locked quarter needs a reason) exist only in JS, in both adapters.
+// * Reasons: the triggers read current_setting('app.reason'); supabase-js cannot set a GUC, so writes that
+//   carry a reason go through the RPCs update_with_reason / delete_with_reason (005). Events the triggers do
+//   not write (plan_added, dependency_added/edited/acknowledged, vote_cast, ...) are inserted by _event().
 import { supabase } from '../lib/supabase';
 import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
-import { PHASE_INDEX } from '../domain/model';
+import { PHASE_INDEX, isLockedPhase } from '../domain/model';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner } from './repository';
 
 const snake = (s) => s.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
 const camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const fromRow = (r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [camel(k), v]));
 const toRow = (o, orgId) => ({ ...Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined).map(([k, v]) => [snake(k), v])), org_id: orgId });
+const now = () => new Date().toISOString();
+const trim = (s) => String(s || '').trim();
+// PostgREST returns rows in no particular order; the mock keeps insertion order, so sort by creation time.
+const byCreated = (k) => (a, b) => String(a[k] || '').localeCompare(String(b[k] || '')) || String(a.refCode || '').localeCompare(String(b.refCode || ''));
 
-// app field -> db field where they differ from plain snake_case
 const TABLES = {
   teams: 'teams', themes: 'themes', quarters: 'quarters', capacity: 'team_capacity', epics: 'epics', plans: 'epic_plans',
   dependencies: 'dependencies', votes: 'confidence_votes', discussions: 'discussion_items', checkIns: 'check_ins',
   impediments: 'impediments', events: 'plan_events',
 };
+// Trigger-written delete events (005 log_delete) use the table name; the app uses the mock's names.
+const EVENT_ACTIONS = { epic_plans_removed: 'plan_removed', dependencies_removed: 'dependency_removed' };
+const DEFAULT_SETTINGS = {
+  language: 'nl', orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5,
+  voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 },
+};
+// Postgres error texts that users should not have to decode.
+function friendly(message) {
+  if (/row-level security/i.test(message)) return 'Not allowed for your role or team';
+  if (/duplicate key.*quarters_org_id_year_q/i.test(message)) return 'Quarter exists';
+  if (/duplicate key.*teams_org_id_name/i.test(message)) return 'A team with that name exists';
+  if (/duplicate key.*themes_org_id_name/i.test(message)) return 'A theme with that name exists';
+  return message;
+}
 
 export class SupabaseRepository {
-  constructor() { this.orgId = null; this.settings = { staleDays: 14, voteBlocksLock: false }; }
-  async _withReason(table, id, patch, reason) {
-    const { error } = await supabase.rpc('update_with_reason', { _table: table, _id: id, _patch: patch, _reason: reason || '' });
-    this._throw(error);
-  }
+  constructor() { this.orgId = null; this.state = null; this.settings = { ...DEFAULT_SETTINGS }; }
+  _throw(error) { if (error) throw new ValidationError(friendly(error.message)); }
 
+  // ── plumbing ───────────────────────────────────────────────────────────────
   async _org() {
     if (this.orgId) return this.orgId;
     const { data, error } = await supabase.from('memberships').select('org_id').limit(1).maybeSingle();
@@ -43,44 +62,101 @@ export class SupabaseRepository {
     if (error) throw new Error(`${table}: ${error.message}`);
     return data.map(fromRow);
   }
-  _throw(error) { if (error) throw new ValidationError(error.message); }
-
-  async load() {
-    const [teams, themes, quarters, capacity, epics, plans, dependencies, votes, discussions, checkIns, impediments, events] =
-      await Promise.all(Object.values(TABLES).map((t) => this._all(t)));
-    const { data: os } = await supabase.from('org_settings').select('*').eq('org_id', await this._org()).maybeSingle();
-    if (os) Object.assign(this.settings, { staleDays: os.stale_days, voteBlocksLock: os.vote_blocks_lock });
-    return {
-      teams, themes: themes.sort((a, b) => a.position - b.position), quarters: quarters.sort((a, b) => a.year * 4 + a.q - (b.year * 4 + b.q)),
-      capacity, epics,
-      plans: plans.map((p) => ({ ...p, rank: p.strategicRank })),
-      dependencies, votes, discussions: discussions.map((d) => ({ ...d, depId: d.dependencyId })), checkIns,
-      impediments: impediments.map((i) => ({ ...i, depId: i.dependencyId })),
-      events: events.map((e) => ({ ...e, actorName: e.actorId, action: ({ epic_plans_removed: 'plan_removed', dependencies_removed: 'dependency_removed' })[e.action] || e.action })),
-      members: (await this._all('memberships')).map((m) => ({ id: m.userId, name: m.userId, title: '', role: m.role, teamId: m.teamId, canRank: m.canRank })),
-      settings: { language: 'nl', setupComplete: false, orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', noResponseDays: 5, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, ...this.settings },
-    };
+  // Fresh single row (phase and team checks must not rely on a stale screen).
+  async _row(table, id, label) {
+    const { data, error } = await supabase.from(table).select('*').eq('id', id).maybeSingle();
+    this._throw(error);
+    if (!data) throw new ValidationError(`Unknown ${label || table}`);
+    return fromRow(data);
   }
-
-  async _event(actor, action, entity, entityId, quarterId, reason, before, after) {
-    await supabase.from('plan_events').insert({ org_id: await this._org(), actor_id: actor.id, action, entity, entity_id: entityId, quarter_id: quarterId, reason: reason || '', before, after });
+  _epic(id) { return this._row('epics', id, 'epic'); }
+  _dep(id) { return this._row('dependencies', id, 'dependency'); }
+  _quarter(id) { return this._row('quarters', id, 'quarter'); }
+  async _guardPhase(quarterId, reason, what) {
+    const q = await this._quarter(quarterId);
+    if (q.phase === 'closed') throw new ValidationError('Quarter is closed');
+    if (isLockedPhase(q.phase) && !trim(reason)) throw new ValidationError(`The quarter is locked: a reason is required to ${what}`);
+    return q;
+  }
+  async _withReason(table, id, patch, reason) {
+    const { error } = await supabase.rpc('update_with_reason', { _table: table, _id: id, _patch: patch, _reason: reason || '' });
+    this._throw(error);
   }
   async _ref(kind) {
     const { data, error } = await supabase.rpc('next_ref', { _org: await this._org(), _kind: kind });
     this._throw(error);
     return data;
   }
+  // History is best-effort: the write itself has already succeeded when this runs.
+  async _event(actor, action, entity, entityId, quarterId, reason, before, after) {
+    const { error } = await supabase.from('plan_events').insert({
+      org_id: await this._org(), actor_id: actor?.id || null, action, entity, entity_id: entityId || null, quarter_id: quarterId || null,
+      reason: reason || '', before: before ?? null, after: after ?? null,
+    });
+    if (error) console.warn(`plan_events (${action}): ${error.message}`);
+  }
+  async _members(org) {
+    // member_directory (006) shows every member's display name to every member; fall back to the own row (002).
+    let { data, error } = await supabase.from('member_directory').select('*').eq('org_id', org);
+    if (error) ({ data } = await supabase.from('memberships').select('*').eq('org_id', org));
+    return (data || []).map(fromRow).map((m) => ({ id: m.userId, name: m.displayName || m.userId, title: '', role: m.role, teamId: m.teamId, canRank: m.canRank }));
+  }
+
+  async load() {
+    const org = await this._org();
+    const [rows, members, osRes, orgRes] = await Promise.all([
+      Promise.all(Object.values(TABLES).map((t) => this._all(t))),
+      this._members(org),
+      supabase.from('org_settings').select('*').eq('org_id', org).maybeSingle(),
+      supabase.from('organisations').select('name').eq('id', org).maybeSingle(),
+    ]);
+    const [teams, themes, quarters, capacity, epics, plans, dependencies, votes, discussions, checkIns, impediments, events] = rows;
+    const names = new Map(members.map((m) => [m.id, m.name]));
+    const os = osRes.data;
+    const personalLanguage = this.settings.personalLanguage;
+    this.settings = {
+      ...DEFAULT_SETTINGS, orgName: orgRes.data?.name || '', ...(os?.profile || {}),
+      ...(os ? { staleDays: os.stale_days, voteBlocksLock: os.vote_blocks_lock } : {}),
+    };
+    // Wizard (PR #16): an organisation with teams and a quarter counts as set up unless the profile says otherwise.
+    if (this.settings.setupComplete === undefined) this.settings.setupComplete = teams.length > 0 && quarters.length > 0;
+    // Language is a personal choice for non-admins (they cannot write org_settings); kept for the session.
+    if (personalLanguage) { this.settings.language = personalLanguage; this.settings.personalLanguage = personalLanguage; }
+    this.state = {
+      teams: teams.sort(byCreated('createdAt')),
+      themes: themes.sort((a, b) => a.position - b.position),
+      quarters: quarters.sort((a, b) => a.year * 4 + a.q - (b.year * 4 + b.q)),
+      capacity: capacity.map((c) => ({ id: `${c.teamId}:${c.quarterId}`, ...c })),   // no surrogate key in SQL (PK = org, team, quarter)
+      epics: epics.sort(byCreated('createdAt')),
+      plans: plans.map((p) => ({ ...p, rank: p.strategicRank })),
+      dependencies: dependencies.sort(byCreated('createdAt')),
+      votes: votes.map((v) => ({ id: `${v.teamId}:${v.quarterId}`, ...v })),
+      discussions: discussions.map((d) => ({ ...d, depId: d.dependencyId })).sort(byCreated('createdAt')),
+      checkIns: checkIns.map((c) => ({ ...c, authorName: names.get(c.authorId) || '' })).sort(byCreated('createdAt')),
+      impediments: impediments.map((i) => ({ ...i, depId: i.dependencyId })).sort(byCreated('raisedAt')),
+      events: events
+        .map((e) => ({ ...e, id: String(e.id), actorName: e.actorId ? (names.get(e.actorId) || 'former member') : '', action: EVENT_ACTIONS[e.action] || e.action }))
+        .sort((a, b) => a.at.localeCompare(b.at)),
+      members,
+      settings: { ...this.settings },
+    };
+    return this.state;
+  }
 
   // ── epics and plans ────────────────────────────────────────────────────────
   async upsertEpic(actor, epic) {
-    if (!epic.title?.trim() && !epic.id) throw new ValidationError('Title is required');
     const org = await this._org();
+    const existing = epic.id ? await this._epic(epic.id) : null;
+    const teamId = epic.teamId ?? existing?.teamId;
+    if (!canWriteTeam(actor, teamId) || (existing && !canWriteTeam(actor, existing.teamId))) throw new PermissionError('You can only edit epics of your own team');
+    if ((!existing || epic.title !== undefined) && !epic.title?.trim()) throw new ValidationError('Title is required');
     const { id, ...rest } = epic;
+    if (existing?.externalSource) { for (const k of ['title', 'externalSource', 'externalId', 'externalUrl']) delete rest[k]; } // mastered by the source (D20)
     const row = toRow(rest, org);
-    if (id) {
-      // Partial update; team changes also re-route the epic's asks (mirrors the mock and the 005 trigger).
+    if (existing) {
       delete row.org_id;
-      this._throw((await supabase.from('epics').update(row).eq('id', id)).error);
+      // The 005 trigger re-routes the epic's asks on a team change and refuses a self-dependency.
+      if (Object.keys(row).length) this._throw((await supabase.from('epics').update(row).eq('id', id)).error);
     } else {
       row.ref_code = await this._ref('epic');
       const { data, error } = await supabase.from('epics').insert(row).select('id').single();
@@ -93,153 +169,333 @@ export class SupabaseRepository {
     const s = await this.upsertEpic(actor, { ...epic, id: undefined });
     return s.epics.find((e) => e.id === this.lastCreatedEpicId);
   }
-  async deleteEpic(actor, epicId) { this._throw((await supabase.from('epics').delete().eq('id', epicId)).error); return this.load(); }
+  async deleteEpic(actor, epicId) {
+    const e = await this._epic(epicId);
+    if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Not your team');
+    // FK cascades remove plans, asks, discussion items, check-ins and impediments; plan_events rows stay.
+    this._throw((await supabase.from('epics').delete().eq('id', epicId)).error);
+    return this.load();
+  }
 
   async upsertPlan(actor, plan, reason = '') {
     const org = await this._org();
-    const { rank, ...rest } = plan;
+    const epic = await this._epic(plan.epicId);
+    const q = await this._quarter(plan.quarterId);
+    if (q.phase === 'closed') throw new ValidationError('Quarter is closed');
+    const { data: ex, error: exErr } = await supabase.from('epic_plans').select('*').eq('epic_id', plan.epicId).eq('quarter_id', plan.quarterId).maybeSingle();
+    this._throw(exErr);
+    const existing = ex ? { ...fromRow(ex), rank: ex.strategic_rank } : null;
+    const rankChanged = existing ? plan.rank !== undefined && plan.rank !== existing.rank : plan.rank != null;
+    const teamWrite = canWriteTeam(actor, epic.teamId);
+    if (rankChanged) {
+      if (!canRank(actor)) throw new PermissionError('Changing the strategic rank needs rank permission');
+      if (!trim(reason)) throw new ValidationError('A reason is required to change the strategic rank');
+    }
+    if (!teamWrite && !(canRank(actor) && existing)) throw new PermissionError('You can only plan epics of your own team');
+    if (!teamWrite && existing) {
+      const other = Object.keys(plan).filter((k) => !['id', 'epicId', 'quarterId', 'rank'].includes(k) && plan[k] !== existing[k]);
+      if (other.length) throw new PermissionError('Rank permission lets you change the strategic rank only');
+    }
+    const low = plan.effortLow ?? existing?.effortLow ?? 0; const high = plan.effortHigh ?? existing?.effortHigh ?? 0;
+    if (high < low) throw new ValidationError('High estimate must be at least the low estimate');
+    if (existing && isLockedPhase(q.phase) && !trim(reason)) {
+      const changed = ['commitment', 'rank', 'effortLow', 'effortHigh'].some((k) => plan[k] !== undefined && plan[k] !== existing[k]);
+      if (changed) throw new ValidationError('The quarter is locked: a reason is required for changes');
+    }
+    if (!existing && isLockedPhase(q.phase) && !trim(reason)) throw new ValidationError('The quarter is locked: a reason is required to add an epic');
+
+    const { id, rank, ...rest } = plan;
     const row = toRow(rest, org);
     if (rank !== undefined) row.strategic_rank = rank;
-    if (plan.id) {
-      if (rank !== undefined && !canRank(actor)) throw new PermissionError('Changing the strategic rank needs rank permission');
-      if (rank !== undefined && !reason.trim()) throw new ValidationError('A reason is required to change the strategic rank');
-      const { org_id, id, ...patch } = row;
-      if (reason) await this._withReason('epic_plans', plan.id, patch, reason);
-      else this._throw((await supabase.from('epic_plans').update(patch).eq('id', plan.id)).error);
+    if (existing) {
+      const { org_id, epic_id, quarter_id, ...patch } = row; // keys never change
+      if (!Object.keys(patch).length) return this.load();
+      // The 005 trigger logs rank / commitment / effort changes and reads the reason from app.reason.
+      if (trim(reason)) await this._withReason('epic_plans', existing.id, patch, reason);
+      else this._throw((await supabase.from('epic_plans').update(patch).eq('id', existing.id)).error);
     } else {
-      this._throw((await supabase.from('epic_plans').insert(row)).error);
+      const { data, error } = await supabase.from('epic_plans').insert(row).select('id').single();
+      this._throw(error);
+      await this._event(actor, 'plan_added', 'epic_plans', data.id, q.id, reason, null, { epicId: plan.epicId });
+      if (rank != null) await this._event(actor, 'rank_changed', 'epic_plans', data.id, q.id, reason, { rank: null }, { rank });
     }
     return this.load();
   }
-  async removePlan(actor, planId, reason = '') { this._throw((await supabase.rpc('delete_with_reason', { _table: 'epic_plans', _id: planId, _reason: reason })).error); return this.load(); }
+  async removePlan(actor, planId, reason = '') {
+    const { data: p } = await supabase.from('epic_plans').select('*').eq('id', planId).maybeSingle();
+    if (!p) return this.load();
+    const epic = await this._epic(p.epic_id);
+    if (!canWriteTeam(actor, epic.teamId)) throw new PermissionError('Not your team');
+    await this._guardPhase(p.quarter_id, reason, 'remove an epic from the quarter');
+    this._throw((await supabase.rpc('delete_with_reason', { _table: 'epic_plans', _id: planId, _reason: reason })).error);
+    return this.load();
+  }
 
   // ── dependencies ───────────────────────────────────────────────────────────
   async addDependency(actor, dep) {
-    if (!dep.ask?.trim()) throw new ValidationError('Describe the ask');
     const org = await this._org();
+    const epic = await this._epic(dep.epicId);
+    if (!canWriteTeam(actor, epic.teamId)) throw new PermissionError('Only the requesting team can add an ask');
+    if (dep.providerTeamId === epic.teamId) throw new ValidationError('A team cannot depend on itself');
+    if (!dep.ask?.trim()) throw new ValidationError('Describe the ask');
+    if (!(dep.effortHigh > 0)) throw new ValidationError('Give an effort estimate (high estimate above 0)');
+    if (dep.effortLow > dep.effortHigh) throw new ValidationError('High estimate must be at least the low estimate');
+    await this._guardPhase(dep.quarterId, dep.reason, 'add an ask');
     const { reason, ...depFields } = dep;
-    const row = toRow(depFields, org); row.ref_code = await this._ref('dependency');
-    row.requester_name = row.requester_name || actor.name || '';
-    // requester_team_id is filled by trigger; provide a placeholder to satisfy NOT NULL
-    row.requester_team_id = row.requester_team_id || row.provider_team_id;
-    this._throw((await supabase.from('dependencies').insert(row)).error);
+    const row = toRow(depFields, org);
+    row.ref_code = await this._ref('dependency');
+    row.requester_name = row.requester_name || epic.ownerName || actor.name || '';
+    row.requester_team_id = epic.teamId; // the 003 trigger derives it from the epic as well
+    const { data, error } = await supabase.from('dependencies').insert(row).select('id').single();
+    this._throw(error);
+    await this._event(actor, 'dependency_added', 'dependencies', data.id, dep.quarterId, '', null, { ask: dep.ask });
     return this.load();
   }
   async answerDependency(actor, depId, { response, reason = '', deferredToQuarterId = null, grantedLow = null, grantedHigh = null }) {
-    if (response !== 'accepted' && !reason.trim()) throw new ValidationError('A reason is required for this answer');
+    const d = await this._dep(depId);
+    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can answer');
+    const q = await this._quarter(d.quarterId);
+    if (!phaseAllows(q.phase, 'answer')) throw new ValidationError(`Answers are open from the Negotiate phase until the quarter closes (now: ${q.phase})`);
+    if (response !== 'accepted' && response !== 'proposed' && !trim(reason)) throw new ValidationError('A reason is required for this answer');
     if (response === 'deferred' && !deferredToQuarterId) throw new ValidationError('Choose the quarter to defer to');
-    if (response === 'partial' && !(grantedHigh > 0)) throw new ValidationError('Say how much you can do (granted person-weeks)');
-    if (response === 'partial') grantedLow = grantedLow ?? 0;
-    this._throw((await supabase.from('dependencies').update({ response, response_reason: reason, deferred_to_quarter_id: deferredToQuarterId,
-      granted_low: response === 'partial' ? grantedLow : null, granted_high: response === 'partial' ? grantedHigh : null }).eq('id', depId)).error);
+    if (response === 'partial') {
+      if (!(grantedHigh > 0)) throw new ValidationError('Say how much you can do (granted person-weeks)');
+      grantedLow = grantedLow ?? 0;
+      if (grantedLow > grantedHigh) throw new ValidationError('Granted low cannot exceed granted high');
+      if (grantedHigh > d.effortHigh) throw new ValidationError('Granted effort cannot exceed the ask');
+    }
+    // The 003 trigger sets responded_at and logs dependency_answered (reason = response_reason).
+    this._throw((await supabase.from('dependencies').update({
+      response, response_reason: reason, deferred_to_quarter_id: response === 'deferred' ? deferredToQuarterId : null,
+      granted_low: response === 'partial' ? grantedLow : null, granted_high: response === 'partial' ? grantedHigh : null,
+    }).eq('id', depId)).error);
     if (response === 'needs_priority_call') {
-      const s = await this.load(); const d = s.dependencies.find((x) => x.id === depId);
-      if (d && !s.discussions.some((x) => x.depId === depId && x.status === 'open')) await this.raiseDiscussion(actor, { quarterId: d.quarterId, epicId: d.epicId, depId, reason: `Priority call needed on ${d.refCode}: ${reason}`, ownerName: actor.name, timeboxMin: 10 });
+      // A priority call is by definition a discussion item for the session (review: coach).
+      const { data: open } = await supabase.from('discussion_items').select('id').eq('dependency_id', depId).eq('status', 'open').limit(1);
+      if (!open?.length) await this.raiseDiscussion(actor, { quarterId: d.quarterId, epicId: d.epicId, depId, reason: `Priority call needed on ${d.refCode}: ${reason}`, ownerName: actor.name, timeboxMin: 10 });
     }
     return this.load();
   }
   async acknowledgeDependency(actor, depId) {
-    this._throw((await supabase.from('dependencies').update({ acknowledged_at: new Date().toISOString() }).eq('id', depId)).error);
+    const d = await this._dep(depId);
+    if (!canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can acknowledge an answer');
+    this._throw((await supabase.from('dependencies').update({ acknowledged_at: now() }).eq('id', depId)).error);
+    await this._event(actor, 'dependency_acknowledged', 'dependencies', depId, d.quarterId, '', null, { response: d.response });
     return this.load();
   }
   async updateDependency(actor, depId, patch) {
-    const { reason, ...rest } = patch; const { org_id, ...row } = toRow(rest, await this._org());
-    const s = await this.load(); const cur = s.dependencies.find((d) => d.id === depId);
-    const scopeChanged = cur && ['ask', 'effortLow', 'effortHigh'].some((k) => rest[k] !== undefined && rest[k] !== cur[k]);
-    if (scopeChanged && cur.response !== 'proposed') Object.assign(row, { response: 'proposed', response_reason: '', granted_low: null, granted_high: null, responded_at: null, resent_at: new Date().toISOString() });
-    if (reason) await this._withReason('dependencies', depId, row, reason);
+    const d = await this._dep(depId);
+    if (!canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can edit the ask');
+    const { reason, ...rest } = patch;
+    await this._guardPhase(d.quarterId, reason, 'edit an ask');
+    const next = { ...d, ...rest };
+    if (!(next.effortHigh > 0) || next.effortLow > next.effortHigh) throw new ValidationError('Check the effort estimate');
+    const effortChanged = next.effortHigh !== d.effortHigh || next.effortLow !== d.effortLow || next.ask !== d.ask;
+    const { org_id, ...row } = toRow(rest, await this._org());
+    // An answered ask whose scope changed goes back to the provider for a new answer (the trigger clears responded_at).
+    if (effortChanged && d.response !== 'proposed') Object.assign(row, { response: 'proposed', response_reason: '', granted_low: null, granted_high: null, resent_at: now() });
+    if (trim(reason)) await this._withReason('dependencies', depId, row, reason);
     else this._throw((await supabase.from('dependencies').update(row).eq('id', depId)).error);
+    await this._event(actor, 'dependency_edited', 'dependencies', depId, d.quarterId, reason, { ask: d.ask, effortLow: d.effortLow, effortHigh: d.effortHigh }, { ask: next.ask, effortLow: next.effortLow, effortHigh: next.effortHigh });
     return this.load();
   }
-  async deleteDependency(actor, depId, reason = '') { this._throw((await supabase.rpc('delete_with_reason', { _table: 'dependencies', _id: depId, _reason: reason })).error); return this.load(); }
+  async deleteDependency(actor, depId, reason = '') {
+    const { data: row } = await supabase.from('dependencies').select('*').eq('id', depId).maybeSingle();
+    if (row) {
+      const d = fromRow(row);
+      if (!canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can remove the ask');
+      await this._guardPhase(d.quarterId, reason, 'remove an ask');
+    }
+    // The 005 delete trigger logs dependencies_removed with the reason.
+    this._throw((await supabase.rpc('delete_with_reason', { _table: 'dependencies', _id: depId, _reason: reason })).error);
+    return this.load();
+  }
 
   // ── session ────────────────────────────────────────────────────────────────
   async setPhase(actor, quarterId, phase, reason = '') {
-    if (!isAdmin(actor)) throw new PermissionError('Only an admin can change the phase');
-    const patch = { phase };
-    const s = await this.load(); const q = s.quarters.find((x) => x.id === quarterId);
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin (facilitator) can change the phase');
+    const s = await this.load();
+    const q = s.quarters.find((x) => x.id === quarterId);
+    if (!q) throw new ValidationError('Unknown quarter');
     const from = PHASE_INDEX[q.phase]; const to = PHASE_INDEX[phase];
-    if (to < from && !reason.trim()) throw new ValidationError('Rewinding a phase requires a reason');
+    if (to === undefined) throw new ValidationError('Unknown phase');
+    if (to < from && !trim(reason)) throw new ValidationError('Rewinding a phase requires a reason');
     if (to > from + 1) throw new ValidationError('Phases advance one step at a time');
+    const patch = { phase };
     if (phase === 'locked' && from < to) {
-      if (this.settings.voteBlocksLock && s.votes.some((v) => v.quarterId === quarterId && v.vote <= 2)) throw new ValidationError('A team voted 2 or lower; resolve before locking');
-      const open = readiness(s, quarterId).filter((r) => !r.ready);
-      if (open.length && !reason.trim()) throw new ValidationError(`${open.length} team(s) not ready (${open.map((r) => r.team.name).join(', ')}). Lock anyway by giving a reason.`);
-      patch.baseline = buildBaseline(s, quarterId); patch.locked_at = new Date().toISOString();
+      if (this.settings.voteBlocksLock) {
+        const low = s.votes.filter((v) => v.quarterId === quarterId && v.vote <= 2);
+        if (low.length) throw new ValidationError(`${low.length} team(s) voted 2 or lower; resolve before locking (setting: low vote blocks lock)`);
+      }
+      if (!q.baseline) {
+        const open = readiness(s, quarterId).filter((r) => !r.ready);
+        if (open.length && !trim(reason)) throw new ValidationError(`${open.length} team(s) not ready (${open.map((r) => r.team.name).join(', ')}). Lock anyway by giving a reason.`);
+      }
+      if (q.baseline) await this._event(actor, 'baseline_replaced', 'quarters', q.id, q.id, reason, { takenAt: q.baseline.takenAt }, null);
+      patch.baseline = buildBaseline(s, quarterId); patch.locked_at = now();
     }
     if (to < from && to <= PHASE_INDEX.vote) patch.votes_revealed = false;
+    // The 003 trigger logs phase_changed with the reason from app.reason.
     await this._withReason('quarters', quarterId, patch, reason);
+    return this.load();
+  }
+  async castVote(actor, teamId, quarterId, vote, reason = '') {
+    if (!canWriteTeam(actor, teamId)) throw new PermissionError('You can only vote for your own team');
+    if (vote <= 3 && !trim(reason)) throw new ValidationError('A reason is required for a vote of 3 or lower');
+    const q = await this._quarter(quarterId);
+    if (!phaseAllows(q.phase, 'vote')) throw new ValidationError('Voting is open in the Vote phase (and for a re-vote while locked)');
+    this._throw((await supabase.from('confidence_votes').upsert({ org_id: await this._org(), team_id: teamId, quarter_id: quarterId, vote, reason, voted_at: now() }, { onConflict: 'org_id,team_id,quarter_id' })).error);
+    await this._event(actor, 'vote_cast', 'confidence_votes', teamId, quarterId, reason, null, { vote });
     return this.load();
   }
   async revealVotes(actor, quarterId) {
     if (!isAdmin(actor)) throw new PermissionError('Only the facilitator reveals votes');
     this._throw((await supabase.from('quarters').update({ votes_revealed: true }).eq('id', quarterId)).error);
-    return this.load();
-  }
-  async castVote(actor, teamId, quarterId, vote, reason = '') {
-    if (!canWriteTeam(actor, teamId)) throw new PermissionError('You can only vote for your own team');
-    if (vote <= 3 && !reason.trim()) throw new ValidationError('A reason is required for a vote of 3 or lower');
-    const s = await this.load(); const q = s.quarters.find((x) => x.id === quarterId);
-    if (!q || !phaseAllows(q.phase, 'vote')) throw new ValidationError('Voting is open in the Vote phase (and for a re-vote while locked)');
-    this._throw((await supabase.from('confidence_votes').upsert({ org_id: await this._org(), team_id: teamId, quarter_id: quarterId, vote, reason, voted_at: new Date().toISOString() }, { onConflict: 'org_id,team_id,quarter_id' })).error);
+    await this._event(actor, 'votes_revealed', 'quarters', quarterId, quarterId, '', null, null);
     return this.load();
   }
   async raiseDiscussion(actor, item) {
+    if (!isPlanner(actor)) throw new PermissionError('Viewers cannot raise discussion items');
+    if (!item.reason?.trim()) throw new ValidationError('Say why this needs discussion');
     const { depId, ...rest } = item;
-    this._throw((await supabase.from('discussion_items').insert({ ...toRow(rest, await this._org()), dependency_id: depId || null, raised_by: actor.id })).error);
-    // team_id column added in migration 005b; toRow already maps teamId -> team_id
+    const row = { ...toRow({ ownerName: actor.name, timeboxMin: 10, ...rest }, await this._org()), dependency_id: depId || null, raised_by: actor.id };
+    this._throw((await supabase.from('discussion_items').insert(row)).error);
     return this.load();
   }
   async resolveDiscussion(actor, id, outcome) {
-    if (!outcome?.trim()) throw new ValidationError('An outcome is required');
-    this._throw((await supabase.from('discussion_items').update({ status: 'resolved', outcome, resolved_at: new Date().toISOString() }).eq('id', id)).error);
+    if (!isPlanner(actor)) throw new PermissionError('Viewers cannot resolve discussion items');
+    if (!outcome?.trim()) throw new ValidationError('An outcome is required to resolve');
+    const d = await this._row('discussion_items', id, 'discussion item');
+    this._throw((await supabase.from('discussion_items').update({ status: 'resolved', outcome, resolved_at: now() }).eq('id', id)).error);
+    await this._event(actor, 'discussion_resolved', 'discussion_items', id, d.quarterId, outcome, null, null);
     return this.load();
   }
 
   // ── in-quarter ─────────────────────────────────────────────────────────────
-  async addCheckIn(actor, c) { this._throw((await supabase.from('check_ins').insert({ ...toRow(c, await this._org()), author_id: actor.id })).error); return this.load(); }
-  async upsertImpediment(actor, imp) {
-    const { depId, ...rest } = imp; const org = await this._org();
-    const { id, ...fields } = rest;
-    const row = { ...toRow(fields, org), dependency_id: depId ?? undefined };
-    if (id) { delete row.org_id; this._throw((await supabase.from('impediments').update(row).eq('id', id)).error); }
-    else { row.ref_code = await this._ref('impediment'); this._throw((await supabase.from('impediments').insert(row)).error); }
+  async addCheckIn(actor, c) {
+    const e = await this._epic(c.epicId);
+    if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Only the epic team can check in');
+    if (!c.confidence) throw new ValidationError('Pick a confidence');
+    const { authorName, ...fields } = c;
+    this._throw((await supabase.from('check_ins').insert({ ...toRow(fields, await this._org()), author_id: actor.id })).error);
     return this.load();
   }
-  async resolveImpediment(actor, id) { this._throw((await supabase.from('impediments').update({ status: 'resolved', resolved_at: new Date().toISOString() }).eq('id', id)).error); return this.load(); }
+  async upsertImpediment(actor, imp) {
+    if (!isPlanner(actor)) throw new PermissionError('Viewers cannot raise impediments');
+    const { id, depId, ...fields } = imp;
+    const org = await this._org();
+    if (id) {
+      if (fields.title !== undefined && !fields.title?.trim()) throw new ValidationError('Title is required');
+      const row = toRow(fields, org); delete row.org_id;
+      if (depId !== undefined) row.dependency_id = depId;
+      if (Object.keys(row).length) this._throw((await supabase.from('impediments').update(row).eq('id', id)).error);
+    } else {
+      if (!fields.title?.trim()) throw new ValidationError('Title is required');
+      if (!fields.epicId && !depId) throw new ValidationError('Link the impediment to an epic');
+      const row = { ...toRow({ kind: 'impediment', ownerName: actor.name, ...fields }, org), dependency_id: depId || null, ref_code: await this._ref('impediment') };
+      if (row.kind !== 'risk') row.roam = null;
+      this._throw((await supabase.from('impediments').insert(row)).error);
+    }
+    return this.load();
+  }
+  async resolveImpediment(actor, id) {
+    if (!isPlanner(actor)) throw new PermissionError('Viewers cannot resolve impediments');
+    const i = await this._row('impediments', id, 'impediment');
+    this._throw((await supabase.from('impediments').update({ status: 'resolved', resolved_at: now(), roam: i.kind === 'risk' ? 'resolved' : null }).eq('id', id)).error);
+    return this.load();
+  }
 
   // ── setup ──────────────────────────────────────────────────────────────────
-  async upsertCapacity(actor, cap) { const { id, reason, ...rest } = cap; this._throw((await supabase.from('team_capacity').upsert(toRow(rest, await this._org()), { onConflict: 'org_id,team_id,quarter_id' })).error); if (reason) await this._event(actor, 'capacity_changed', 'team_capacity', id || null, cap.quarterId, reason, null, rest); return this.load(); }
-  async upsertTeam(actor, t) { this._throw((await supabase.from('teams').upsert(toRow(t, await this._org()), { onConflict: 'org_id,id' })).error); return this.load(); }
+  async upsertCapacity(actor, cap) {
+    if (!canWriteTeam(actor, cap.teamId)) throw new PermissionError('Not your team');
+    const { id, reason, orgId, ...rest } = cap;
+    await this._guardPhase(cap.quarterId, reason, 'change capacity');
+    const org = await this._org();
+    const { data: before } = await supabase.from('team_capacity').select('*').eq('team_id', cap.teamId).eq('quarter_id', cap.quarterId).maybeSingle();
+    this._throw((await supabase.from('team_capacity').upsert(toRow(rest, org), { onConflict: 'org_id,team_id,quarter_id' })).error);
+    if (before) { const b = fromRow(before); await this._event(actor, 'capacity_changed', 'team_capacity', null, cap.quarterId, reason, b, { ...b, ...rest }); }
+    return this.load();
+  }
+  async upsertTeam(actor, t) {
+    if (!isAdmin(actor)) throw new PermissionError('Admin only');
+    if (!t.name?.trim()) throw new ValidationError('Name is required');
+    this._throw((await supabase.from('teams').upsert(toRow(t, await this._org()), { onConflict: 'org_id,id' })).error);
+    return this.load();
+  }
   async deleteTeam(actor, id) {
+    if (!isAdmin(actor)) throw new PermissionError('Admin only');
     const s = await this.load();
     if (s.epics.some((e) => e.teamId === id)) throw new ValidationError('Move or delete the team\'s epics first');
     if (s.dependencies.some((d) => d.providerTeamId === id)) throw new ValidationError('Other teams still have asks for this team; remove or re-route them first');
-    this._throw((await supabase.from('teams').delete().eq('id', id)).error); return this.load();
+    // memberships.team_id is set to null and team_capacity rows are removed by the FKs in 001.
+    this._throw((await supabase.from('teams').delete().eq('id', id)).error);
+    return this.load();
   }
-  async upsertTheme(actor, t) { this._throw((await supabase.from('themes').upsert(toRow(t, await this._org()), { onConflict: 'org_id,id' })).error); return this.load(); }
-  async deleteTheme(actor, id) { this._throw((await supabase.from('themes').delete().eq('id', id)).error); return this.load(); }
-  async upsertQuarter(actor, q) { this._throw((await supabase.from('quarters').upsert(toRow(q, await this._org()), { onConflict: 'org_id,id' })).error); return this.load(); }
+  async upsertTheme(actor, t) {
+    if (!canRank(actor)) throw new PermissionError('Themes need rank permission');
+    if (!t.name?.trim()) throw new ValidationError('Name is required');
+    const row = toRow(t, await this._org());
+    if (!t.id) row.position = (this.state?.themes.length) ?? 0;
+    this._throw((await supabase.from('themes').upsert(row, { onConflict: 'org_id,id' })).error);
+    return this.load();
+  }
+  async deleteTheme(actor, id) {
+    if (!canRank(actor)) throw new PermissionError('Themes need rank permission');
+    // epics.theme_id is set to null by the FK in 001.
+    this._throw((await supabase.from('themes').delete().eq('id', id)).error);
+    return this.load();
+  }
+  async upsertQuarter(actor, q) {
+    if (!isAdmin(actor)) throw new PermissionError('Admin only');
+    this._throw((await supabase.from('quarters').upsert(toRow(q, await this._org()), { onConflict: 'org_id,id' })).error);
+    return this.load();
+  }
   async updateSettings(actor, patch) {
-    Object.assign(this.settings, patch);
-    this._throw((await supabase.from('org_settings').upsert({ org_id: await this._org(), stale_days: this.settings.staleDays, vote_blocks_lock: this.settings.voteBlocksLock })).error);
+    if (Object.keys(patch).every((k) => k === 'language') && !isAdmin(actor)) {
+      this.settings = { ...this.settings, language: patch.language, personalLanguage: patch.language };
+      this.state = { ...this.state, settings: { ...this.settings } };
+      return this.state;
+    }
+    if (!isAdmin(actor)) throw new PermissionError('Admin only');
+    const org = await this._org();
+    const next = { ...this.settings, ...patch };
+    const { staleDays, voteBlocksLock, personalLanguage, ...profile } = next;
+    // stale_days / vote_blocks_lock are columns (005); the organisation profile is a jsonb document (006).
+    this._throw((await supabase.from('org_settings').upsert({ org_id: org, stale_days: staleDays, vote_blocks_lock: voteBlocksLock, profile })).error);
+    if (patch.orgName !== undefined) this._throw((await supabase.from('organisations').update({ name: patch.orgName }).eq('id', org)).error);
+    this.settings = next;
     return this.load();
   }
 
+  // ── integration import (D19-D22) ───────────────────────────────────────────
   async importExternalEpics(actor, externalEpics, teamMapping) {
     if (!isAdmin(actor)) throw new PermissionError('Admin only');
     const org = await this._org();
     const s = await this.load();
-    let created = 0; let updated = 0;
+    const byExt = new Map(s.epics.filter((e) => e.externalId).map((e) => [`${e.externalSource}:${e.externalId}`, e]));
+    let created = 0; let updated = 0; const suggestions = [];
     for (const x of externalEpics) {
       const teamId = teamMapping[x.teamHint]; if (!teamId) continue;
-      const cur = s.epics.find((e) => e.externalSource === x.source && e.externalId === x.externalId);
-      if (cur) { this._throw((await supabase.from('epics').update({ title: x.title, external_url: x.url, external_synced_at: new Date().toISOString() }).eq('id', cur.id)).error); updated += 1; }
+      const key = `${x.source}:${x.externalId}`;
+      const cur = byExt.get(key);
+      const synced = { title: x.title, external_url: x.url, external_synced_at: now(), external_state: x.state };
+      if (cur) { this._throw((await supabase.from('epics').update(synced).eq('id', cur.id)).error); updated += 1; }
       else {
-        this._throw((await supabase.from('epics').insert({ org_id: org, ref_code: await this._ref('epic'), team_id: teamId, title: x.title, owner_name: x.ownerName || '', external_source: x.source, external_id: x.externalId, external_url: x.url, external_synced_at: new Date().toISOString() })).error);
-        created += 1;
+        const { data, error } = await supabase.from('epics').insert({ org_id: org, ref_code: await this._ref('epic'), team_id: teamId, owner_name: x.ownerName || '', external_source: x.source, external_id: x.externalId, ...synced }).select('id').single();
+        this._throw(error);
+        byExt.set(key, { id: data.id, teamId }); created += 1;
       }
     }
-    return { created, updated, suggestions: [] };
+    // Dependency suggestions from links between imported epics of different teams (AC G5)
+    for (const x of externalEpics) {
+      const from = byExt.get(`${x.source}:${x.externalId}`);
+      for (const linked of x.linkedExternalIds || []) {
+        const to = byExt.get(`${x.source}:${linked}`);
+        if (from && to && from.teamId !== to.teamId) suggestions.push({ fromEpicId: from.id, toTeamId: to.teamId, toEpicId: to.id });
+      }
+    }
+    await this._event(actor, 'import_run', 'integration', null, null, '', null, { created, updated });
+    await this.load();
+    return { created, updated, suggestions };
   }
 }

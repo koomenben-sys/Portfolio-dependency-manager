@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "mvp-mock", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--", "--port", "5174", "--strictPort"], "port": 5174 }
+    { "name": "mvp-mock", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--", "--port", "5174", "--strictPort"], "port": 5174 },
+    { "name": "mvp-supabase", "runtimeExecutable": "env", "runtimeArgs": ["VITE_DATA_SOURCE=supabase", "npm", "run", "dev", "--", "--port", "5175", "--strictPort"], "port": 5175 }
   ]
 }

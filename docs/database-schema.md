@@ -1,6 +1,6 @@
 # Database Schema
 
-> **Superseded (2026-10 MVP iteration):** the tenant-ready schema for the quarterly planning tool lives in `db/migrations/001-004` and is explained in `docs/design.md` section 9. The text below documents the Feb-2026 schema, which migration 001 drops.
+> **Superseded (2026-10 MVP iteration):** the tenant-ready schema for the quarterly planning tool lives in `db/migrations/001-006` and is explained in `docs/design.md` section 9. The text below documents the Feb-2026 schema, which migration 001 drops.
 
 ## Overview
 
