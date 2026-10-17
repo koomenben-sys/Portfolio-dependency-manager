@@ -2,11 +2,152 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Design tokens (docs/design.md section 19, D25). Everything themeable lives here. ───────────── */
+:root {
+  --color-canvas: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-ink: #0f172a;
+  --color-ink-2: #334155;
+  --color-muted: #64748b;
+  --color-faint: #94a3b8;
+
+  --color-accent-50: #ecfeff;
+  --color-accent-100: #cffafe;
+  --color-accent-200: #a5f3fc;
+  --color-accent-300: #67e8f9;
+  --color-accent-500: #0e7490;
+  --color-accent-600: #155e75;
+  --color-accent-700: #164e63;
+  --color-accent-fg: #ffffff;
+
+  --color-ok-bg: #dcfce7;   --color-ok-fg: #166534;   --color-ok-border: #86efac;  --color-ok: #16a34a;
+  --color-warn-bg: #fef3c7; --color-warn-fg: #92400e; --color-warn-border: #fcd34d; --color-warn: #d97706;
+  --color-danger-bg: #fee2e2; --color-danger-fg: #991b1b; --color-danger-border: #fca5a5; --color-danger: #dc2626;
+  --color-info-bg: #dbeafe; --color-info-fg: #1e40af; --color-info-border: #93c5fd; --color-info: #2563eb;
+  --color-neutral-bg: #f1f5f9; --color-neutral-fg: #334155; --color-neutral-border: #cbd5e1;
+
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.06);
+  --shadow-md: 0 4px 12px rgb(15 23 42 / 0.08);
+  --shadow-lg: 0 16px 40px rgb(15 23 42 / 0.16);
+
+  --radius-control: 4px;
+  --radius-card: 6px;
+  --radius-panel: 8px;
+  --radius-modal: 12px;
+
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 400ms;
+
+  --sidebar-w: 240px;
+  --sidebar-rail-w: 64px;
+  --view-header-h: 56px;
+  --row-h: 48px;
+}
+
+/* Alternative accent for municipalities: neutral blue (Rijksoverheid's #154273 is reserved). */
+:root[data-theme='overheid'] {
+  --color-accent-50: #eff6ff;
+  --color-accent-100: #dbeafe;
+  --color-accent-200: #bfdbfe;
+  --color-accent-300: #93c5fd;
+  --color-accent-500: #1d4ed8;
+  --color-accent-600: #1e40af;
+  --color-accent-700: #1e3a8a;
+}
+
+:root[data-density='compact'] { --row-h: 40px; }
+
+/* ── Base typography ──────────────────────────────────────────────────────────────────── */
+html { scroll-padding-top: calc(var(--view-header-h) + 16px); }
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--color-ink);
+  background: var(--color-canvas);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.01em; }
+.tnum { font-variant-numeric: tabular-nums; }
+code, kbd, .mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+
+/* ── Focus: visible everywhere, never removed without replacement (WCAG 2.4.7 / 2.4.13) ─────── */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+.focus-ring:focus-visible { outline: 2px solid var(--color-accent-500); outline-offset: 2px; }
+.focus-ring-inset:focus-visible { outline: 2px solid var(--color-accent-500); outline-offset: -2px; }
+
+/* ── Utilities ────────────────────────────────────────────────────────────────────────── */
+/* 45° hatch for over-capacity segments: colour is never the only carrier. */
+.hatch {
+  background-image: repeating-linear-gradient(135deg, rgb(153 27 27 / 0.55) 0 3px, transparent 3px 7px);
+}
+.hatch-warn {
+  background-image: repeating-linear-gradient(135deg, rgb(146 64 14 / 0.45) 0 3px, transparent 3px 7px);
+}
+.ghost-segment {
+  background-image: repeating-linear-gradient(135deg, rgb(100 116 139 / 0.35) 0 2px, transparent 2px 6px);
+  outline: 1px dashed var(--color-faint);
+  outline-offset: -1px;
+}
+.cut-line { border-top: 2px dashed var(--color-accent-500); }
+.scrollbar-thin { scrollbar-width: thin; }
+.sr-only-focusable:not(:focus):not(:focus-within) {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.skip-link {
+  position: fixed; top: 8px; left: 8px; z-index: 100;
+  background: var(--color-ink); color: #fff; padding: 8px 12px; border-radius: var(--radius-card); font-weight: 500;
+}
+.tour-highlight {
+  outline: 3px solid var(--color-accent-500) !important;
+  outline-offset: 4px;
+  border-radius: var(--radius-panel);
+  box-shadow: 0 0 0 9999px rgb(15 23 42 / 0.18);
+  position: relative; z-index: 35;
+  transition: box-shadow var(--dur-base) var(--ease-out);
+}
+
+/* ── Motion ───────────────────────────────────────────────────────────────────────────── */
+@keyframes kp-slide-in-right { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes kp-slide-in-up { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes kp-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes kp-pop { from { transform: scale(0.97); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes kp-flash { 0% { background-color: var(--color-accent-100); } 100% { background-color: transparent; } }
+.anim-slide-in-right { animation: kp-slide-in-right var(--dur-base) var(--ease-out) both; }
+.anim-slide-in-up { animation: kp-slide-in-up var(--dur-base) var(--ease-out) both; }
+.anim-fade-in { animation: kp-fade-in var(--dur-fast) var(--ease-out) both; }
+.anim-pop { animation: kp-pop var(--dur-base) var(--ease-out) both; }
+.anim-flash { animation: kp-flash 1.2s var(--ease-out) both; }
+.transition-base { transition-property: color, background-color, border-color, box-shadow, transform, opacity, width; transition-duration: var(--dur-base); transition-timing-function: var(--ease-out); }
+.bar-animate { transition: width var(--dur-slow) var(--ease-out), left var(--dur-slow) var(--ease-out); }
+.flip-move { transition: transform 260ms var(--ease-out); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* ── Print: the Overview is a one-pager for the board paper ───────────────────────────────── */
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; color: #000; font-size: 11px; line-height: 15px; }
+  .print\:hidden, [data-print='hide'] { display: none !important; }
+  [data-print='show'] { display: block !important; }
+  #main { overflow: visible !important; height: auto !important; padding: 0 !important; }
+  .print-page { max-width: none !important; }
+  section, table, tr { break-inside: avoid; }
+  a[href]::after { content: ''; }
+  .shadow-sm, .shadow-md, .shadow-lg { box-shadow: none !important; }
 }
