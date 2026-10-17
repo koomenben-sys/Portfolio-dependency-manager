@@ -49,7 +49,7 @@ export class MockRepository {
     const existing = epic.id && this.state.epics.find((e) => e.id === epic.id);
     const teamId = epic.teamId ?? existing?.teamId;
     if (!canWriteTeam(actor, teamId) || (existing && !canWriteTeam(actor, existing.teamId))) throw new PermissionError('You can only edit epics of your own team');
-    if (!epic.title?.trim()) throw new ValidationError('Title is required');
+    if ((!existing || epic.title !== undefined) && !epic.title?.trim()) throw new ValidationError('Title is required');
     if (existing) {
       if (existing.externalSource) { // imported fields are mastered by the source (D20)
         epic = { ...epic, title: existing.title, externalSource: existing.externalSource, externalId: existing.externalId, externalUrl: existing.externalUrl };

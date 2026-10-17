@@ -12,13 +12,13 @@ export const MOCK_ADO_RESPONSE = {
   value: [
     // existing imported epics (ids match seed: 48000 + n*7 for n = 3, 6, 7, 9)
     wi(48021, 'PSD3 readiness assessment (scope updated)', 'Active', 'Payments', 'Joris Smit'),
-    wi(48042, 'Single sign-on with DigiD / eHerkenning', 'New', 'Klantportaal', 'Lotte Meijer', [['System.LinkTypes.Dependency-Reverse', 48119]]),
-    wi(48049, 'Digital claims intake (photo + AI triage)', 'Active', 'Claims', 'Sanne Bakker', [['System.LinkTypes.Dependency-Forward', 48200]]),
+    wi(48042, 'Single sign-on with DigiD / eHerkenning', 'New', 'Klantportaal', 'Lotte Meijer', [['System.LinkTypes.Dependency-Reverse', 48519]]),
+    wi(48049, 'Digital claims intake (photo + AI triage)', 'Active', 'Claims', 'Sanne Bakker', [['System.LinkTypes.Dependency-Forward', 48520]]),
     // new epics
-    wi(48119, 'Identity provider upgrade', 'New', 'Security', 'Eva Kok'),
-    wi(48200, 'Claims document store on cloud', 'New', 'Cloud Platform', 'Mark van Dijk'),
-    wi(48233, 'Customer feedback loop in app', 'New', 'Mobile App', 'Daan Peters', [['System.LinkTypes.Related', 48049]]),
+    wi(48519, 'Identity provider upgrade', 'New', 'Security', 'Eva Kok'),
+    wi(48520, 'Claims document store on cloud', 'New', 'Cloud Platform', 'Mark van Dijk'),
+    wi(48533, 'Customer feedback loop in app', 'New', 'Mobile App', 'Daan Peters', [['System.LinkTypes.Related', 48049]]),
     // unknown area path -> unmapped bucket
-    wi(48301, 'Intermediary portal rebuild', 'New', 'Intermediair', 'Onbekend'),
+    wi(48601, 'Intermediary portal rebuild', 'New', 'Intermediair', 'Onbekend'),
   ],
 };

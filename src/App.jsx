@@ -43,12 +43,12 @@ function Shell({ onSignOut }) {
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
-        <div className="px-4 py-2 flex items-center gap-4">
+        <div className="px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-2 mr-2">
             <span className="w-7 h-7 rounded bg-indigo-600 text-white font-bold flex items-center justify-center text-sm" aria-hidden="true">K</span>
             <span className="font-semibold">Kwartaalplan</span>
           </div>
-          <nav className="flex gap-1">
+          <nav className="flex flex-wrap gap-1">
             {NAV.map(([id, label]) => (
               <button key={id} onClick={() => setView(id)} className={`px-3 py-1.5 rounded text-sm ${view === id ? 'bg-indigo-600 text-white' : 'hover:bg-gray-100'}`}>
                 {label}{id === 'attention' && attentionCount > 0 && <span className={`ml-1 text-[11px] px-1.5 rounded-full ${view === id ? 'bg-white text-indigo-700' : 'bg-indigo-600 text-white'}`}>{attentionCount}</span>}

@@ -46,14 +46,12 @@ export function incomingForTeam(state, teamId, quarterId) {
 // Timing conflict (AC C7): needed in a later quarter than the epic is planned, or deferred beyond.
 export function timingConflict(state, dep) {
   const quarters = byId(state.quarters);
-  const need = quarters.get(dep.quarterId);
-  if (dep.response === 'deferred' && dep.deferredToQuarterId) {
-    const to = quarters.get(dep.deferredToQuarterId);
-    return !!(to && need && quarterOrdinal(to) > quarterOrdinal(need));
-  }
-  const epicPlanQuarters = state.plans.filter((p) => p.epicId === dep.epicId).map((p) => quarters.get(p.quarterId));
-  const earliest = epicPlanQuarters.filter(Boolean).sort((a, b) => quarterOrdinal(a) - quarterOrdinal(b))[0];
-  return !!(earliest && need && quarterOrdinal(need) > quarterOrdinal(earliest));
+  // The quarter in which the provider will actually deliver: the deferred one if deferred, else the asked one.
+  const deliver = quarters.get(dep.response === 'deferred' && dep.deferredToQuarterId ? dep.deferredToQuarterId : dep.quarterId);
+  // Latest quarter the epic is planned in; a delivery after that is a conflict.
+  const planned = state.plans.filter((p) => p.epicId === dep.epicId).map((p) => quarters.get(p.quarterId)).filter(Boolean);
+  const latest = planned.sort((a, b) => quarterOrdinal(b) - quarterOrdinal(a))[0];
+  return !!(latest && deliver && quarterOrdinal(deliver) > quarterOrdinal(latest));
 }
 
 export function noResponseDays(dep, now = Date.now()) {

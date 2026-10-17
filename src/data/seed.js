@@ -39,7 +39,7 @@ const QUARTERS = [
 
 // team: headcount, absence weeks, reserve %
 const CAP = { 't-pay': [6, 4, 20], 't-por': [7, 5, 20], 't-clm': [8, 6, 20], 't-pol': [6, 3, 30],
-  't-dat': [5, 3, 20], 't-cld': [5, 2, 35], 't-sec': [4, 2, 30], 't-mob': [6, 4, 15] };
+  't-dat': [5, 3, 20], 't-cld': [8, 2, 30], 't-sec': [6, 2, 25], 't-mob': [6, 4, 15] };
 const capacity = QUARTERS.flatMap((q) => Object.entries(CAP).map(([teamId, [headcount, absenceWeeks, reservePct]]) => ({
   id: `c-${teamId}-${q.id}`, teamId, quarterId: q.id, headcount, weeks: 13, focusFactor: 0.65, absenceWeeks, reservePct,
 })));
