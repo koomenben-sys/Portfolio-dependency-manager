@@ -5,7 +5,7 @@ import { canRank, isPlanner, isAdmin } from '../data/repository';
 import { isLockedPhase, needsTalk } from '../domain/model';
 import { epicDeps, byId } from '../domain/plan';
 import { useT } from '../i18n';
-import { cls, RankNo, DepSummary, CommitmentChip, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine } from '../components/plan/core';
+import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
@@ -16,6 +16,7 @@ export function PrioritizeView() {
   const t = useT();
   const [openEpic, setOpenEpic] = useState(null);
   const [query, setQuery] = useState('');
+  const [teamFilter, setTeamFilter] = useState('');
   const [pending, setPending] = useState(null); // { order: planId[], movedId } — a draft until "Opslaan"
   const [dragId, setDragId] = useState(null);
   const [overId, setOverId] = useState(null);
@@ -40,9 +41,10 @@ export function PrioritizeView() {
   const unranked = plansQ.filter((p) => !orderIds.has(p.id));
   const mayRank = canRank(actor) && quarter.phase !== 'closed';
   const mayAdd = isPlanner(actor) && quarter.phase !== 'closed';
-  const searching = query.trim().length > 0;
+  // Searching or filtering by team hides rows, so the visible order is no longer 1..n: reordering pauses.
+  const searching = query.trim().length > 0 || teamFilter !== '';
   const canDrag = mayRank && !searching;
-  const match = (p) => { const e = epics.get(p.epicId); return !searching || `${e?.refCode} ${e?.title} ${teams.get(e?.teamId)?.name}`.toLowerCase().includes(query.trim().toLowerCase()); };
+  const match = (p) => { const e = epics.get(p.epicId); if (teamFilter && e?.teamId !== teamFilter) return false; return !query.trim() || `${e?.refCode} ${e?.title} ${teams.get(e?.teamId)?.name}`.toLowerCase().includes(query.trim().toLowerCase()); };
 
   const applyOrder = (ids, movedId) => { setPending({ order: ids, movedId }); setErr(null); };
   const moveTo = (planId, toIndex) => {
@@ -91,15 +93,14 @@ export function PrioritizeView() {
           className={`group relative h-row cursor-pointer transition-base focus-ring-inset ${dragging ? 'opacity-40' : ''} ${overId === p.id && dragId !== p.id ? 'shadow-[inset_0_2px_0_0_var(--color-accent-500)]' : ''} ${flashId === p.id ? 'anim-flash' : isMoved ? 'bg-accent-50' : 'hover:bg-surface-2'}`}>
           <td className="w-7 pl-2 relative">
             {worst && <span className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-full ${worst}`} aria-hidden="true" />}
-            {canDrag && inList ? <GripVertical size={14} className="text-faint group-hover:text-muted" aria-hidden="true" /> : null}
+            {canDrag && inList ? <span title={t('Drag, or Alt+↑/↓')}><GripVertical size={14} className="text-faint group-hover:text-muted" aria-hidden="true" /></span> : null}
           </td>
           <td className="w-10 pr-2"><RankNo rank={inList ? index + 1 : null} size="sm" /></td>
           <td className="pr-3 min-w-0">
-            <div className="flex items-baseline gap-2 min-w-0"><span className="text-body font-medium text-ink truncate">{e.title}</span><span className="text-caption text-faint mono shrink-0">{e.refCode}</span></div>
+            <div className="text-body font-medium text-ink truncate">{e.title}</div>
           </td>
           <td className="w-44 pr-3 text-label text-ink-2 truncate">{teams.get(e.teamId)?.name}</td>
-          <td className="w-36 pr-3"><DepSummary deps={deps} /></td>
-          <td className="w-36 pr-3 hidden md:table-cell"><CommitmentChip value={p.commitment} /></td>
+          <td className="w-64 pr-3"><WorstIssue deps={deps} teams={teams} /></td>
           <td className="w-20 pr-2">
             {mayRank && (inList ? (
               <span className={`inline-flex gap-0.5 transition-base ${searching ? 'invisible' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}>
@@ -110,7 +111,7 @@ export function PrioritizeView() {
           </td>
         </tr>
         {isMoved && (
-          <tr className="bg-accent-50"><td colSpan={7} className="px-10 pb-3 pt-1">
+          <tr className="bg-accent-50"><td colSpan={6} className="px-10 pb-3 pt-1">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-label text-accent-700 whitespace-nowrap tnum">{t('Moved to #{n}', { n: index + 1 })}</span>
               <InlineReason required={isLockedPhase(quarter.phase)} onSave={commit} onCancel={cancel} error={err} />
@@ -128,6 +129,8 @@ export function PrioritizeView() {
     <div className="pr-0" data-tour="prioritize">
       <ViewHeader title={t('Prioritise')} meta={t('{n} epics', { n: plansQ.length })} right={
         <>
+          <label className="sr-only" htmlFor="prio-team">{t('Team')}</label>
+          <select id="prio-team" className={`${cls.input} !w-auto`} value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)}><option value="">{t('All teams')}</option>{state.teams.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
           <label className="relative"><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-faint" aria-hidden="true" /><input type="search" className={`${cls.input} !w-52 !pl-7`} placeholder={t('Search')} aria-label={t('Search epics')} value={query} onChange={(e) => setQuery(e.target.value)} /></label>
           {mayAdd && <button className={cls.primary} onClick={() => setAdding(true)} data-tour="add-epic"><Plus size={14} aria-hidden="true" />{t('Epic')}</button>}
         </>
@@ -144,14 +147,13 @@ export function PrioritizeView() {
                 <th className="w-10 font-medium" scope="col">#</th>
                 <th className="font-medium" scope="col">{t('Epic')}</th>
                 <th className="w-44 font-medium" scope="col">{t('Team')}</th>
-                <th className="w-36 font-medium" scope="col">{t('Dependencies')}</th>
-                <th className="w-36 font-medium hidden md:table-cell" scope="col">{t('Status')}</th>
+                <th className="w-64 font-medium" scope="col">{t('Dependencies')}</th>
                 <th className="w-20" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {visible.map((p) => renderRow(p, order.indexOf(p), true))}
-              {visible.length === 0 && <tr><td colSpan={7}><EmptyLine>{searching ? t('No match.') : t('Nothing ranked yet.')}</EmptyLine></td></tr>}
+              {visible.length === 0 && <tr><td colSpan={6}><EmptyLine>{searching ? t('No match.') : t('Nothing ranked yet.')}</EmptyLine></td></tr>}
             </tbody>
           </table>
           {unranked.length > 0 && (
@@ -165,7 +167,6 @@ export function PrioritizeView() {
           )}
         </div>
       )}
-      {mayRank && plansQ.length > 1 && <p className="mt-2 text-caption text-faint">{t('Drag, or Alt+↑/↓ on a row.')}</p>}
 
       {openEpic && <SimpleEpicPanel epicId={openEpic} onClose={() => setOpenEpic(null)} />}
       {adding && <NewEpicDialog onClose={() => setAdding(false)} onCreated={(id) => { setAdding(false); setOpenEpic(id); }} />}

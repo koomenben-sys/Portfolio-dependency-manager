@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Check, X, Circle, CircleDot, CircleHelp, ArrowRight, ChevronDown } from 'lucide-react';
+import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { ASK_META, COMMITMENT_META } from '../../domain/model';
 import { useT } from '../../i18n';
@@ -28,8 +28,8 @@ const TONE = {
 };
 export const toneClass = (tone) => TONE[tone] || TONE.neutral;
 
-const ASK_ICON = { proposed: Circle, accepted: Check, partial: CircleDot, deferred: ArrowRight, needs_priority_call: CircleHelp, declined: X };
-export const AskIcon = ({ response, size = 14, className = '' }) => { const I = ASK_ICON[response] || Circle; return <I size={size} strokeWidth={2.25} className={className} aria-hidden="true" />; };
+const ASK_ICON = { proposed: Clock, accepted: Check, partial: CircleDot, deferred: ArrowRight, needs_priority_call: CircleHelp, declined: X };
+export const AskIcon = ({ response, size = 14, className = '' }) => { const I = ASK_ICON[response] || Clock; return <I size={size} strokeWidth={2.25} className={className} aria-hidden="true" />; };
 
 // Status = icon + short label + pastel colour; never colour alone.
 export function StatusChip({ response, compact = false, className = '' }) {
@@ -49,26 +49,36 @@ export function CommitmentChip({ value }) {
   return <span className={`inline-flex items-center gap-1 rounded-full border px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(COMMIT_TONE[value])}`}><span aria-hidden="true">{m.icon}</span>{t(m.label)}</span>;
 }
 
-// Strategic rank as a quiet tabular number; top ranks get the accent.
+// Strategic rank as a quiet tabular number; one neutral style for every rank (iteration 1, item 4).
 export function RankNo({ rank, size = 'md' }) {
   const t = useT();
   const dim = size === 'sm' ? 'w-6 h-6 text-caption' : 'w-7 h-7 text-label';
-  const look = rank == null ? 'bg-surface-2 text-faint' : rank <= 3 ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-ink-2';
+  const look = rank == null ? 'bg-surface-2 text-faint' : 'bg-surface-2 text-ink-2';
   return <span className={`shrink-0 rounded-control font-semibold tnum inline-flex items-center justify-center ${dim} ${look}`} aria-label={rank == null ? t('Unranked') : t('Strategic rank {rank}', { rank })}>{rank ?? '–'}</span>;
 }
 
-// Dependency summary of an epic: "2 ✓ 1 ? 1 ✕", open count shown as ○. Max four tiny chips, counts first.
-export function DepSummary({ deps }) {
+// Four core states; older partial/deferred data folds into the nearest one (D31).
+export const normAsk = (r) => (r === 'partial' ? 'accepted' : r === 'deferred' ? 'needs_priority_call' : r);
+export const ASK_SEVERITY = { declined: 3, needs_priority_call: 2, proposed: 1, accepted: 0 };
+export const worstAsk = (deps) => (deps.length ? deps.map((d) => normAsk(d.response)).sort((a, b) => ASK_SEVERITY[b] - ASK_SEVERITY[a])[0] : null);
+const WORST_TEXT = { declined: 'text-danger-fg', needs_priority_call: 'text-warn-fg', proposed: 'text-ink-2', accepted: 'text-ok-fg' };
+
+// One readable "worst issue" per epic (iteration 1, item 2): "✕ Kan niet · Platform & Security", "? Bespreken · Team",
+// "◷ 1 open", "✓ 2 toegezegd", "–". Several asks: the worst plus "+n"; the tooltip lists them all.
+export function WorstIssue({ deps, teams }) {
   const t = useT();
   if (!deps.length) return <span className="text-faint text-caption">–</span>;
-  const counts = { accepted: 0, proposed: 0, needs_priority_call: 0, declined: 0 };
-  deps.forEach((d) => { const k = d.response === 'partial' ? 'accepted' : d.response === 'deferred' ? 'needs_priority_call' : d.response; counts[k] = (counts[k] || 0) + 1; });
-  const order = ['accepted', 'proposed', 'needs_priority_call', 'declined'];
+  const worst = worstAsk(deps);
+  const all = deps.map((d) => `${teams.get(d.providerTeamId)?.name || '?'}: ${d.ask} — ${t(ASK_META[normAsk(d.response)].label)}`).join('\n');
+  const first = deps.find((d) => normAsk(d.response) === worst);
+  const n = deps.filter((d) => normAsk(d.response) === worst).length;
+  const text = worst === 'declined' || worst === 'needs_priority_call'
+    ? <>{t(ASK_META[worst].label)} <span className="text-muted">· {teams.get(first.providerTeamId)?.name}</span></>
+    : <>{n} {t(ASK_META[worst].label).toLowerCase()}</>;
+  const rest = deps.length - (worst === 'declined' || worst === 'needs_priority_call' ? 1 : n);
   return (
-    <span className="inline-flex items-center gap-1" aria-label={order.filter((k) => counts[k]).map((k) => `${counts[k]} ${t(ASK_META[k].label)}`).join(', ')}>
-      {order.filter((k) => counts[k]).map((k) => (
-        <span key={k} className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 h-5 text-micro font-semibold tnum ${toneClass(ASK_META[k].tone)}`} aria-hidden="true">{counts[k]}<AskIcon response={k} size={10} /></span>
-      ))}
+    <span className={`inline-flex items-center gap-1.5 text-label font-medium min-w-0 ${WORST_TEXT[worst]}`} title={all} aria-label={all}>
+      <AskIcon response={worst} size={13} className="shrink-0" /><span className="truncate">{text}</span>{rest > 0 && <span className="text-caption text-muted tnum shrink-0">+{rest}</span>}
     </span>
   );
 }

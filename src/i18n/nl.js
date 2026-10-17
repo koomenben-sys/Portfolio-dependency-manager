@@ -745,7 +745,7 @@ export const nl = {
   'Asks': 'Verzoeken',
   'Description': 'Omschrijving',
   'Drag': 'Slepen',
-  'Drag, or Alt+↑/↓ on a row.': 'Sleep, of Alt+↑/↓ op een rij.',
+  'Drag, or Alt+↑/↓': 'Sleep, of Alt+↑/↓',
   'Effort (pw)': 'Inspanning (pw)',
   'Effort high': 'Inspanning hoog',
   'Effort low': 'Inspanning laag',
