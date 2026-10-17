@@ -342,6 +342,36 @@ Feature: Round-2 behaviours
 - F6. My attention is scoped to the selected quarter, remembers when you last looked (for "new since your last visit"), lists your own unanswered asks, and offers Answer / Acknowledge actions.
 - A11. Demo mode runs with no Supabase environment variables at all; the app renders a "No quarter yet" notice instead of hanging when an organisation has no quarter.
 
+## G4. Onboarding, demo tour, language (second iteration)
+
+- A12. An admin of an organisation that is not set up (`setupComplete` false) sees the onboarding wizard; after "Open the board" the board shows the created quarter. Demo mode can start an empty organisation and return to the demo data.
+- A13. The header offers a demo tour per role; each step switches the persona (demo mode) and the screen and shows an explanation; nothing in the data changes.
+- A14. The UI language can be switched between Nederlands and English; with `nl` every screen reads in Dutch; data (names, ref codes) is never translated.
+
+```gherkin
+Feature: Onboarding and language
+
+  Scenario: New organisation set-up
+    Given I am an admin and the organisation has no teams or quarters
+    When I open the app
+    Then I see the wizard starting with the profile step
+    When I add teams "Burgerzaken" and "IT Platform", a theme, quarter 2027 Q1 and capacity for both teams
+    And I click "Open the board"
+    Then the board shows 2027 Q1 with two empty team lanes and their capacity
+
+  Scenario: Demo tour switches role and screen
+    Given demo mode
+    When I start the tour "Directeur" and click "Volgende" three times
+    Then the persona is Ruud Visser and the screen is the Board
+    And nothing in the demo data has changed
+
+  Scenario: Dutch by default
+    When I open the app in demo mode
+    Then the navigation reads Overzicht, Bord, Afhankelijkheden, Sessie, In het kwartaal, Mijn aandacht, Instellingen
+    When I switch the language to English
+    Then the same navigation reads in English
+```
+
 ## H. Out of scope (explicit)
 
 Multi-tenant signup/billing, SSO, Jira/Trello, e-mail notifications, real-time presence, change-request workflow, cross-quarter heatmap, network graph, Program/Portfolio entities, Dutch UI text.

@@ -33,6 +33,15 @@ export class MockRepository {
     this.counters = { epic: 33, dependency: 21, impediment: 6 };
     return this._persist();
   }
+  // Blank organisation for the onboarding wizard (demo mode). Keeps the language choice.
+  async resetEmpty(actor, language = 'nl') {
+    const seed = seedState();
+    this.state = { teams: [], themes: [], quarters: [], capacity: [], epics: [], plans: [], dependencies: [], votes: [], discussions: [], checkIns: [], impediments: [], events: [],
+      members: seed.members.filter((m) => m.role === 'admin').map((m) => ({ ...m, teamId: null })),
+      settings: { ...seed.settings, language, setupComplete: false, orgName: '' } };
+    this.counters = { epic: 1, dependency: 1, impediment: 1 };
+    return this._persist();
+  }
   _ref(kind) {
     const n = this.counters[kind]++;
     const prefix = { epic: 'EP', dependency: 'DEP', impediment: 'IMP' }[kind];
@@ -338,7 +347,8 @@ export class MockRepository {
     return this._persist();
   }
   async updateSettings(actor, patch) {
-    if (!isAdmin(actor)) throw new PermissionError('Admin only');
+    const onlyLanguage = Object.keys(patch).every((k) => k === 'language');
+    if (!onlyLanguage && !isAdmin(actor)) throw new PermissionError('Admin only');
     Object.assign(this.state.settings, patch);
     return this._persist();
   }
