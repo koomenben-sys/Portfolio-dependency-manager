@@ -337,6 +337,11 @@ The owner asked how an arbitrary organisation is mapped correctly. The answer is
 | My attention | – (no team) unless also a planner | own unit's asks, answers, stale items | – |
 | Settings | all | – | themes if `can_rank` |
 
+### 17.3b Onboarding wizard and demo tour (built 2026-10-17, second iteration)
+- **Onboarding wizard** (`src/components/plan/OnboardingWizard.jsx`): shown to admins while `settings.setupComplete` is false. Steps: profile (language, name, planning-unit label, capacity unit, fiscal-year start), teams, strategic themes, first quarter, capacity per team (defaults editable), where epics come from, done. Each step writes through the repository, so leaving halfway keeps progress. Demo mode offers "Start with an empty organisation" (`MockRepository.resetEmpty`) and "Load the demo organisation instead".
+- **Demo tour** (`TourPanel.jsx`, `tourScenarios.js`): five role scenarios (director, head of platform, product owner, facilitator, viewer) that switch persona and screen per step and explain what to look at; bilingual prose; navigation only, no data changes. Script for live demos: `docs/demo-script.md`.
+- **Language** (`src/i18n/`): English strings are keys, `nl.js` holds Dutch; default `nl` (semi-government is the first target market); switch in the header; stored in `settings.language`. Decision D24: a minimal in-house `t()` instead of i18next. Reason: ~400 strings, no plural/ICU needs yet, zero dependencies; rejected: i18next (weight), separate Dutch build (two deployments).
+
 ### 17.4 Follow-ups for configuration
 - Invite / membership UI (Supabase: insert into `memberships`, send magic link); today SQL.
 - Multiple concurrent sessions (per tribe/ART) = quarter scoped to a label; schema already allows several quarters, a `scope_label` column is the small addition.
