@@ -379,13 +379,14 @@ Supersedes the navigation parts of A12-A14 and the screen-level criteria of B/C/
 **Acceptance criteria**
 - J1. The navigation shows exactly three numbered screens — 1 Prioriteren, 2 Afhankelijkheden, 3 Afstemmen — plus a quarter selector, a settings gear and an account menu (Bekijken als in demo, language, Rondleiding). The default route is `#prioriteren`. No demo banner; a small "Demo" chip.
 - J2. With Instellingen › "Uitgebreide modules (beta)" on (default off), the group "Uitgebreid (beta)" adds Overzicht, Bord, Intake & capaciteit, Sessie, In het kwartaal and Mijn aandacht; off, those routes fall back to Prioriteren.
-- J3. Prioriteren lists the quarter's ranked epics (# · Epic · Team · Afhankelijkheden · Status). A user with rank permission reorders by drag & drop or with the row's arrow buttons (Alt+↑/↓); after a move an inline optional reason appears with Opslaan/Annuleren; saving assigns ranks 1..n and logs one `rank_changed` event with the reason. Users without rank permission see no drag handle or arrows. In a locked quarter the reason is required.
+- J3. Prioriteren lists the quarter's ranked epics (# · Epic · Team · Afhankelijkheden). The Afhankelijkheden cell reads the worst ask with its team ("✕ Kan niet · Platform & Security", "? Bespreken · Team", "◷ 1 open", "✓ 2 toegezegd", "–"), plus "+n" for further asks; the tooltip lists them all. No epic codes in the row; one neutral rank badge style. A team filter ("Alle teams") sits next to search; while searching or filtering, reordering is paused. A user with rank permission reorders by drag & drop or with the row's arrow buttons (Alt+↑/↓); after a move an inline optional reason appears with Opslaan/Annuleren; saving assigns ranks 1..n and logs one `rank_changed` event with the reason. Users without rank permission see no drag handle or arrows. In a locked quarter the reason is required.
 - J4. Unranked epics sit in a collapsed group "Nog niet geprioriteerd (n)"; "Rang" appends one to the end of the ranked list (through the same save flow).
 - J5. Rows whose asks include Kan niet or Bespreken show a left marker (red / amber). Clicking a row opens the simplified epic panel; Escape closes it and focus returns to the row.
-- J6. Afhankelijkheden: team selector (default: the actor's team); "Wij vragen" lists the team's epics in rank order with their asks; "+ Verzoek" opens an inline row (team · what · optional pw) — no modal. "Aan ons gevraagd" lists asks to the team ordered by the requesting epic's rank with a segmented Toezeggen / Bespreken / Kan niet control (only for planners of that team and admins, from the Negotiate phase); Kan niet requires an inline reason, Bespreken takes an optional one; Toezeggen is one click. Partial / deferred answers are shown read-only.
-- J7. Afstemmen shows four count tiles (Open · Toegezegd · Bespreken · Kan niet) that filter the list; "Te bespreken" lists team pairs with Bespreken / Kan niet asks sorted by the highest-ranked epic involved, expandable to the asks (rank · epic · what · status · reason); "Matrix" toggles a team × team grid whose cells focus a pair.
+- J6. Afhankelijkheden: the team selector sits in the title row ("Afhankelijkheden · [team ▾]", default: the actor's team). Each tab opens with one line of count chips (✕ · ? · ◷ · ✓) that filter the list. "Wij vragen" lists the team's epics in rank order with their asks (team · what · status; reason in normal muted text; delete on hover / focus only; no effort text); epics without asks collapse into "n epics zonder verzoeken"; "+ Verzoek" opens an inline row (team · what · optional pw) — no modal. "Aan ons gevraagd" lists asks to the team ordered by the requesting epic's rank with a segmented Toezeggen / Bespreken / Kan niet control (only for planners of that team and admins, from the Negotiate phase); Kan niet requires an inline reason; Bespreken and Toezeggen are one click. When the team has capacity for the quarter the line reads "Gevraagd n pw · beschikbaar n pw" (requested = effortHigh of asks not declined), red when requested exceeds available. Partial / deferred answers are shown read-only.
+- J7. Afstemmen shows four count tiles in the order Kan niet · Bespreken · Open · Toegezegd (the last two quieter) that filter the list, then one line "Top 5: n in gevaar (rang …)" computed from the five highest-ranked epics with a Kan niet / Bespreken ask; each rank number opens that epic's pair. "Te bespreken" lists team pairs with Bespreken / Kan niet asks first, then pairs with only Open asks in a quieter style, each sorted by the highest-ranked epic involved and carrying one worst-status chip; a pair expands to its asks (rank · epic · what · status · reason). The provider's planner or an admin answers inline with the same Toezeggen / Bespreken / Kan niet control (Kan niet asks a reason). Each pair has a "Besproken" check that is stored per browser for the quarter. "Matrix tonen" at the bottom reveals the team × team grid whose cells focus a pair.
 - J8. The wizard has three steps (Organisatie · Teams · Kwartaal + eerste epics) and ends on Prioriteren with the typed epics ranked in order. An optional link leads to the Azure DevOps demo import.
 - J9. Every new string has a Dutch text; Dutch is the default. Helper text is at most six words; empty states are one line plus one button.
+- J10. The "Live" / "30 s" / "Offline" indicator is shown only in Supabase mode; demo mode shows the DEMO chip alone. In the epic panel, rank, effort, description and label are plain text for users without the rights.
 
 ```gherkin
 Feature: Prioritise by dragging
@@ -430,10 +431,27 @@ Feature: Align
   Scenario: Agenda ordered by priority
     Given 2027 Q1 has Bespreken / Kan niet asks between four team pairs
     When I open Afstemmen
-    Then the tiles read Open 2 · Toegezegd 6 · Bespreken 3 · Kan niet 2
-    And "Te bespreken (4)" lists Klantportaal → Polisadministratie first (its top epic is #2)
+    Then the tiles read Kan niet 2 · Bespreken 3 · Open 2 · Toegezegd 6
+    And the line reads "Top 5: 2 in gevaar (rang 2, 5)"
+    And "Te bespreken (6)" lists Klantportaal → Polisadministratie first (its top epic is #2) and the two open-only pairs last
     When I click the tile "Kan niet"
     Then the list only shows pairs with Kan niet asks
+
+  Scenario: Outcome recorded in the meeting
+    Given I am Anouk de Jong (admin) on Afstemmen with Payments → Platform & Security expanded
+    When I click "Toezeggen" on "Fraud rules for instant payouts"
+    Then the ask shows "Toegezegd" and the tile Bespreken drops to 2
+    When I tick "Besproken" on that pair
+    Then the pair shows the check and keeps it after a reload of this browser
+
+Feature: Prioriteren reads the worst issue
+
+  Scenario: Director sees what and with whom
+    Given I am Ruud Visser on Prioriteren in 2027 Q1
+    Then the row "Policy admin migration to new core (wave 2)" reads "✕ Kan niet · Platform & Security"
+    And the row "Self-service policy changes" reads "? Bespreken · Polisadministratie +1"
+    When I choose "Klantportaal" in the team filter
+    Then only Klantportaal epics are listed and the drag handles are hidden
 
 Feature: Three-step wizard
 

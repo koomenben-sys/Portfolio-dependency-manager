@@ -435,6 +435,33 @@ Six teams (Payments, Klantportaal, Claims, Polisadministratie, Data Platform, Pl
 ### Verified
 `npm run build` after every step; a bundled Node smoke test against `MockRepository` (seed shape, reorderPlans permissions / ranks / event, answer-reason rules, ask without effort, wizard flow). Browser verification by the lead.
 
+### Iteration 1 (fictive-user tests, 2026-10-18)
+
+Four fictive users (director, team lead / planner, facilitator, viewer) walked the three screens; all scored "calm & clear" 8/10 and "I'd use it" 5-7/10. Every change below removes something or answers the persona's one question in one glance; no explanatory text was added. Binding list: `reset-iteration-1.md` (side-session notes).
+
+| Persona | Finding | Change |
+|---|---|---|
+| Director, planner, viewer | "Toegezegd" in the Status column: three of four did not know what it referred to. | Status (epic commitment) column removed from Prioriteren; the one signal per row is the dependency state. |
+| Director | Count chips "2 ✓ 1 ?" did not answer "what and with whom". | One readable worst-issue cell per row: "✕ Kan niet · Platform & Security", "? Bespreken · Team", "◷ 1 open", "✓ 2 toegezegd", "–"; several asks show the worst plus "+n"; the tooltip lists them all (`WorstIssue` in `core.jsx`). Open uses a clock glyph everywhere. |
+| Director | EP-codes and the "Sleep, of Alt+↑/↓" hint were noise. | Codes stay in the panel only; the hint is the drag handle's tooltip. |
+| All | Teal badges for ranks 1-3 were unexplained. | One neutral rank badge style; the left marker for Kan niet / Bespreken rows stays. |
+| Planner | Wanted to see only her team on Prioriteren. | Team filter "Alle teams" next to search (default all; reordering pauses while filtering). |
+| Team lead | Needed the counts of a tab before reading rows, and the load an incoming list puts on the team. | One line of icon+number chips per tab (✕ · ? · ◷ · ✓), each a filter; "Aan ons gevraagd" adds "Gevraagd n pw · beschikbaar n pw" when capacity is set for the quarter (requested = effortHigh of asks not declined; available from `availableWeeks`), red when requested > available. |
+| Planner | Epics without asks took space on "Wij vragen"; reasons were too small to read. | Epics without asks collapse into "n epics zonder verzoeken"; reasons under an ask in normal muted text; rank order kept. |
+| Planner | "2–3 pw" on outgoing rows was never used. | Effort text removed from "Wij vragen" rows (kept in "Aan ons gevraagd" and the form). |
+| Planner | The bin icon on every ask invited mistakes. | Delete appears on hover / keyboard focus only. |
+| Team lead | "Bespreken" opened a reason box like "Kan niet". | Bespreken answers in one click; only Kan niet asks for a reason inline. |
+| Team lead | The team selector did not read as the page subject. | Title row "Afhankelijkheden · [team ▾]", defaulting to the actor's team. |
+| Facilitator | Eye landed on Open/Toegezegd first. | Tiles ordered Kan niet · Bespreken · Open · Toegezegd; the last two quieter (smaller number, muted). |
+| Facilitator, director | "Are the top priorities safe?" needed a scan of the list. | One line "Top 5: n in gevaar (rang 2, 5)" from the five highest-ranked epics with a Kan niet / Bespreken ask; rank numbers open the pair. |
+| Facilitator | Open asks between two teams were invisible on the agenda. | Open-only pairs listed after the problem pairs in a quieter style; one worst-status chip per pair. |
+| Facilitator | Outcomes had to be recorded on another screen during the meeting. | Segmented Toezeggen / Bespreken / Kan niet inline per ask for the provider's planner or an admin; "Besproken" check per pair, session-local (`localStorage` key `kp.discussed.<quarter>`, no domain change). |
+| Facilitator | The matrix button competed with the agenda. | Matrix behind a text link "Matrix tonen" at the bottom. |
+| All | "Live"/"30 s" chip meant nothing in the demo. | Shown only in Supabase mode; the small DEMO chip stays. |
+| Viewer | Disabled inputs in the panel looked broken. | Rank, effort, description and label render as plain text without the rights. |
+
+Deliberate deviations: the optional reason for "Bespreken" has no entry point in the core screens yet (the panel is read-only for asks; adding a field there would be new UI) — the reason survives from an earlier "Kan niet" answer and is shown wherever it exists. The "Besproken" check is per browser, as the list asked.
+
 ## 20. P1: invites, RLS tests, realtime (built 2026-10-17, branch `claude/p1-invites-rls-realtime`)
 
 Migrations `007_invitations.sql` and `008_realtime.sql` (both additive and re-runnable), test `db/tests/rls_test.sql`.
