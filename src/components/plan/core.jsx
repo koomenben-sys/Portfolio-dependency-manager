@@ -1,0 +1,207 @@
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { Check, X, Circle, CircleDot, CircleHelp, ArrowRight, ChevronDown } from 'lucide-react';
+import { ASK_META, COMMITMENT_META } from '../../domain/model';
+import { useT } from '../../i18n';
+
+// Calm primitives for the three core screens (docs/design.md section 19). Tokens come from src/index.css;
+// one accent, 1px borders, no resting shadows, every control >= 24px, focus ring from :focus-visible.
+
+export const cls = {
+  primary: 'inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-control bg-accent text-accent-fg text-label font-medium hover:bg-accent-600 disabled:opacity-40 disabled:cursor-not-allowed transition-base whitespace-nowrap',
+  secondary: 'inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-control bg-surface border border-border-strong text-label font-medium text-ink hover:bg-surface-2 disabled:opacity-40 disabled:cursor-not-allowed transition-base whitespace-nowrap',
+  ghost: 'inline-flex items-center gap-1 h-8 px-2 rounded-control text-label font-medium text-accent hover:bg-accent-50 disabled:opacity-40 disabled:cursor-not-allowed transition-base whitespace-nowrap',
+  quiet: 'inline-flex items-center gap-1 h-7 px-1.5 rounded-control text-caption text-muted hover:text-ink hover:bg-surface-2 transition-base whitespace-nowrap',
+  icon: 'inline-flex items-center justify-center w-7 h-7 rounded-control text-muted hover:text-ink hover:bg-surface-2 disabled:opacity-40 transition-base',
+  input: 'h-8 px-2 rounded-control border border-border-strong bg-surface text-body text-ink placeholder:text-faint focus:border-accent w-full disabled:bg-surface-2 disabled:text-muted',
+  textarea: 'px-2 py-1.5 rounded-control border border-border-strong bg-surface text-body text-ink placeholder:text-faint focus:border-accent w-full',
+  card: 'bg-surface border border-border rounded-panel',
+  label: 'block text-caption font-medium text-muted mb-1',
+};
+
+const TONE = {
+  neutral: 'bg-neutral-bg text-neutral-fg border-neutral-border',
+  ok: 'bg-ok-bg text-ok-fg border-ok-border',
+  warn: 'bg-warn-bg text-warn-fg border-warn-border',
+  danger: 'bg-danger-bg text-danger-fg border-danger-border',
+  info: 'bg-info-bg text-info-fg border-info-border',
+};
+export const toneClass = (tone) => TONE[tone] || TONE.neutral;
+
+const ASK_ICON = { proposed: Circle, accepted: Check, partial: CircleDot, deferred: ArrowRight, needs_priority_call: CircleHelp, declined: X };
+export const AskIcon = ({ response, size = 14, className = '' }) => { const I = ASK_ICON[response] || Circle; return <I size={size} strokeWidth={2.25} className={className} aria-hidden="true" />; };
+
+// Status = icon + short label + pastel colour; never colour alone.
+export function StatusChip({ response, compact = false, className = '' }) {
+  const t = useT();
+  const m = ASK_META[response] || ASK_META.proposed;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(m.tone)} ${className}`}>
+      <AskIcon response={response} size={12} />{!compact && <span>{t(m.label)}</span>}
+    </span>
+  );
+}
+
+const COMMIT_TONE = { draft: 'neutral', discuss: 'warn', committed: 'ok', at_risk: 'warn', not_committed: 'danger' };
+export function CommitmentChip({ value }) {
+  const t = useT();
+  const m = COMMITMENT_META[value]; if (!m) return null;
+  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(COMMIT_TONE[value])}`}><span aria-hidden="true">{m.icon}</span>{t(m.label)}</span>;
+}
+
+// Strategic rank as a quiet tabular number; top ranks get the accent.
+export function RankNo({ rank, size = 'md' }) {
+  const t = useT();
+  const dim = size === 'sm' ? 'w-6 h-6 text-caption' : 'w-7 h-7 text-label';
+  const look = rank == null ? 'bg-surface-2 text-faint' : rank <= 3 ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-ink-2';
+  return <span className={`shrink-0 rounded-control font-semibold tnum inline-flex items-center justify-center ${dim} ${look}`} aria-label={rank == null ? t('Unranked') : t('Strategic rank {rank}', { rank })}>{rank ?? '–'}</span>;
+}
+
+// Dependency summary of an epic: "2 ✓ 1 ? 1 ✕", open count shown as ○. Max four tiny chips, counts first.
+export function DepSummary({ deps }) {
+  const t = useT();
+  if (!deps.length) return <span className="text-faint text-caption">–</span>;
+  const counts = { accepted: 0, proposed: 0, needs_priority_call: 0, declined: 0 };
+  deps.forEach((d) => { const k = d.response === 'partial' ? 'accepted' : d.response === 'deferred' ? 'needs_priority_call' : d.response; counts[k] = (counts[k] || 0) + 1; });
+  const order = ['accepted', 'proposed', 'needs_priority_call', 'declined'];
+  return (
+    <span className="inline-flex items-center gap-1" aria-label={order.filter((k) => counts[k]).map((k) => `${counts[k]} ${t(ASK_META[k].label)}`).join(', ')}>
+      {order.filter((k) => counts[k]).map((k) => (
+        <span key={k} className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 h-5 text-micro font-semibold tnum ${toneClass(ASK_META[k].tone)}`} aria-hidden="true">{counts[k]}<AskIcon response={k} size={10} /></span>
+      ))}
+    </span>
+  );
+}
+
+// Tabs (role=tablist) with counts; arrow keys move between tabs.
+export function Tabs({ items, value, onChange, ariaLabel }) {
+  const refs = useRef([]);
+  const onKey = (e, i) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const n = (i + (e.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
+    onChange(items[n].id); refs.current[n]?.focus();
+  };
+  return (
+    <div role="tablist" aria-label={ariaLabel} className="flex gap-1 border-b border-border">
+      {items.map((it, i) => {
+        const active = it.id === value;
+        return (
+          <button key={it.id} role="tab" aria-selected={active} tabIndex={active ? 0 : -1} ref={(el) => { refs.current[i] = el; }} onKeyDown={(e) => onKey(e, i)} onClick={() => onChange(it.id)}
+            className={`relative -mb-px inline-flex items-center gap-1.5 h-9 px-3 text-label font-medium border-b-2 transition-base ${active ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
+            {it.label}{it.count != null && <span className={`tnum rounded-full px-1.5 h-5 min-w-5 inline-flex items-center justify-center text-micro font-semibold ${active ? 'bg-accent-50 text-accent-700' : 'bg-surface-2 text-muted'}`}>{it.count}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// One line + one action, nothing more.
+export function EmptyLine({ children, action }) {
+  return <div className="flex items-center justify-between gap-3 px-4 py-6 text-body text-muted">{children}{action}</div>;
+}
+
+export function ErrorLine({ error }) { const t = useT(); return error ? <p role="alert" className="text-caption text-danger-fg mt-1">{t(error)}</p> : null; }
+
+// Inline reason row: "Waarom? (optioneel)" + Opslaan. Enter saves, Escape cancels. No modal (D28/D29).
+export function InlineReason({ label, placeholder, required = false, autoFocus = true, saveLabel, onSave, onCancel, error, defaultValue = '' }) {
+  const t = useT();
+  const [v, setV] = useState(defaultValue);
+  const [busy, setBusy] = useState(false);
+  const id = useId();
+  const save = async () => { if (busy) return; if (required && !v.trim()) return; setBusy(true); try { await onSave(v.trim()); } finally { setBusy(false); } };
+  return (
+    <div className="flex flex-col gap-1 anim-fade-in">
+      <div className="flex items-center gap-2">
+        <label htmlFor={id} className="text-caption text-muted whitespace-nowrap">{label ?? (required ? t('Why?') : t('Why? (optional)'))}</label>
+        <input id={id} autoFocus={autoFocus} className={`${cls.input} max-w-md`} value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} aria-required={required}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape' && onCancel) { e.preventDefault(); onCancel(); } }} />
+        <button type="button" className={cls.primary} disabled={busy || (required && !v.trim())} onClick={save}>{saveLabel ?? t('Save')}</button>
+        {onCancel && <button type="button" className={cls.secondary} onClick={onCancel}>{t('Cancel')}</button>}
+      </div>
+      <ErrorLine error={error} />
+    </div>
+  );
+}
+
+// Segmented answer control: Toezeggen · Bespreken · Kan niet (role=radiogroup, active state filled).
+const SEG_ACTIVE = { accepted: 'bg-ok-bg text-ok-fg border-ok-border', needs_priority_call: 'bg-warn-bg text-warn-fg border-warn-border', declined: 'bg-danger-bg text-danger-fg border-danger-border' };
+export function AnswerControl({ value, onPick, disabled = false, labelledBy }) {
+  const t = useT();
+  const opts = [['accepted', t('Commit')], ['needs_priority_call', t('Discuss')], ['declined', t("Can't")]];
+  const shown = value === 'partial' ? 'accepted' : value === 'deferred' ? 'needs_priority_call' : value;
+  return (
+    <div role="radiogroup" aria-labelledby={labelledBy} className="inline-flex rounded-control border border-border-strong overflow-hidden bg-surface">
+      {opts.map(([k, label], i) => {
+        const active = shown === k;
+        return (
+          <button key={k} type="button" role="radio" aria-checked={active} disabled={disabled} onClick={() => onPick(k)}
+            className={`inline-flex items-center gap-1 h-8 px-2.5 text-label font-medium transition-base focus-ring-inset disabled:cursor-not-allowed ${i > 0 ? 'border-l border-border-strong' : ''} ${active ? SEG_ACTIVE[k] : 'text-ink-2 hover:bg-surface-2 disabled:opacity-50'}`}>
+            <AskIcon response={k} size={13} />{label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Section header inside a view: title left, actions right. Titles stay short; no paragraphs below.
+export function ViewHeader({ title, meta, right }) {
+  return (
+    <div className="flex items-center justify-between gap-4 mb-4 min-h-8">
+      <div className="flex items-baseline gap-3 min-w-0"><h1 className="text-title text-ink truncate">{title}</h1>{meta && <span className="text-label text-muted whitespace-nowrap">{meta}</span>}</div>
+      {right && <div className="flex items-center gap-2 shrink-0">{right}</div>}
+    </div>
+  );
+}
+
+// Popover menu: click outside / Escape closes, focus returns to the trigger, arrow keys move between items.
+export function Menu({ button, children, align = 'right', ariaLabel, width = 'w-64' }) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef(null);
+  const trig = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (e) => { if (wrap.current && !wrap.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { setOpen(false); trig.current?.focus(); return; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const items = [...(wrap.current?.querySelectorAll('[role="menuitem"], [role="menuitemradio"], select') || [])].filter((el) => !el.disabled);
+        if (!items.length) return;
+        e.preventDefault();
+        const i = items.indexOf(document.activeElement);
+        items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+      }
+    };
+    document.addEventListener('mousedown', onDoc); document.addEventListener('keydown', onKey);
+    const first = wrap.current?.querySelector('[role="menuitem"], [role="menuitemradio"]'); first?.focus();
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+  return (
+    <div ref={wrap} className="relative">
+      {button({ ref: trig, open, toggle: () => setOpen((o) => !o), 'aria-haspopup': 'menu', 'aria-expanded': open })}
+      {open && (
+        <div role="menu" aria-label={ariaLabel} className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 ${width} bg-surface border border-border rounded-panel shadow-md p-1 z-50 anim-pop`} onClick={(e) => { if (e.target.closest('[data-close]')) setOpen(false); }}>
+          {typeof children === 'function' ? children({ close: () => setOpen(false) }) : children}
+        </div>
+      )}
+    </div>
+  );
+}
+export const menuItem = 'w-full flex items-center gap-2 h-8 px-2 rounded-control text-label text-ink hover:bg-surface-2 text-left focus-ring-inset disabled:opacity-40';
+export const MenuLabel = ({ children }) => <div className="px-2 pt-2 pb-1 text-micro font-semibold uppercase tracking-wide text-faint">{children}</div>;
+export const MenuSep = () => <div className="my-1 border-t border-border" />;
+
+// Collapsible group with a count, used for "Nog niet geprioriteerd (n)" and "Historie".
+export function Disclosure({ summary, children, defaultOpen = false, className = '' }) {
+  return (
+    <details className={`group ${className}`} open={defaultOpen}>
+      <summary className="list-none cursor-pointer select-none inline-flex items-center gap-1 h-8 px-1 -mx-1 rounded-control text-label font-medium text-muted hover:text-ink focus-ring">
+        <ChevronDown size={14} className="transition-transform group-open:rotate-180" aria-hidden="true" />{summary}
+      </summary>
+      <div className="mt-2">{children}</div>
+    </details>
+  );
+}
+
+export const fmtDate = (iso, lang = 'nl') => (iso ? new Date(iso).toLocaleDateString(lang === 'nl' ? 'nl-NL' : 'en-GB') : '–');

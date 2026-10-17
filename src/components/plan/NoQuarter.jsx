@@ -7,7 +7,7 @@ export function NoQuarter() {
   const t = useT();
   return (
     <Panel title={t('No quarter yet')}>
-      <p className="text-sm text-gray-700">{t('Create the quarter you want to plan in')} <a className="text-indigo-700 hover:underline" href="#settings">{t('Settings › Quarters')}</a>. {t('The organisation setup checklist there walks through the rest.')}</p>
+      <p className="text-sm text-gray-700">{t('Create the quarter you want to plan in')} <a className="text-indigo-700 hover:underline" href="#instellingen">{t('Settings › Quarters')}</a>. {t('The organisation setup checklist there walks through the rest.')}</p>
     </Panel>
   );
 }
