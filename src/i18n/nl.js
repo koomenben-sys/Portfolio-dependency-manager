@@ -770,4 +770,18 @@ export const nl = {
   'Strategic rank': 'Strategische rang',
   'Why? (quarter is locked)': 'Waarom? (kwartaal is vergrendeld)',
   'not planned': 'niet gepland',
+  // ── reset: Afhankelijkheden ──
+  'Answers open from Negotiate.': 'Antwoorden open vanaf Onderhandelen.',
+  'Asked of us': 'Aan ons gevraagd',
+  'Direction': 'Richting',
+  'No': 'Nee',
+  'No asks.': 'Geen verzoeken.',
+  'No epics for this team in this quarter.': 'Geen epics van dit team in dit kwartaal.',
+  'Nothing asked of this team.': 'Niets aan dit team gevraagd.',
+  'Remove?': 'Verwijderen?',
+  'Send': 'Versturen',
+  'We ask': 'Wij vragen',
+  'What do we need?': 'Wat hebben we nodig?',
+  'What stands in the way?': 'Wat staat in de weg?',
+  'Yes': 'Ja',
 };
