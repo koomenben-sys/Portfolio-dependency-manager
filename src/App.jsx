@@ -38,7 +38,13 @@ function SupabaseGate() {
 }
 
 function Shell({ onSignOut }) {
-  const { state, actor, chooseActor, personas, quarter, quarterId, setQuarterId, error, dataSource } = usePlan();
+  const ctx = usePlan();
+  if (!ctx) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>;
+  return <ShellInner ctx={ctx} onSignOut={onSignOut} />;
+}
+
+function ShellInner({ ctx, onSignOut }) {
+  const { state, actor, chooseActor, personas, quarter, quarterId, setQuarterId, error, dataSource } = ctx;
   const [view, setViewState] = useState(viewFromHash);
   const setView = (id) => { setViewState(id); window.location.hash = id; };
   useEffect(() => { const on = () => setViewState(viewFromHash()); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
@@ -52,7 +58,7 @@ function Shell({ onSignOut }) {
         <div className="px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-2 mr-2">
             <span className="w-7 h-7 rounded bg-indigo-600 text-white font-bold flex items-center justify-center text-sm" aria-hidden="true">K</span>
-            <span className="font-semibold">Kwartaalplan</span>
+            <span className="font-semibold">Kwartaalplan</span>{state.settings.orgName && <span className="text-sm text-gray-600 hidden md:inline">· {state.settings.orgName}</span>}
           </div>
           <nav className="flex flex-wrap gap-1">
             {NAV.map(([id, label]) => (

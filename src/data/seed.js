@@ -189,7 +189,9 @@ const events = [
 const state = {
   teams: TEAMS, themes: THEMES, quarters: QUARTERS, capacity, epics, plans: [...plans, ...plans0], dependencies,
   votes, discussions, checkIns, impediments, events,
-  settings: { staleDays: 14, voteBlocksLock: false },
+  members: PERSONAS,
+  settings: { orgName: 'Oranje Verzekeringen', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5, voteBlocksLock: false,
+    capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 } },
 };
 
 // Q4 was locked earlier: store a baseline, then make two post-lock changes so the diff is not empty.

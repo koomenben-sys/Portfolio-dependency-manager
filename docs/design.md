@@ -252,3 +252,73 @@ Built 2026-10-17 on branch `claude/enterprise-planning-mvp-23669e`.
 - Deviation: org-level settings (check-in cadence, vote-blocks-lock) live in memory in the Supabase adapter; an `org_settings` table is a follow-up.
 - Deviation: `plan_events.actor_name` is not stored in Postgres (only `actor_id`); the UI shows the id in Supabase mode.
 - Not done: live Azure DevOps call (CORS blocks it from the browser anyway; Edge Function is the path), Supabase adapter against a real database, automated tests.
+
+### Validation round 2 (built MVP, five role agents) and what changed
+
+Reviewers: director, product owner, engineering manager (platform team), agile coach/RTE, product designer (a11y). Full reports in the session notes; the changes landed in commit "Iterate on MVP validation round 2".
+
+| Finding (who) | Change |
+|---|---|
+| Partial answers counted the full ask; open asks counted nowhere; incoming asks jumped the rank queue (EM) | `grantedLow/High` on partial answers; "if all accepted" load; cut line ranks own epics and accepted asks together by strategic rank (`rankedLoad`) |
+| Band thresholds on rounded % (EM) | exact ratio |
+| No edit of an ask, no contact, no needed-by, prefilled effort (PO) | edit/resend ask (answer resets to proposed), requester contact, needed-by date, empty effort fields with validation |
+| Votes visible as cast, open from Draft, stale after plan changes, no gate on lock, re-lock kept old baseline, phase rules UI-only (coach) | votes only in Vote/Locked, facilitator reveal, "plan changed after vote" flag, readiness includes capacity/declines/open discussions, lock with open items needs an override reason, fresh baseline on re-lock, repository enforces phase rules for removals/asks/capacity, diff covers removed asks and capacity |
+| Duplicate red flags, no regulatory view, numbers undefined, no export (director) | one row per epic with tags, regulatory register (regulation, deadline date, rank, fits capacity), legend, Print/PDF, confidence shown as x/5 |
+| 11px type, contrast, card clutter, jargon, modals not accessible (designer) | 12px floor, outlined rank badge >10, strike-through instead of opacity, card reduced to rank/title/meta + commitment + worst-answer pill + regulatory, plain labels, legend, dialog roles/focus trap/Escape, aria-labels on repeated controls |
+| No live sync (coach) | out of MVP scope; 30 s polling in Supabase mode; realtime is a follow-up (Supabase Realtime on plan tables) |
+| Asks not tied to provider work items (PO) | follow-up: optional `provider_external_id` on dependencies and ADO child-item creation via Edge Function |
+| Skill split / multi-pool capacity (EM) | rejected for MVP: one pool per planning unit keeps the model explainable; a "sub-team" planning unit is the workaround |
+
+### Owner questions during the build
+- "Which agent is the coordinator?" - this session; the role agents are one-shot reviewers.
+- Model: switched to Fable 5.1 mid-session by the owner.
+
+## 17. Organisation configuration — mapping any organisation onto the model
+
+The owner asked how an arbitrary organisation is mapped correctly. The answer is a small, explicit configuration surface (Settings > Organisation setup) and a mapping guide. Everything below exists in the MVP unless marked *follow-up*.
+
+### 17.1 What must be configured (the setup checklist)
+| Step | Data | Where | Who |
+|---|---|---|---|
+| 1. Organisation profile | name; what a planning unit is called (team / squad / product team / department / tribe); capacity unit (person-weeks, or person-days shown as weeks); fiscal-year start month; default weeks per quarter, focus factor, reserve %; check-in cadence; "no response" threshold | Settings > Organisation setup | admin |
+| 2. Planning units | the teams that own epics and answer asks; optional ADO area path / Jira project key per team (import mapping) | Settings > Planning units; mapping in the import panel | admin |
+| 3. People and roles | admin (facilitator), planner (bound to one planning unit), viewer; `can_rank` flag for whoever sets strategic priority | mock: personas; Supabase: `memberships` rows (*follow-up: invite UI*) | admin |
+| 4. Strategic themes | the ordered list the top steers on; "unaligned" is always available | Settings > Strategic themes | can_rank |
+| 5. Quarters | the quarter being planned (+ optionally the active one); phases are driven from Session | Settings > Quarters | admin |
+| 6. Capacity | headcount + absence per team for the planning quarter, defaults from the profile; teams refine focus/reserve on the board | Settings > Capacity for all teams at once; Board > Capacity assumptions | admin / planner |
+| 7. Epics | typed in on the board or imported (ADO mock now; Jira/Trello adapters later) | Board / Settings > Import | planner / admin |
+
+### 17.2 Mapping guide — common organisation shapes
+**D23 - One flexible "planning unit" instead of a fixed org hierarchy.** Reason: tribe/squad, department/team, product/line differ per company; modelling levels forces every customer into one shape (the June "Program" trap). The unit is "the thing that owns epics, has capacity and answers asks". Rejected: configurable hierarchy depth (large UI and query cost, little planning value), per-person capacity (becomes resource management, privacy issues).
+
+| Organisation shape | Planning unit | Grouping (label) | Who ranks | Notes |
+|---|---|---|---|---|
+| Spotify-style tribes/squads | squad | tribe name as label (filter) | tribe leads + CPO with `can_rank` | one admin per tribe if sessions run per tribe (*follow-up: multiple concurrent sessions*) |
+| SAFe ART | team | ART or value stream as label | business owners | quarter = PI; confidence vote and ROAM map 1:1 |
+| Classic departments | department or team | program/portfolio as label | management team | reserve % tends to be high (run work) |
+| Product lines with shared platform teams | product team + platform teams as units | product line as label | product leadership | platform teams live by the intake queue |
+| Vendors / external teams | a planning unit with its own capacity (contracted weeks) | supplier name as label | – | treat their asks like any other team |
+
+**Rules of thumb for a good mapping**
+1. If two groups negotiate capacity with each other, they are separate planning units. If they never do, merge them.
+2. Capacity is per unit per quarter; keep the formula defaults honest (focus 0.6-0.7, reserve 20-40 % for platform/run teams).
+3. Labels are cheap; add a program or portfolio label only when someone will filter on it.
+4. Only a handful of people get `can_rank`; everyone else influences rank through the discussion queue.
+5. Regulatory epics carry the regulation name and a hard date so the register is defensible.
+
+### 17.3 Roles and views (who sees what)
+| View | admin (facilitator) | planner | viewer / director (`can_rank`) |
+|---|---|---|---|
+| Overview | read | read | read (primary) |
+| Board | edit all; capacity all | edit own unit's epics, asks, capacity | read; rank + themes if `can_rank` |
+| Dependencies | answer for any unit | answer for own unit; raise asks from own epics | read |
+| Session | phases, reveal, lock, settings | vote for own unit, raise/resolve discussion items | read |
+| In-quarter | all | check-ins and impediments for own unit | read |
+| My attention | – (no team) unless also a planner | own unit's asks, answers, stale items | – |
+| Settings | all | – | themes if `can_rank` |
+
+### 17.4 Follow-ups for configuration
+- Invite / membership UI (Supabase: insert into `memberships`, send magic link); today SQL.
+- Multiple concurrent sessions (per tribe/ART) = quarter scoped to a label; schema already allows several quarters, a `scope_label` column is the small addition.
+- Terminology overrides beyond the unit label (e.g. "epic" -> "feature", "ask" -> "dependency request") as an i18n table; Dutch UI strings.
+- Import mapping persistence (`integration_connections.config.teamMapping`) and Jira/Trello adapters behind the same `ExternalEpic` contract.

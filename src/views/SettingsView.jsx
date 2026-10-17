@@ -6,6 +6,7 @@ import { Panel, btn, input, Field, ErrorNote, Empty, Modal } from '../components
 import { mapWorkItems, previewImport } from '../integrations/azureDevOps/mapper';
 import { MOCK_ADO_RESPONSE } from '../integrations/azureDevOps/mock';
 import { fetchEpics } from '../integrations/azureDevOps/client';
+import { SetupPanel, BulkCapacity, MembersPanel } from '../components/plan/SetupPanel';
 
 // Teams, themes, quarters, cadence, ADO import, JSON export, demo reset (AC A3, G1-G6).
 export function SettingsView() {
@@ -21,12 +22,13 @@ export function SettingsView() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold">Settings <span className="text-sm font-normal text-gray-500">— data source: {dataSource}</span></h2>
+      <h2 className="text-xl font-bold">Settings <span className="text-sm font-normal text-gray-600">— data source: {dataSource}</span></h2>
       <ErrorNote error={err} />
+      <SetupPanel onGoTo={(id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
       {!admin && <Empty>Most settings are admin-only. Themes can be edited by users with rank permission.</Empty>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Panel title="Teams">
+        <div id="teams"><Panel title={`Planning units (${state.settings.unitLabel || 'teams'})`}>
           <ul className="space-y-1 text-sm">
             {state.teams.map((t) => (
               <li key={t.id} className="flex items-center gap-2">
@@ -36,10 +38,10 @@ export function SettingsView() {
             ))}
           </ul>
           {admin && <AddRow placeholder="New team" onAdd={(name) => act('upsertTeam', { name })} />}
-          <p className="text-xs text-gray-500 mt-2">Capacity per team per quarter is set from the board lane header ("assumptions").</p>
-        </Panel>
+          <p className="text-xs text-gray-600 mt-2">Capacity per team per quarter: below ("Capacity for all teams at once") or per team on the board ("Capacity assumptions").</p>
+        </Panel></div>
 
-        <Panel title="Strategic themes (top-down)">
+        <div id="themes"><Panel title="Strategic themes (top-down)">
           <ul className="space-y-1 text-sm">
             {state.themes.map((t) => (
               <li key={t.id} className="flex items-center gap-2">
@@ -49,13 +51,13 @@ export function SettingsView() {
             ))}
           </ul>
           {canRank(actor) && <AddRow placeholder="New theme" onAdd={(name) => act('upsertTheme', { name })} />}
-        </Panel>
+        </Panel></div>
 
-        <Panel title="Quarters">
+        <div id="quarters"><Panel title="Quarters">
           <ul className="space-y-1 text-sm">{state.quarters.map((q) => <li key={q.id} className="flex justify-between"><span>{quarterLabel(q)}</span><span className="text-xs text-gray-500">{PHASES.find((p) => p.id === q.phase)?.label}{q.baseline ? ' · baseline' : ''}</span></li>)}</ul>
           {admin && <NewQuarter onAdd={(year, q) => act('upsertQuarter', { year, q })} />}
-          <p className="text-xs text-gray-500 mt-2">Phases are advanced from the Session screen.</p>
-        </Panel>
+          <p className="text-xs text-gray-600 mt-2">Phases are advanced from the Session screen.</p>
+        </Panel></div>
 
         <Panel title="Cadence and data">
           <Field l="Check-in cadence (days before an epic is stale)">
@@ -68,7 +70,9 @@ export function SettingsView() {
         </Panel>
       </div>
 
-      {admin && <AdoImport />}
+      <div id="members"><MembersPanel /></div>
+      <div id="capacity"><BulkCapacity /></div>
+      <div id="import">{admin && <AdoImport />}</div>
     </div>
   );
 }

@@ -58,7 +58,8 @@ export class SupabaseRepository {
       dependencies, votes, discussions: discussions.map((d) => ({ ...d, depId: d.dependencyId })), checkIns,
       impediments: impediments.map((i) => ({ ...i, depId: i.dependencyId })),
       events: events.map((e) => ({ ...e, actorName: e.actorId })),
-      settings: this.settings,
+      members: (await this._all('memberships')).map((m) => ({ id: m.userId, name: m.userId, title: '', role: m.role, teamId: m.teamId, canRank: m.canRank })),
+      settings: { orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', noResponseDays: 5, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, ...this.settings },
     };
   }
 

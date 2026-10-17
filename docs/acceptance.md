@@ -293,6 +293,45 @@ Feature: Azure DevOps read-only import
     And it is not created automatically
 ```
 
+## G2. Changes from validation round 2 (implemented)
+
+- C9. A partial answer records the granted effort (0 < granted ≤ asked); only the granted effort counts in the provider's load.
+- C10. The provider's capacity bar shows "+N pw if all open asks accepted"; the intake queue shows per ask whether it fits or falls below the cut line, and the remaining capacity after accepted asks.
+- C11. The cut line ranks own epics and accepted asks together by the (requesting) epic's strategic rank.
+- C12. An ask can be edited by the requesting team; changing text or effort resets an answered ask to Proposed and is logged; asks carry a needed-by date and the requester's contact; effort is not prefilled and must be > 0.
+- C13. "Needs priority call" automatically puts the ask on the discussion queue.
+- D8. Votes can be cast only in the Vote phase (re-vote while Locked); they stay hidden until the facilitator reveals them; a vote cast before the team's plan changed is flagged.
+- D9. Readiness also checks over-capacity, unresolved declined / priority-call asks and open discussion items; locking with teams not ready requires an override reason, which is recorded; re-locking after a rewind takes a fresh baseline.
+- D10. The repository enforces phase rules: in a locked quarter removing an epic, adding/editing/removing an ask and changing capacity all need a reason; the diff lists removed asks and capacity changes.
+- E7. Red flags are one row per epic with all applicable tags, highest severity first; a regulatory register lists regulation, deadline date, rank, commitment and whether the epic fits capacity; the Overview can be printed.
+- A8. Modals are accessible (dialog role, focus trap, Escape, focus return); type is at least 12px; rank badges and strike-through replace low-contrast styling.
+- A9. Settings shows an organisation setup checklist (profile, planning units, people and roles, themes, quarters, capacity, epics) with completeness per step, an organisation profile with capacity defaults, and bulk capacity entry per quarter.
+- A10. The current screen is in the URL hash; an error boundary replaces white screens with reload / reset options.
+
+```gherkin
+Feature: Round-2 behaviours
+
+  Scenario: Partial answer counts only the granted effort
+    Given Platform's load is 20 of 30 pw and an ask of 4 to 6 pw is open
+    When Platform answers "Partial" granting 2 to 3 pw with a reason
+    Then Platform's load becomes 22 to 23 pw
+    And the requester sees "granted 2–3 pw of 4–6"
+
+  Scenario: Hidden votes until reveal
+    Given the quarter is in the Vote phase and two teams have voted
+    When a planner of a third team opens the Session screen
+    Then they see "2 votes cast, hidden" and only their own team's vote
+    When the facilitator clicks "Reveal votes"
+    Then the distribution and per-team votes are visible to everyone
+
+  Scenario: Lock needs an override when teams are not ready
+    Given team "Data" has an unanswered ask
+    When the facilitator advances to "Locked" without a reason
+    Then a prompt lists "Data (1 unanswered ask)" and asks for an override reason
+    When the facilitator enters "Agreed in the room; Data answers by Friday"
+    Then the quarter is locked and the reason is in the history
+```
+
 ## H. Out of scope (explicit)
 
 Multi-tenant signup/billing, SSO, Jira/Trello, e-mail notifications, real-time presence, change-request workflow, cross-quarter heatmap, network graph, Program/Portfolio entities, Dutch UI text.

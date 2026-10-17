@@ -46,7 +46,7 @@ export function DependenciesView() {
             <thead className="text-xs text-gray-600 text-left"><tr><th className="py-1">Rank</th><th>Ask</th><th>From</th><th>Effort</th><th>Fits?</th><th>Open for</th><th>Answer</th><th></th></tr></thead>
             <tbody>
               {queue.map(({ d, plan, epic }) => {
-                const nr = noResponseDays(d);
+                const nr = noResponseDays(d, Date.now(), state.settings.noResponseDays ?? 5);
                 const fit = fitsById.get(d.id);
                 const eff = incomingEffort(d);
                 return (

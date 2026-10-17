@@ -60,10 +60,10 @@ export function timingConflict(state, dep) {
   return !!(latest && deliver && quarterOrdinal(deliver) > quarterOrdinal(latest));
 }
 
-export function noResponseDays(dep, now = Date.now()) {
+export function noResponseDays(dep, now = Date.now(), threshold = NO_RESPONSE_DAYS) {
   if (dep.response !== 'proposed') return null;
   const d = daysSince(dep.createdAt, now);
-  return d >= NO_RESPONSE_DAYS ? d : null;
+  return d >= threshold ? d : null;
 }
 
 export function latestCheckIn(state, epicId) {
