@@ -242,4 +242,13 @@ Stale data after week 2 (mitigation: "data as of", check-in cadence, My attentio
 
 ## 16. Build log and deviations
 
-(Filled in during implementation.)
+Built 2026-10-17 on branch `claude/enterprise-planning-mvp-23669e`.
+
+- Commits: design + migrations + acceptance (4d426f8); MVP code (194f103); fixes and removal of the Feb views (6f569c5).
+- Source layout: `src/domain/` (pure model, capacity, selectors), `src/data/` (repository contract, mock, Supabase, seed), `src/context/PlanContext.jsx`, `src/views/*View.jsx`, `src/components/plan/`, `src/integrations/azureDevOps/`.
+- `VITE_DATA_SOURCE` unset or `mock` = demo mode without login, persona switcher in the header, data in localStorage. `supabase` = existing auth flow + `memberships`.
+- Verified: `npm run build` passes; all screens render against the mock in the browser; a scripted contract test in the browser confirmed the authorisation and validation rules (viewer read-only, planner own-team only, rank needs permission + reason, decline/defer need reason/quarter, phase gating, vote <=3 needs reason, lock stores baseline, locked edits need a reason and show in the diff, import keeps planning fields).
+- Deviation (D17/D6 in the Supabase adapter): supabase-js cannot set the `app.reason` GUC that the rank trigger reads. The adapter calls an RPC `update_plan_with_reason` that does not exist yet and falls back to writing the event itself; a follow-up migration `005_rpc_reason.sql` should add that RPC (set_config + update in one function). Until then rank changes through the Supabase adapter will be rejected by the trigger. The mock adapter is unaffected.
+- Deviation: org-level settings (check-in cadence, vote-blocks-lock) live in memory in the Supabase adapter; an `org_settings` table is a follow-up.
+- Deviation: `plan_events.actor_name` is not stored in Postgres (only `actor_id`); the UI shows the id in Supabase mode.
+- Not done: live Azure DevOps call (CORS blocks it from the browser anyway; Edge Function is the path), Supabase adapter against a real database, automated tests.
