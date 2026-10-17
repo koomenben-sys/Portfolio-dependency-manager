@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Check, X, Circle, CircleDot, CircleHelp, ArrowRight, ChevronDown } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { ASK_META, COMMITMENT_META } from '../../domain/model';
 import { useT } from '../../i18n';
 
@@ -205,3 +206,33 @@ export function Disclosure({ summary, children, defaultOpen = false, className =
 }
 
 export const fmtDate = (iso, lang = 'nl') => (iso ? new Date(iso).toLocaleDateString(lang === 'nl' ? 'nl-NL' : 'en-GB') : '–');
+
+// Small dialog for creating things (role=dialog, focus trap, Escape closes, focus returns). Reasons never use it.
+export function Dialog({ title, onClose, children, width = 'w-[440px]' }) {
+  const t = useT();
+  const ref = useRef(null);
+  const closeRef = useRef(onClose); closeRef.current = onClose;
+  useEffect(() => {
+    const prev = document.activeElement;
+    ref.current?.querySelector('input, textarea, select, button')?.focus();
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeRef.current?.();
+      if (e.key === 'Tab' && ref.current) {
+        const f = [...ref.current.querySelectorAll('input, textarea, select, button, a[href]')].filter((el) => !el.disabled);
+        if (!f.length) return;
+        const [a, z] = [f[0], f[f.length - 1]];
+        if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+        else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); prev?.focus?.(); };
+  }, []);
+  return createPortal(
+    <div className="fixed inset-0 z-modal flex items-start justify-center pt-[12vh] bg-ink/20 anim-fade-in" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={`${width} max-w-[95vw] bg-surface rounded-modal shadow-lg border border-border anim-pop`}>
+        <header className="flex items-center justify-between px-4 h-12 border-b border-border"><h2 className="text-subtitle font-semibold">{title}</h2><button className={cls.icon} onClick={onClose} aria-label={t('Close')}><X size={16} /></button></header>
+        <div className="p-4">{children}</div>
+      </div>
+    </div>, document.body);
+}

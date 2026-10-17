@@ -222,7 +222,7 @@ function CheckInForm({ epic, onClose }) {
 }
 
 // Human-readable history line (review: PO).
-function describeEvent(e, t) {
+export function describeEvent(e, t) {
   const fmt = (v) => (v == null ? '–' : String(v).replace(/_/g, ' '));
   switch (e.action) {
     case 'rank_changed': return t('strategic rank {from} → {to}', { from: fmt(e.before?.rank ?? e.before?.strategic_rank), to: fmt(e.after?.rank ?? e.after?.strategic_rank) });
