@@ -784,4 +784,12 @@ export const nl = {
   'What do we need?': 'Wat hebben we nodig?',
   'What stands in the way?': 'Wat staat in de weg?',
   'Yes': 'Ja',
+  // ── reset: Afstemmen ──
+  'Matrix': 'Matrix',
+  'Nothing here.': 'Niets hier.',
+  'Nothing to discuss. Nice.': 'Niets te bespreken. Mooi.',
+  'Show all to discuss': 'Alles te bespreken',
+  'Team matrix': 'Teammatrix',
+  'To discuss': 'Te bespreken',
+  'asks ↓ provides →': 'vraagt ↓ levert →',
 };
