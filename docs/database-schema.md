@@ -1,5 +1,7 @@
 # Database Schema
 
+> **Superseded (2026-10 MVP iteration):** the tenant-ready schema for the quarterly planning tool lives in `db/migrations/001-004` and is explained in `docs/design.md` section 9. The text below documents the Feb-2026 schema, which migration 001 drops.
+
 ## Overview
 
 Four tables mirror the app's core data model. `initiatives` belong to `portfolios`, and `dependencies` belong to `initiatives`. A `counters` table tracks the sequential numbers used to generate human-readable ref codes (e.g. PF-0001, IN-0042).

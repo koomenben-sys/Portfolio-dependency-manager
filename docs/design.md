@@ -1,0 +1,241 @@
+# Quarterly Planning Tool — Design Document (MVP iteration)
+
+Status: DRAFT, awaiting owner sign-off (see `docs/acceptance.md`).
+Working title: "Kwartaalplan" (the repo/app name is still Portfolio Dependency Manager).
+
+Every major decision below is numbered (D1, D2, ...) and states the reason and the rejected alternatives, so it can be explained to others.
+
+---
+
+## 1. Vision and principles
+
+An enterprise planning tool for scarce team capacity and cross-team dependencies, used in Agile quarterly planning sessions. It replaces the giant quarterly planning meeting and the Excel / Azure DevOps mix. Top-down strategic priority meets bottom-up team capacity; the result is visible instantly: where top-level priority lies, what teams committed to, where discussion is still needed. During the quarter: light check-ins and impediment tracking.
+
+Principles:
+
+1. **The epic per team is the unit.** Programs/portfolios are an optional label used as a filter. Loose epics work equally well.
+2. **The planning event is the product.** The tool models the session (phases, discussion queue, confidence vote, lock), not just a tracker.
+3. **Decisions are visible and explained.** Every change to rank or commitment carries a reason and is kept in history.
+4. **Capacity is a conversation prompt, never a gate.** Warn, never block; show assumptions.
+5. **Do not duplicate the system of record.** Epics live in Azure DevOps / Jira; we import, we do not become a second backlog. No depth below epic.
+6. **Give back to teams.** Intake queue, commitment summary, "why we said no" - not just upward reporting.
+7. **Accessible status.** Never colour alone: icon + text label + colour.
+
+## 2. Starting point (base commit)
+
+**D1 - Base = commit `10fe602` (2026-02-28, current `main`).**
+Reason: the owner prefers the Jan/Feb version; it is stable, small (~2,800 lines), has auth with roles, a design system (`src/constants/design.js`) and a working Supabase hook pattern. Its core spine (team - initiative - dependency - quarter) already matches the vision.
+Rejected: (a) June branch `feature/quarter-planning-views` (programs, sidebar shell): pulls in a Program-as-parent concept that contradicts "grouping is only a filter", and its quarter lifecycle (planning / in_progress / done) is too coarse for session phases; it also has uncommitted work that must not be touched. (b) Restart from scratch: throws away auth and design system for no gain.
+Ported from June as *ideas only*: first-class `quarters` table with a lifecycle (extended here to session phases, D9); program as optional grouping (here: a plain label, D3).
+
+**Gap found in the base:** all hooks call Supabase directly (`supabase.from(...)`), so the app cannot run without a database. A repository layer is the first technical change (D12).
+
+## 3. Research summary
+
+Full notes with sources: `docs/research/research-competitors.md`, `docs/research/research-ux.md`. Caveat: based on search summaries; prices are third-party/unverified.
+
+| Tool | What to take | What to avoid |
+|---|---|---|
+| SAFe PI planning (planning board, program board, ROAM, fist-of-five, commit) | Phases, risks as ROAM, per-team confidence vote, lock | SAFe-only vocabulary; vote as rubber stamp |
+| Jira Align / Planview / Targetprocess | Dependency owner + committed quarter; ROAM | Sales-led, 500+ dev scale, quote-only pricing |
+| Jira Plans / Advanced Roadmaps | Capacity vs demand, scenarios | Locked to Jira; no commitment ritual; hidden dependency lines |
+| Azure DevOps Delivery Plans | Predecessor/successor links as data source | No capacity, no commitment; ADO-only |
+| Easy Agile Programs, Agile Cockpit (NL, verified: Agile Cockpit B.V., Jira-only) | Jira-native PI board; prioritisation model + scenarios | Jira-only data model |
+| Miro / Lucid PI boards | Facilitation feel | Canvas-only; dependencies drop out of view at scale; no capacity maths |
+| Aha!, ProductPlan | Roadmap polish | Per-editor pricing; not dependency tooling |
+
+**Gap we target:** affordable, tool-agnostic (Jira/ADO/Trello via import) combination of capacity vs demand, dependency negotiation, commitment/confidence and light in-quarter check-ins. Competitors split these over boards, timelines or heavy suites.
+
+UX rules adopted (sources in the UX note): teams as lanes with one fixed card layout; dependencies as inline badges by default plus a team x team matrix (matrices beat node-link diagrams above ~20 nodes), lines only for the selected item; capacity as 3 bands (<=80% / <=100% / >100%) with the percentage always printed, warn-not-block; exec page limited to ~6 KPIs with "data as of"; status = icon + text + colour; fist-of-five shows distribution and requires a reason at <=3; check-in = one optional line; stale flags precise.
+
+## 4. Personas and jobs-to-be-done
+
+| Persona | Job to be done | Primary screen |
+|---|---|---|
+| Director / C-level | "Show me in 2 minutes whether our strategic and regulatory priorities are covered, and what needs my decision." | Overview |
+| Product owner / manager | "Get my epic onto other teams' plates and know, without chasing, what they promised." | Board, Dependencies, My attention |
+| Team lead / engineering manager | "See what is asked of my team, say yes/partial/later/no with a reason, and protect capacity." | Dependencies (intake queue), Board |
+| Agile coach / facilitator | "Run the quarterly session from the queue: phases, discussion items, confidence, lock." | Session |
+| Admin | "Set up teams, capacity, themes, quarters, import." | Settings |
+
+Role split (D5): directors focus on strategy/compliance (themes, regulatory epics, rank); POs, PMs and teams focus on delivering value (epics, dependencies, commitment).
+
+## 5. Domain model
+
+```
+organisation (1, MVP; tenant boundary)
+ ├─ team ── team_capacity (per quarter)
+ ├─ theme  (strategic theme, set by top)
+ ├─ quarter (phase: prep > draft > negotiate > review > vote > locked > active > closed)
+ │    ├─ epic_plan  (epic x quarter: strategic_rank, effort range, commitment status)
+ │    ├─ confidence_vote (team x quarter)
+ │    └─ baseline snapshot (taken at lock)
+ ├─ epic  (owned by exactly one team; optional theme; optional label; optional external link)
+ │    ├─ dependency (epic needs something from another team, in a quarter)
+ │    ├─ check_in
+ │    └─ impediment (kind: risk | impediment; ROAM)
+ ├─ discussion_item (raised on epic or dependency)
+ └─ plan_event (append-only: audit + decision log + commitment history)
+```
+
+| Entity | Definition and key fields |
+|---|---|
+| Team | Name; capacity per quarter derived from headcount x working days x focus factor - absence - reserve (D7). |
+| Epic | The unit of planning. `team_id` (one owner), `title`, `theme_id` (nullable), `label` (free text, e.g. "GDPR"; filter only), `regulatory` + `regulatory_deadline`, external link (`external_source`, `external_id`, `external_url`). |
+| Epic plan | An epic's plan for one quarter: `strategic_rank` (1..n, set by users with rank permission), `effort_low`/`effort_high` in person-weeks, `confidence` (low/med/high), `commitment` status. |
+| Dependency | Requesting epic needs `ask` from `provider_team` in `quarter`, with effort estimate. Response: `proposed`, `accepted`, `partial`, `deferred`, `declined`, `needs_priority_call`; with reason and (if deferred) target quarter. |
+| Quarter | `year`, `q`, `phase`. |
+| Strategic priority from the top | `theme` (ordered) + `strategic_rank` on epic plan + regulatory flag with deadline. |
+| Commitment status | Epic plan: `draft`, `discuss`, `committed`, `at_risk`, `not_committed`. |
+| Check-in | Epic, date, confidence (low/med/high), optional one-line note. |
+| Impediment | `kind` risk/impediment, epic and/or dependency, owner, raised date, status, `roam` (resolved/owned/accepted/mitigated) for risks, resolved date. |
+| Discussion item | Raised on an epic or dependency by anyone: reason, owner, timebox, outcome, status open/resolved. |
+| Optional grouping | `epic.label` text. No parent entity (D3). |
+
+**D2 - Epic owned by exactly one team; shared work is modelled as dependencies.**
+Reason: unambiguous accountability and capacity maths; the dependency is exactly where shared work gets negotiated. Rejected: multi-team epics (ownership fights, double counting of capacity); splitting into per-team "child epics" as a separate entity (extra depth, duplicates ADO).
+
+**D3 - Program/portfolio = free-text `label` on the epic, used as filter. No parent table.**
+Reason: owner requirement (filter, not parent); loose epics must work equally well; labels need no maintenance. Rejected: Program/Portfolio tables with FK (forces hierarchy, empty-parent problem; the June design); many-to-many group table (more UI for no MVP benefit - can be added later without changing epics).
+
+**D4 - Two status systems on purpose, with a shared vocabulary.**
+Dependency status = the *answer to an ask* (between teams). Epic commitment = the *team's own promise*. A committed epic whose dependencies are not accepted is shown as a derived warning "committed with open dependencies". Reason: they have different owners and moments. Rejected: merging into one enum (PO suggestion) - loses who decides what; keeping unrelated vocabularies - confusing.
+
+**D5 - Roles: `admin`, `planner`, `viewer`, plus permission flag `can_rank`.**
+Reason: exec "role" is really one permission (set strategic rank/themes). A planner is bound to a team and may write only that team's rows. The facilitator is an admin action (phase control). Rejected: 4-5 distinct roles (granularity cost, no MVP gain); exec as a role (blocks a director who is also admin).
+
+**D6 - One append-only `plan_event` table for audit, decision log and commitment history.**
+Reason: the core question "what did teams commit to and who changed what and why" needs history; one table with `reason`, `before`, `after` serves audit (architect), decision log (director) and "changed since baseline" (coach). Rejected: three separate tables (triple the code and triggers); only current state (no trust, no audit). A reason is mandatory for rank changes, commitment changes after lock, and declines.
+
+**D7 - Capacity = derived person-weeks with visible formula; ranges for effort.**
+`net = headcount x weeks_in_quarter x focus_factor(default 0.65) - absence_weeks`; `available = net x (1 - reserve%)` where reserve covers run/on-call/support (default 20%). Load = sum of committed + planned own epics (low..high) plus accepted incoming dependencies (shown separately). Reason: raw "points" are not additive across teams and are gamed; formula with overridable assumptions builds trust. Absences are entered as aggregated weeks, never names (privacy).
+Rejected: story points; a single typed-in number (fiction); per-person scheduling (becomes a resource planner; out of scope).
+
+**D8 - Capacity is warn-not-block; thresholds <=80% green, <=100% amber, >100% red, percentage always printed.**
+Reason: research (UX note) and EM critique: gates get gamed; utilisation near 100% causes queueing. Rejected: hard block; heatmap team x many quarters in MVP (deferred).
+
+## 6. Session model (the quarterly event)
+
+**D9 - Quarter phase as a facilitator-controlled state machine.**
+`prep` (async: epics, themes, capacity) > `draft` (teams draft their plan) > `negotiate` (dependency requests/answers) > `review` (capacity/risk, cut line) > `vote` (confidence) > `locked` (baseline taken) > `active` (in-quarter) > `closed`.
+Phase changes what is editable (e.g. strategic rank only editable in `prep`/`review` or by `can_rank` with reason after lock; dependency answers only from `negotiate` onward). Admin advances or rewinds with a reason.
+Reason: coach critique - the event is the product; async-by-default drafting, live time reserved for the discussion queue. Rejected: simple planning/active/closed (June model) - cannot express readiness, lock or baseline; per-phase deadlines/automation (deferred).
+
+**Discussion queue.** Any user can flag an epic or dependency "needs discussion" with a reason; owner and timebox are set; the live agenda is this queue sorted by strategic rank then size. Resolving needs an outcome text.
+
+**Cut line.** On the board each team's epics are sorted by strategic rank with a running cumulative load; the line where cumulative high-estimate load exceeds available capacity is drawn. The conversation becomes "what falls below the line" decided by rank, not by who shouts. Reason: EM critique.
+
+**Confidence vote.** Per team per quarter, 1-5; reason required at <=3; distribution is shown, re-vote allowed; whether <=2 blocks locking is an admin setting, default "discussion trigger only".
+
+**Lock and baseline.** Locking snapshots `epic_plan` and `dependency` into `baseline` JSON on the quarter. After lock, edits remain possible but are marked "changed since baseline" with a mandatory reason, and listed in a diff (added/dropped epics, status flips, rank/capacity moves). A one-page "plan of record" can be printed from the Session screen. Rejected: formal change-request workflow (heavy); hard freeze (teams route around the tool).
+
+## 7. UX concept and key screens
+
+Navigation: top bar with quarter selector, label filter, "as of" timestamp, role switcher (mock mode). Six screens, in this order of build priority within MVP.
+
+1. **Overview (director).** Max 6 KPIs: % of top-N strategic epics committed, teams over capacity, regulatory epics at risk, open dependencies without answer (with age), open impediments (with age), confidence average. Below: theme coverage (epics + weeks per theme; "unaligned" epics visible), red-flag list (each with owner and age). "Data as of" and last-updated per team. Built from the same data as the board, no extra storage.
+2. **Quarter board.** Team lanes (columns), epics ordered by strategic rank, one fixed card: rank, title, theme chip, regulatory marker, effort range, commitment badge (icon + text), dependency badges "needs 2 / asked of us 1" with worst state, ref to ADO. Capacity bar per team lane with % and cut line. Filters: label, theme, status. Density toggle. Clicking an epic opens a side panel (edit, dependencies, check-ins, history).
+3. **Dependencies.** Provider-team *intake queue* (ask, requester, quarter, size, "what happens if we say no", answer buttons Accept / Partial / Defer to Qx / Decline / Needs priority call; reason required for all but Accept) and a team x team matrix (counts coloured by worst status) for overview. Timing conflict flag when the dependency quarter is later than the requesting epic's quarter.
+4. **Session (facilitator).** Phase stepper, readiness list per team (has epics? capacity set? open asks unanswered? vote cast?), discussion queue, confidence vote panel, lock + diff + plan-of-record print.
+5. **In-quarter.** Per epic quick check-in (low/med/high + one line), impediment/risk list (owner, age, ROAM), stale panel (no check-in within the configured cadence, default 14 days).
+6. **My attention.** Derived inbox for the signed-in user/team: unanswered asks to my team, answers/counters/declines on my asks, stale check-ins, aging impediments, discussion items I own. (Replaces notifications in MVP.)
+Plus **Settings**: teams and capacity assumptions, themes, quarters, ADO import, JSON export.
+
+**D10 - Dependencies shown as badges + matrix; no graph in MVP.**
+Reason: research (matrix study; Jira Plans anti-pattern: hidden/inconsistent lines). Rejected: node-link graph (hairball), timeline lines everywhere.
+
+**D11 - Exec Overview is a derived read-only page, not a separate data product.**
+Reason: the director asked for it to be the product; PO/EM said fold it. Compromise: build it first-class in the UI but derive everything from board data (no extra storage, always consistent, cheap). Rejected: separate dashboard store / exports (stale-data risk - the top distrust item for the director).
+
+UI language: English (as base). Dutch labels are an i18n task for later. Styling: existing Tailwind design tokens in `src/constants/design.js`; status icons + text.
+
+## 8. Architecture
+
+```
+React views
+   │  hooks (usePlan, ...) 
+   ▼
+Repository interface  (src/data/repository.js: listEpics, upsertEpicPlan, answerDependency, ...)
+   ├─ MockRepository      (in-memory seed + localStorage persistence)  <- default
+   └─ SupabaseRepository  (supabase-js; RLS enforced server-side)
+Integration adapters (src/integrations/): normalised Epic[] in, no DB knowledge
+   └─ azureDevOps: mapWorkItems() pure + REST client (needs server-side token) + mock response
+```
+
+**D12 - Repository interface with Mock and Supabase implementations; selected by `VITE_DATA_SOURCE` (default `mock`).**
+Reason: lets the app run fully without a database (the owner cannot expose his dashboard), keeps tests honest (same contract), and is the seam for SaaS. Orgid and actor are explicit parameters. Computations that must not drift (capacity load, cut line, KPIs) live in one pure module `src/domain/` used by both adapters; in Postgres a view mirrors the load calculation for reporting.
+Rejected: mocking `supabase-js` (brittle, hides RLS reality); localStorage as primary store (no sharing, no tenancy); Firebase or custom backend (rewrites the working base for no gain).
+
+**D13 - Keep Supabase + static GitHub Pages for MVP; server-side work goes to Edge Functions.**
+Reason: base already uses it; owner's DB is restored. Risk noted: GitHub Pages and no SSO are blockers for a real enterprise rollout (director critique) - see section 11.
+
+**D14 - Auth: reuse the existing Supabase Auth flow; in mock mode a role/team switcher replaces login.**
+Rejected: building SSO now (Entra ID SSO is a later Supabase/Edge config, not app code).
+
+## 9. Database schema (tenant-ready)
+
+Migrations in `db/migrations/` (run in the Supabase SQL editor, in order):
+`001_core.sql` (reset + tables), `002_rls.sql` (helper functions + policies), `003_functions_and_triggers.sql` (ref codes, triggers, append-only event log, capacity view), `004_bootstrap.sql` (creates the organisation and makes you admin). **001 drops the Feb tables (teams, portfolios, initiatives, dependencies, counters) - data loss, repopulate from JSON export if needed.**
+
+**D15 - `org_id NOT NULL` on every table, composite FKs `(org_id, id)`.**
+Reason: a child row can never point to another organisation's parent; cheap now, painful to retrofit. Single org in MVP (one seeded row). Rejected: schema-per-tenant (ops cost at SaaS scale on Supabase); org in JWT claims (stale after revocation) - membership table is authoritative.
+
+**D16 - RLS through `is_member(org)`, `has_role(org, ...)`, `my_team(org)` SECURITY DEFINER helpers wrapped in `(select ...)` for per-statement caching; default deny.**
+Planner writes only rows of their own team; `can_rank` gates theme and rank writes; `plan_event` is insert-only (UPDATE/DELETE revoked). Rejected: policies with inline subqueries (slow, repeated); `using (true)` as in the June migrations (fine for single-user, wrong for SaaS).
+
+**D17 - Ref codes via `next_ref(org, kind)` function using `UPDATE ... RETURNING` on `ref_counters`, `UNIQUE (org_id, ref_code)`.**
+Reason: the base's read-then-write counter races under concurrent users. Gaps acceptable. Codes: `EP-0001` epic, `DEP-0001` dependency, `IMP-0001`.
+
+**D18 - Effort as numeric person-weeks (low/high), not S/M/L text.**
+Reason: capacity maths need numbers; S/M/L is a display mapping only. Rejected: keeping text sizes with a lookup (hidden constants, per-org drift).
+
+Tables: `organisations`, `memberships(user_id, org_id, role, team_id, can_rank)`, `teams`, `themes`, `quarters`, `team_capacity`, `epics`, `epic_plans`, `dependencies`, `confidence_votes`, `discussion_items`, `check_ins`, `impediments`, `plan_events`, `ref_counters`, `integration_connections`, `integration_sync_runs`. Details and constraints are in the migration files (the source of truth); `docs/database-schema.md` points here.
+
+## 10. Integration strategy (adapter boundary)
+
+**D19 - Adapter = pure function: external payload in, normalised `ExternalEpic[]` out; sync job writes through the repository.**
+`ExternalEpic = { source, externalId, url, title, state, ownerName, areaPath/teamHint, linkedExternalIds[] }`. Epics get `external_source`, `external_id`, `external_synced_at`, `UNIQUE (org_id, external_source, external_id)`.
+**Conflict rule (D20):** imported fields (title, state, external link) are mastered by the source and read-only in the UI; planning fields (rank, effort, commitment, dependencies, notes) are owned locally and never overwritten by sync.
+**Secrets (D21):** PAT/OAuth tokens never reach the browser or any table readable by `authenticated`. Real use runs in a Supabase Edge Function with the token in Vault / function secrets. `integration_connections` stores only non-secret config (org URL, project, mapping). In dev, the client reads `VITE_ADO_PAT` only for local experimentation and the UI defaults to the **mock** response.
+**MVP build (D22): Azure DevOps read-only import is built** (feasible at low cost: one WIQL query + work item batch for epics and relations via REST). Delivered: pure mapper, REST client taking credentials as arguments, mock response fixture, import preview UI (creates/updates epics by `external_id`; unknown team -> unassigned bucket for the admin to map). Not exercised against a real ADO org in this iteration. Jira and Trello: designed only, not stubbed. Rejected: scheduled two-way sync (conflict handling), webhook ingestion (needs server), CSV-only (does not prove the adapter).
+
+## 11. Security, privacy, SaaS path (design only)
+
+- EU Supabase region from day one (GDPR); DPA and subprocessor list required before pilot.
+- Entra ID SSO: Supabase SSO (SAML) on a paid plan; required for real enterprise use (director critique). Not in MVP.
+- Audit log retention vs erasure: `plan_event.actor_id` can be pseudonymised, rows are not deleted.
+- Absences are aggregated weeks only. Works-council (OR) concerns: no individual productivity data is collected.
+- Multi-tenant signup, billing, per-org settings UI, tenant isolation tests (pgTAP) are the next phase; the schema already carries org_id.
+- Pages hosting is static; anything with secrets goes through Edge Functions.
+
+## 12. Role-play validation: conflicts and resolutions
+
+Five role agents (director, PO, engineering manager, agile coach, SaaS architect) critiqued `concept-brief`. Resolutions:
+
+| Conflict | Resolution |
+|---|---|
+| PO, director, EM, coach: cut Supabase/RLS/tenancy and ADO. Architect: schema decisions are the expensive-to-retrofit part. | Owner scoped SaaS-ready design: **keep** schema + RLS (SQL only, low cost) and **mock-first** repository; ADO built as mock-backed read-only adapter. Real DB and real ADO calls are not exercised in this iteration. (D12, D15, D22) |
+| Director: Overview is the product. PO/EM/coach: fold it, board first. | Overview built, but derived from board data. (D11) |
+| EM/coach/PO: remove RAG check-ins (surveillance, status reporting). Owner: check-ins and impediments are required. | Check-in kept minimal: low/med/high + optional one-liner, configurable cadence, no mandatory RAG. (section 7) |
+| PO: merge dependency and commitment status. | Kept separate with derived warning. (D4) |
+| Director: SSO/EU in MVP. | Designed (section 11), not built; stated as blocker for production. |
+| Coach: session phases, ROAM, vote, lock. PO/EM: too heavy. | Phases, discussion queue, vote, lock + diff in MVP; ROAM as a field on risks; no change-request workflow. (D9) |
+| EM: capacity derived with ranges. Director/PO: heatmap is fiction. | Derived formula with visible assumptions, per-quarter bar only, warn-not-block. (D7, D8) |
+| PO: notifications needed. | "My attention" inbox now; email digest deferred (needs server). |
+| Director: compliance tagging, decision log. | `regulatory` + deadline on epics; `plan_event` with mandatory reasons. (D6) |
+| Architect: 4 roles -> 3 + flag. | Adopted. (D5) |
+
+## 13. MVP scope and non-goals
+
+In: one organisation; Overview, Board, Dependencies (intake + matrix), Session, In-quarter, My attention, Settings; mock repository with realistic Dutch-company data; Supabase repository + migrations (written, not run by us); ADO mock import.
+Out: multi-tenant onboarding/billing, SSO, Jira/Trello, notifications/email, real-time presence, change-request workflow, heatmap across quarters, node-link graph, programs as entities.
+
+## 14. Risks
+
+Stale data after week 2 (mitigation: "data as of", check-in cadence, My attention); capacity numbers distrusted (visible assumptions, ranges); Supabase repository untested until owner runs the migrations; scope breadth for one iteration (build order in `docs/acceptance.md`); rank politics (mandatory reason + history).
+
+## 15. Open questions for the owner
+
+1. Is English UI acceptable for now (Dutch later)?
+2. OK that migration `001` drops the Feb tables (data loss, flagged per your earlier rule)?
+3. Working name "Kwartaalplan", or keep "Portfolio Dependency Manager" for now?
