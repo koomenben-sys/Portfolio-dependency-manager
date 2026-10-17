@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { DATA_SOURCE } from '../data/repository';
 
 const AuthContext = createContext(null);
 
@@ -7,6 +8,16 @@ export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null);
   const [role, setRole]       = useState(null);
   const [loading, setLoading] = useState(true);
+  const [membership, setMembership] = useState(null);
+
+  // Mock mode never touches Supabase (AC A1).
+  if (DATA_SOURCE !== 'supabase') {
+    return (
+      <AuthContext.Provider value={{ user: null, role: null, loading: false, signOut: async () => {}, membership: null }}>
+        {children}
+      </AuthContext.Provider>
+    );
+  }
 
   async function loadRole(userId) {
     try {
@@ -32,6 +43,13 @@ export function AuthProvider({ children }) {
       }, 6000);
       throw err; // re-throw so the caller's .catch(() => 'viewer') fires immediately
     }
+  }
+
+  // New schema (db/migrations/002): membership row drives role, team and rank permission.
+  async function loadMembership(u) {
+    const { data } = await supabase.from('memberships').select('org_id, role, team_id, can_rank').eq('user_id', u.id).limit(1).maybeSingle();
+    if (!data) return null;
+    return { id: u.id, name: u.email, role: data.role, teamId: data.team_id, canRank: data.can_rank, orgId: data.org_id };
   }
 
   useEffect(() => {
@@ -84,6 +102,7 @@ export function AuthProvider({ children }) {
           setUser(session.user);
           setLoading(false); // unblock UI immediately; role loads in background
           setRole(await loadRole(session.user.id).catch(() => 'viewer'));
+          loadMembership(session.user).then(setMembership).catch(() => {});
         } else {
           setUser(null);
           setRole(null);
@@ -109,7 +128,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, signOut }}>
+    <AuthContext.Provider value={{ user, role, loading, signOut, membership }}>
       {children}
     </AuthContext.Provider>
   );

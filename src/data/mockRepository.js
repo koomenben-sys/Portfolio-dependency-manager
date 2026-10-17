@@ -1,0 +1,298 @@
+// In-memory + localStorage implementation of the repository contract (docs/design.md D12, AC A1-A5).
+import { seedState } from './seed';
+import { buildBaseline } from '../domain/plan';
+import { PHASES, isLockedPhase } from '../domain/model';
+import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner } from './repository';
+
+const KEY = 'kwartaalplan.mock.v1';
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+const now = () => new Date().toISOString();
+const clone = (x) => JSON.parse(JSON.stringify(x));
+
+export class MockRepository {
+  constructor() {
+    this.state = null;
+    this.counters = null;
+  }
+
+  // ── persistence ────────────────────────────────────────────────────────────
+  _persist() {
+    try { localStorage.setItem(KEY, JSON.stringify({ state: this.state, counters: this.counters })); } catch { /* ignore */ }
+    return clone(this.state);
+  }
+  async load() {
+    if (this.state) return clone(this.state);
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) { const saved = JSON.parse(raw); this.state = saved.state; this.counters = saved.counters; return clone(this.state); }
+    } catch { /* fall through */ }
+    return this.reset();
+  }
+  async reset() {
+    this.state = seedState();
+    this.counters = { epic: 33, dependency: 21, impediment: 6 };
+    return this._persist();
+  }
+  _ref(kind) {
+    const n = this.counters[kind]++;
+    const prefix = { epic: 'EP', dependency: 'DEP', impediment: 'IMP' }[kind];
+    return `${prefix}-${String(n).padStart(4, '0')}`;
+  }
+  _event(actor, action, entity, entityId, quarterId, reason, before, after) {
+    this.state.events.push({ id: uid(), at: now(), actorId: actor?.id, actorName: actor?.name, action, entity, entityId, quarterId, reason: reason || '', before, after });
+  }
+  _quarter(id) { const q = this.state.quarters.find((x) => x.id === id); if (!q) throw new ValidationError('Unknown quarter'); return q; }
+  _epic(id) { const e = this.state.epics.find((x) => x.id === id); if (!e) throw new ValidationError('Unknown epic'); return e; }
+
+  // ── epics and plans ────────────────────────────────────────────────────────
+  async upsertEpic(actor, epic) {
+    const existing = epic.id && this.state.epics.find((e) => e.id === epic.id);
+    const teamId = epic.teamId ?? existing?.teamId;
+    if (!canWriteTeam(actor, teamId) || (existing && !canWriteTeam(actor, existing.teamId))) throw new PermissionError('You can only edit epics of your own team');
+    if (!epic.title?.trim()) throw new ValidationError('Title is required');
+    if (existing) {
+      if (existing.externalSource) { // imported fields are mastered by the source (D20)
+        epic = { ...epic, title: existing.title, externalSource: existing.externalSource, externalId: existing.externalId, externalUrl: existing.externalUrl };
+      }
+      Object.assign(existing, epic);
+    } else {
+      this.state.epics.push({ id: uid(), refCode: this._ref('epic'), description: '', ownerName: '', label: '', regulatory: false, regulatoryDeadline: null, themeId: null, externalSource: null, externalId: null, externalUrl: null, ...epic });
+    }
+    return this._persist();
+  }
+  async deleteEpic(actor, epicId) {
+    const e = this._epic(epicId);
+    if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Not your team');
+    this.state.epics = this.state.epics.filter((x) => x.id !== epicId);
+    this.state.plans = this.state.plans.filter((x) => x.epicId !== epicId);
+    this.state.dependencies = this.state.dependencies.filter((x) => x.epicId !== epicId);
+    this.state.discussions = this.state.discussions.filter((x) => x.epicId !== epicId);
+    this.state.checkIns = this.state.checkIns.filter((x) => x.epicId !== epicId);
+    this.state.impediments = this.state.impediments.filter((x) => x.epicId !== epicId);
+    return this._persist();
+  }
+
+  async upsertPlan(actor, plan, reason = '') {
+    const epic = this._epic(plan.epicId);
+    const q = this._quarter(plan.quarterId);
+    if (q.phase === 'closed') throw new ValidationError('Quarter is closed');
+    const existing = this.state.plans.find((p) => p.id === plan.id) || this.state.plans.find((p) => p.epicId === plan.epicId && p.quarterId === plan.quarterId);
+    const rankChanged = existing ? plan.rank !== undefined && plan.rank !== existing.rank : plan.rank != null;
+    const teamWrite = canWriteTeam(actor, epic.teamId);
+    if (rankChanged) {
+      if (!canRank(actor)) throw new PermissionError('Changing the strategic rank needs rank permission');
+      if (!reason.trim()) throw new ValidationError('A reason is required to change the strategic rank');
+    }
+    if (!teamWrite && !(canRank(actor) && existing)) throw new PermissionError('You can only plan epics of your own team');
+    if (plan.effortLow != null && plan.effortHigh != null && plan.effortHigh < plan.effortLow) throw new ValidationError('High estimate must be at least the low estimate');
+    if (existing && isLockedPhase(q.phase) && !reason.trim()) {
+      const changed = ['commitment', 'rank', 'effortLow', 'effortHigh'].some((k) => plan[k] !== undefined && plan[k] !== existing[k]);
+      if (changed) throw new ValidationError('The quarter is locked: a reason is required for changes');
+    }
+    if (existing) {
+      if (rankChanged) this._event(actor, 'rank_changed', 'plans', existing.id, q.id, reason, { rank: existing.rank }, { rank: plan.rank });
+      if (plan.commitment !== undefined && plan.commitment !== existing.commitment) this._event(actor, 'commitment_changed', 'plans', existing.id, q.id, reason, { commitment: existing.commitment }, { commitment: plan.commitment });
+      if ((plan.effortLow !== undefined && plan.effortLow !== existing.effortLow) || (plan.effortHigh !== undefined && plan.effortHigh !== existing.effortHigh)) {
+        this._event(actor, 'effort_changed', 'plans', existing.id, q.id, reason, { effortLow: existing.effortLow, effortHigh: existing.effortHigh }, { effortLow: plan.effortLow ?? existing.effortLow, effortHigh: plan.effortHigh ?? existing.effortHigh });
+      }
+      Object.assign(existing, plan, { updatedAt: now() });
+    } else {
+      const created = { id: uid(), rank: null, effortLow: 0, effortHigh: 0, commitment: 'draft', confidence: 'medium', ...plan, updatedAt: now() };
+      this.state.plans.push(created);
+      this._event(actor, 'plan_added', 'plans', created.id, q.id, reason, null, { epicId: plan.epicId });
+      if (plan.rank != null) this._event(actor, 'rank_changed', 'plans', created.id, q.id, reason, { rank: null }, { rank: plan.rank });
+    }
+    return this._persist();
+  }
+  async removePlan(actor, planId) {
+    const p = this.state.plans.find((x) => x.id === planId);
+    if (!p) return this._persist();
+    const e = this._epic(p.epicId);
+    if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Not your team');
+    this.state.plans = this.state.plans.filter((x) => x.id !== planId);
+    this._event(actor, 'plan_removed', 'plans', planId, p.quarterId, '', { epicId: p.epicId }, null);
+    return this._persist();
+  }
+
+  // ── dependencies ───────────────────────────────────────────────────────────
+  async addDependency(actor, dep) {
+    const epic = this._epic(dep.epicId);
+    if (!canWriteTeam(actor, epic.teamId)) throw new PermissionError('Only the requesting team can add an ask');
+    if (dep.providerTeamId === epic.teamId) throw new ValidationError('A team cannot depend on itself');
+    if (!dep.ask?.trim()) throw new ValidationError('Describe the ask');
+    this._quarter(dep.quarterId);
+    const created = { id: uid(), refCode: this._ref('dependency'), requesterTeamId: epic.teamId, ifDeclined: '', effortLow: 0, effortHigh: 0, response: 'proposed', responseReason: '', deferredToQuarterId: null, respondedAt: null, createdAt: now(), ...dep };
+    this.state.dependencies.push(created);
+    this._event(actor, 'dependency_added', 'dependencies', created.id, dep.quarterId, '', null, { ask: dep.ask });
+    return this._persist();
+  }
+  async answerDependency(actor, depId, { response, reason = '', deferredToQuarterId = null }) {
+    const d = this.state.dependencies.find((x) => x.id === depId);
+    if (!d) throw new ValidationError('Unknown dependency');
+    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can answer');
+    const q = this._quarter(d.quarterId);
+    if (['prep', 'draft'].includes(q.phase)) throw new ValidationError(`Answers open in the negotiate phase (now: ${q.phase})`);
+    if (response !== 'accepted' && response !== 'proposed' && !reason.trim()) throw new ValidationError('A reason is required for this answer');
+    if (response === 'deferred' && !deferredToQuarterId) throw new ValidationError('Choose the quarter to defer to');
+    this._event(actor, 'dependency_answered', 'dependencies', d.id, d.quarterId, reason, { response: d.response }, { response });
+    Object.assign(d, { response, responseReason: reason, deferredToQuarterId: response === 'deferred' ? deferredToQuarterId : null, respondedAt: response === 'proposed' ? null : now() });
+    return this._persist();
+  }
+  async updateDependency(actor, depId, patch) {
+    const d = this.state.dependencies.find((x) => x.id === depId);
+    if (!d) throw new ValidationError('Unknown dependency');
+    if (!canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can edit the ask');
+    Object.assign(d, patch);
+    return this._persist();
+  }
+  async deleteDependency(actor, depId) {
+    const d = this.state.dependencies.find((x) => x.id === depId);
+    if (d && !canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can remove the ask');
+    this.state.dependencies = this.state.dependencies.filter((x) => x.id !== depId);
+    return this._persist();
+  }
+
+  // ── session ────────────────────────────────────────────────────────────────
+  async setPhase(actor, quarterId, phase, reason = '') {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin (facilitator) can change the phase');
+    const q = this._quarter(quarterId);
+    const from = PHASES.findIndex((p) => p.id === q.phase);
+    const to = PHASES.findIndex((p) => p.id === phase);
+    if (to < from && !reason.trim()) throw new ValidationError('Rewinding a phase requires a reason');
+    if (phase === 'locked' && this.state.settings.voteBlocksLock) {
+      const low = this.state.votes.filter((v) => v.quarterId === quarterId && v.vote <= 2);
+      if (low.length) throw new ValidationError(`${low.length} team(s) voted 2 or lower; resolve before locking (setting: low vote blocks lock)`);
+    }
+    if (phase === 'locked' && !q.baseline) { q.baseline = buildBaseline(this.state, quarterId); q.lockedAt = now(); }
+    this._event(actor, 'phase_changed', 'quarters', q.id, q.id, reason, { phase: q.phase }, { phase });
+    q.phase = phase;
+    return this._persist();
+  }
+  async castVote(actor, teamId, quarterId, vote, reason = '') {
+    if (!canWriteTeam(actor, teamId)) throw new PermissionError('You can only vote for your own team');
+    if (vote <= 3 && !reason.trim()) throw new ValidationError('A reason is required for a vote of 3 or lower');
+    const q = this._quarter(quarterId);
+    if (q.phase === 'prep' || q.phase === 'closed') throw new ValidationError('Voting is not open in this phase');
+    const existing = this.state.votes.find((v) => v.teamId === teamId && v.quarterId === quarterId);
+    if (existing) Object.assign(existing, { vote, reason, votedAt: now() });
+    else this.state.votes.push({ id: uid(), teamId, quarterId, vote, reason, votedAt: now() });
+    this._event(actor, 'vote_cast', 'votes', teamId, quarterId, reason, null, { vote });
+    return this._persist();
+  }
+  async raiseDiscussion(actor, item) {
+    if (!isPlanner(actor)) throw new PermissionError('Viewers cannot raise discussion items');
+    if (!item.reason?.trim()) throw new ValidationError('Say why this needs discussion');
+    this.state.discussions.push({ id: uid(), ownerName: actor.name, timeboxMin: 10, status: 'open', outcome: '', createdAt: now(), depId: null, epicId: null, ...item });
+    return this._persist();
+  }
+  async resolveDiscussion(actor, id, outcome) {
+    if (!isPlanner(actor)) throw new PermissionError('Viewers cannot resolve discussion items');
+    if (!outcome?.trim()) throw new ValidationError('An outcome is required to resolve');
+    const d = this.state.discussions.find((x) => x.id === id);
+    Object.assign(d, { status: 'resolved', outcome, resolvedAt: now() });
+    this._event(actor, 'discussion_resolved', 'discussions', id, d.quarterId, outcome, null, null);
+    return this._persist();
+  }
+
+  // ── in-quarter ─────────────────────────────────────────────────────────────
+  async addCheckIn(actor, checkIn) {
+    const e = this._epic(checkIn.epicId);
+    if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Only the epic team can check in');
+    if (!checkIn.confidence) throw new ValidationError('Pick a confidence');
+    this.state.checkIns.push({ id: uid(), note: '', authorName: actor.name, createdAt: now(), ...checkIn });
+    return this._persist();
+  }
+  async upsertImpediment(actor, imp) {
+    if (!isPlanner(actor)) throw new PermissionError('Viewers cannot raise impediments');
+    if (!imp.title?.trim()) throw new ValidationError('Title is required');
+    const existing = imp.id && this.state.impediments.find((x) => x.id === imp.id);
+    if (existing) Object.assign(existing, imp);
+    else this.state.impediments.push({ id: uid(), refCode: this._ref('impediment'), kind: 'impediment', ownerName: actor.name, status: 'open', roam: null, raisedAt: now(), resolvedAt: null, depId: null, ...imp });
+    return this._persist();
+  }
+  async resolveImpediment(actor, id) {
+    if (!isPlanner(actor)) throw new PermissionError('Viewers cannot resolve impediments');
+    const i = this.state.impediments.find((x) => x.id === id);
+    Object.assign(i, { status: 'resolved', resolvedAt: now(), roam: i.kind === 'risk' ? 'resolved' : null });
+    return this._persist();
+  }
+
+  // ── setup ──────────────────────────────────────────────────────────────────
+  async upsertCapacity(actor, cap) {
+    if (!canWriteTeam(actor, cap.teamId)) throw new PermissionError('Not your team');
+    const existing = this.state.capacity.find((c) => c.teamId === cap.teamId && c.quarterId === cap.quarterId);
+    if (existing) { this._event(actor, 'capacity_changed', 'capacity', existing.id, cap.quarterId, '', { ...existing }, { ...existing, ...cap }); Object.assign(existing, cap); }
+    else this.state.capacity.push({ id: uid(), headcount: 0, weeks: 13, focusFactor: 0.65, absenceWeeks: 0, reservePct: 20, ...cap });
+    return this._persist();
+  }
+  async upsertTeam(actor, team) {
+    if (!isAdmin(actor)) throw new PermissionError('Admin only');
+    const existing = team.id && this.state.teams.find((t) => t.id === team.id);
+    if (existing) Object.assign(existing, team); else this.state.teams.push({ id: uid(), ...team });
+    return this._persist();
+  }
+  async deleteTeam(actor, id) {
+    if (!isAdmin(actor)) throw new PermissionError('Admin only');
+    if (this.state.epics.some((e) => e.teamId === id)) throw new ValidationError('Move or delete the team\'s epics first');
+    this.state.teams = this.state.teams.filter((t) => t.id !== id);
+    this.state.capacity = this.state.capacity.filter((c) => c.teamId !== id);
+    return this._persist();
+  }
+  async upsertTheme(actor, theme) {
+    if (!canRank(actor)) throw new PermissionError('Themes need rank permission');
+    const existing = theme.id && this.state.themes.find((t) => t.id === theme.id);
+    if (existing) Object.assign(existing, theme); else this.state.themes.push({ id: uid(), position: this.state.themes.length, description: '', ...theme });
+    return this._persist();
+  }
+  async deleteTheme(actor, id) {
+    if (!canRank(actor)) throw new PermissionError('Themes need rank permission');
+    this.state.themes = this.state.themes.filter((t) => t.id !== id);
+    this.state.epics.forEach((e) => { if (e.themeId === id) e.themeId = null; });
+    return this._persist();
+  }
+  async upsertQuarter(actor, quarter) {
+    if (!isAdmin(actor)) throw new PermissionError('Admin only');
+    const existing = quarter.id && this.state.quarters.find((q) => q.id === quarter.id);
+    if (existing) Object.assign(existing, quarter);
+    else {
+      if (this.state.quarters.some((q) => q.year === quarter.year && q.q === quarter.q)) throw new ValidationError('Quarter exists');
+      this.state.quarters.push({ id: uid(), phase: 'prep', baseline: null, ...quarter });
+    }
+    return this._persist();
+  }
+  async updateSettings(actor, patch) {
+    if (!isAdmin(actor)) throw new PermissionError('Admin only');
+    Object.assign(this.state.settings, patch);
+    return this._persist();
+  }
+
+  // ── integration import (D19-D22) ───────────────────────────────────────────
+  // externalEpics: normalised ExternalEpic[]; teamMapping: { [teamHint]: teamId }
+  async importExternalEpics(actor, externalEpics, teamMapping) {
+    if (!isAdmin(actor)) throw new PermissionError('Admin only');
+    let created = 0; let updated = 0; const suggestions = [];
+    const byExt = new Map(this.state.epics.filter((e) => e.externalId).map((e) => [`${e.externalSource}:${e.externalId}`, e]));
+    for (const x of externalEpics) {
+      const teamId = teamMapping[x.teamHint];
+      if (!teamId) continue;
+      const key = `${x.source}:${x.externalId}`;
+      const existing = byExt.get(key);
+      if (existing) { Object.assign(existing, { title: x.title, externalUrl: x.url, externalSyncedAt: now(), externalState: x.state }); updated += 1; }
+      else {
+        const e = { id: uid(), refCode: this._ref('epic'), teamId, themeId: null, title: x.title, description: '', ownerName: x.ownerName || '', label: '', regulatory: false, regulatoryDeadline: null, externalSource: x.source, externalId: x.externalId, externalUrl: x.url, externalSyncedAt: now(), externalState: x.state };
+        this.state.epics.push(e); byExt.set(key, e); created += 1;
+      }
+    }
+    // Dependency suggestions from links between imported epics of different teams (AC G5)
+    for (const x of externalEpics) {
+      const from = byExt.get(`${x.source}:${x.externalId}`);
+      for (const linked of x.linkedExternalIds || []) {
+        const to = byExt.get(`${x.source}:${linked}`);
+        if (from && to && from.teamId !== to.teamId) suggestions.push({ fromEpicId: from.id, toTeamId: to.teamId, toEpicId: to.id });
+      }
+    }
+    this._event(actor, 'import_run', 'integration', null, null, '', null, { created, updated });
+    this._persist();
+    return { created, updated, suggestions };
+  }
+}

@@ -1,6 +1,6 @@
 # MVP Acceptance Criteria and Gherkin Scenarios
 
-Status: AWAITING OWNER SIGN-OFF. No implementation code is written until approved (CLAUDE.md Feature Shipping Process).
+Status: APPROVED on 2026-10-17 (owner approved questions 2-5 in chat and delegated sign-off of these criteria and scenarios to the lead after a critical review; see docs/design.md header).
 Design and reasons: `docs/design.md`. Verification method: `npm run build` plus manual browser run against the mock adapter (no automated test runner exists in the repo; adding one is out of scope).
 
 ## Build order (after sign-off, one commit per step)

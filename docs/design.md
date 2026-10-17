@@ -1,6 +1,6 @@
 # Quarterly Planning Tool — Design Document (MVP iteration)
 
-Status: DRAFT, awaiting owner sign-off (see `docs/acceptance.md`).
+Status: DRAFT -> APPROVED. The owner (Ben) approved the acceptance criteria and open questions in chat on 2026-10-17: UI in English terminology, migration 001 may drop the Feb tables, name "Kwartaalplan", old Feb views may be replaced, and he delegated the sign-off of the acceptance criteria and Gherkin scenarios to the lead (Claude, acting as Head of Product), with a mandate to rework the MVP if the interviews justify it. The lead reviewed the criteria critically and kept the scope: the five role interviews pointed at refinements (exec page derived from board data, minimal check-ins, phases and lock, notification-free "My attention"), not at a different product, so no fundamental rework was needed. Deviations during build are recorded in section 16.
 Working title: "Kwartaalplan" (the repo/app name is still Portfolio Dependency Manager).
 
 Every major decision below is numbered (D1, D2, ...) and states the reason and the rejected alternatives, so it can be explained to others.
@@ -239,3 +239,7 @@ Stale data after week 2 (mitigation: "data as of", check-in cadence, My attentio
 1. Is English UI acceptable for now (Dutch later)?
 2. OK that migration `001` drops the Feb tables (data loss, flagged per your earlier rule)?
 3. Working name "Kwartaalplan", or keep "Portfolio Dependency Manager" for now?
+
+## 16. Build log and deviations
+
+(Filled in during implementation.)
