@@ -76,7 +76,8 @@ export class MockRepository {
       }
       Object.assign(existing, epic);
     } else {
-      this.state.epics.push({ id: uid(), refCode: this._ref('epic'), description: '', ownerName: '', label: '', regulatory: false, regulatoryDeadline: null, themeId: null, externalSource: null, externalId: null, externalUrl: null, ...epic });
+      const { id: _ignored, ...fields } = epic; // createEpic passes id: undefined; never let it override the uid
+      this.state.epics.push({ id: uid(), refCode: this._ref('epic'), description: '', ownerName: '', label: '', regulatory: false, regulatoryDeadline: null, themeId: null, externalSource: null, externalId: null, externalUrl: null, ...fields });
     }
     return this._persist();
   }

@@ -103,7 +103,7 @@ Feature: Quarter board
 **Acceptance criteria**
 - C1. From an epic, a planner can request a dependency: provider team, quarter needed, ask text, effort low/high, optional "what happens if you say no". It starts as `proposed`.
 - C2. The provider team's intake queue lists all asks addressed to the team for the selected quarter, with age, requester, effort, ranked by the requesting epic's strategic rank, plus the team's remaining capacity.
-- C3. The provider planner can answer: Accept, Partial, Defer to quarter X, Decline, Needs priority call. All except Accept require a reason; Defer requires a target quarter. The answer and reason show on the requesting epic's card/panel.
+- C3. The provider planner can answer: Accept, Partial, Defer to quarter X, Decline, Needs priority call. Decline and Defer require a reason, Needs priority call takes an optional one (changed 2026-10-17, D29); Defer requires a target quarter. The answer and reason show on the requesting epic's card/panel. In the core screens only Toezeggen / Bespreken / Kan niet are offered (D31).
 - C4. Accepted and Partial asks count in the provider team's load as "incoming".
 - C5. A proposed ask older than 5 days is flagged "no response".
 - C6. The matrix shows requester team (rows) x provider team (columns) with counts coloured by worst response (with text count and icon); clicking a cell lists the dependencies.
@@ -370,6 +370,79 @@ Feature: Onboarding and language
     Then the navigation reads Overzicht, Bord, Afhankelijkheden, Sessie, In het kwartaal, Mijn aandacht, Instellingen
     When I switch the language to English
     Then the same navigation reads in English
+```
+
+## J. Less is more reset (2026-10-17, docs/design.md section 19)
+
+Supersedes the navigation parts of A12-A14 and the screen-level criteria of B/C/E for the default product; B, D, E, F remain valid for the extended modules (beta).
+
+**Acceptance criteria**
+- J1. The navigation shows exactly three numbered screens — 1 Prioriteren, 2 Afhankelijkheden, 3 Afstemmen — plus a quarter selector, a settings gear and an account menu (Bekijken als in demo, language, Rondleiding). The default route is `#prioriteren`. No demo banner; a small "Demo" chip.
+- J2. With Instellingen › "Uitgebreide modules (beta)" on (default off), the group "Uitgebreid (beta)" adds Overzicht, Bord, Intake & capaciteit, Sessie, In het kwartaal and Mijn aandacht; off, those routes fall back to Prioriteren.
+- J3. Prioriteren lists the quarter's ranked epics (# · Epic · Team · Afhankelijkheden · Status). A user with rank permission reorders by drag & drop or with the row's arrow buttons (Alt+↑/↓); after a move an inline optional reason appears with Opslaan/Annuleren; saving assigns ranks 1..n and logs one `rank_changed` event with the reason. Users without rank permission see no drag handle or arrows. In a locked quarter the reason is required.
+- J4. Unranked epics sit in a collapsed group "Nog niet geprioriteerd (n)"; "Rang" appends one to the end of the ranked list (through the same save flow).
+- J5. Rows whose asks include Kan niet or Bespreken show a left marker (red / amber). Clicking a row opens the simplified epic panel; Escape closes it and focus returns to the row.
+- J6. Afhankelijkheden: team selector (default: the actor's team); "Wij vragen" lists the team's epics in rank order with their asks; "+ Verzoek" opens an inline row (team · what · optional pw) — no modal. "Aan ons gevraagd" lists asks to the team ordered by the requesting epic's rank with a segmented Toezeggen / Bespreken / Kan niet control (only for planners of that team and admins, from the Negotiate phase); Kan niet requires an inline reason, Bespreken takes an optional one; Toezeggen is one click. Partial / deferred answers are shown read-only.
+- J7. Afstemmen shows four count tiles (Open · Toegezegd · Bespreken · Kan niet) that filter the list; "Te bespreken" lists team pairs with Bespreken / Kan niet asks sorted by the highest-ranked epic involved, expandable to the asks (rank · epic · what · status · reason); "Matrix" toggles a team × team grid whose cells focus a pair.
+- J8. The wizard has three steps (Organisatie · Teams · Kwartaal + eerste epics) and ends on Prioriteren with the typed epics ranked in order. An optional link leads to the Azure DevOps demo import.
+- J9. Every new string has a Dutch text; Dutch is the default. Helper text is at most six words; empty states are one line plus one button.
+
+```gherkin
+Feature: Prioritise by dragging
+
+  Scenario: Director moves an epic up
+    Given I am Ruud Visser (can rank) on Prioriteren in 2027 Q1
+    When I drag "Instant payouts" from #5 to #1
+    Then the row is at #1 and the other rows read 2..14
+    And an inline field "Waarom? (optioneel)" appears under the row
+    When I click "Opslaan" without a reason
+    Then the order is stored and the history shows "strategic rank 5 → 1" by Ruud Visser
+
+  Scenario: Keyboard alternative
+    Given the row "Pricing data mart" has focus
+    When I press Alt+ArrowUp
+    Then the row moves up one place and the inline reason field appears
+
+  Scenario: Planner cannot reorder
+    Given I am Joris Smit (planner, cannot rank)
+    Then rows have no drag handle and no arrow buttons
+
+Feature: Dependencies per team
+
+  Scenario: Ask inline without effort
+    Given I am Lotte Meijer on "Wij vragen" for Klantportaal
+    When I click "+ Verzoek" on "Self-service policy changes", pick "Data Platform", type "Customer events feed" and send
+    Then a row "Data Platform · Customer events feed · Open" appears under the epic
+
+  Scenario: Can't needs one line
+    Given I am Mark van Dijk on "Aan ons gevraagd" for Platform & Security
+    When I click "Kan niet" on "Fraud rules for instant payouts"
+    Then an inline reason field appears and "Opslaan" is disabled until I type
+    When I type "Security engineers on DORA until March" and save
+    Then the ask shows "Kan niet" with that reason, and Payments sees it on Afstemmen
+
+  Scenario: Commit is one click
+    When I click "Toezeggen" on an open ask
+    Then it shows "Toegezegd" immediately, no dialog
+
+Feature: Align
+
+  Scenario: Agenda ordered by priority
+    Given 2027 Q1 has Bespreken / Kan niet asks between four team pairs
+    When I open Afstemmen
+    Then the tiles read Open 2 · Toegezegd 6 · Bespreken 3 · Kan niet 2
+    And "Te bespreken (4)" lists Klantportaal → Polisadministratie first (its top epic is #2)
+    When I click the tile "Kan niet"
+    Then the list only shows pairs with Kan niet asks
+
+Feature: Three-step wizard
+
+  Scenario: First ranked list in three steps
+    Given an empty organisation and I am admin
+    When I enter "Gemeente Rivierenland", add teams "Burgerzaken" and "IT Platform", choose 2027 Q1
+    And type "Burgerzaken: Digitaal verhuizen" and "IT Platform: Nieuwe zaakapplicatie"
+    And click "Naar prioriteren"
+    Then Prioriteren shows the two epics ranked #1 and #2
 ```
 
 ## H. Out of scope (explicit)
