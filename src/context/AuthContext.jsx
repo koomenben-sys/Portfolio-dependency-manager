@@ -9,11 +9,12 @@ export function AuthProvider({ children }) {
   const [role, setRole]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [membership, setMembership] = useState(null);
+  const [checkedFor, setCheckedFor] = useState(null); // user id whose invitations + membership were loaded
 
   // Mock mode never touches Supabase (AC A1).
   if (DATA_SOURCE !== 'supabase') {
     return (
-      <AuthContext.Provider value={{ user: null, role: null, loading: false, signOut: async () => {}, membership: null }}>
+      <AuthContext.Provider value={{ user: null, role: null, loading: false, signOut: async () => {}, membership: null, membershipLoading: false }}>
         {children}
       </AuthContext.Provider>
     );
@@ -39,11 +40,9 @@ export function AuthProvider({ children }) {
         if (!alive) return;
         clearTimeout(timeout);
         if (session?.user) {
-          setUser(session.user);
-          setLoading(false); // unblock UI immediately; membership loads in the background
-          loadMembership(session.user)
-            .then((m) => { if (alive) { setMembership(m); setRole(m?.role ?? 'viewer'); } })
-            .catch(() => { if (alive) setRole('viewer'); });
+          // Only keep the user here; invitations and membership load in the effect below.
+          setUser((prev) => (prev?.id === session.user.id ? prev : session.user));
+          setLoading(false);
         } else {
           setUser(null); setRole(null); setMembership(null); setLoading(false);
         }
@@ -51,6 +50,23 @@ export function AuthProvider({ children }) {
     });
     return () => { alive = false; clearTimeout(timeout); subscription.unsubscribe(); };
   }, []);
+
+  // After sign-in (outside onAuthStateChange, see above): accept open invitations for this e-mail address
+  // (007 accept_invitations; ignored when 007 is not run), then read the membership.
+  useEffect(() => {
+    if (!user) return undefined;
+    let alive = true;
+    Promise.resolve(supabase.rpc('accept_invitations'))
+      .then(({ error }) => { if (error) console.warn(`accept_invitations: ${error.message}`); })
+      .catch(() => {})
+      .then(() => loadMembership(user))
+      .then((m) => { if (alive) { setMembership(m); setRole(m?.role ?? 'viewer'); } })
+      .catch(() => { if (alive) setRole('viewer'); })
+      .finally(() => { if (alive) setCheckedFor(user.id); });
+    return () => { alive = false; };
+  }, [user?.id]);
+  // True from sign-in until the membership is known, so the plan does not load before invitations are accepted.
+  const membershipLoading = !!user && checkedFor !== user.id;
 
   const signOut = async () => {
     try {
@@ -64,7 +80,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, signOut, membership }}>
+    <AuthContext.Provider value={{ user, role, loading, signOut, membership, membershipLoading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -2,7 +2,7 @@
 import { seedState } from './seed';
 import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
 import { PHASES, isLockedPhase } from '../domain/model';
-import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner } from './repository';
+import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange } from './repository';
 
 const KEY = 'kwartaalplan.mock.v1';
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -24,12 +24,12 @@ export class MockRepository {
     if (this.state) return clone(this.state);
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) { const saved = JSON.parse(raw); this.state = saved.state; this.counters = saved.counters; return clone(this.state); }
+      if (raw) { const saved = JSON.parse(raw); this.state = saved.state; this.counters = saved.counters; this.state.invitations ||= []; return clone(this.state); }
     } catch { /* fall through */ }
     return this.reset();
   }
   async reset() {
-    this.state = seedState();
+    this.state = { invitations: [], ...seedState() };
     this.counters = { epic: 33, dependency: 21, impediment: 6 };
     return this._persist();
   }
@@ -37,10 +37,25 @@ export class MockRepository {
   async resetEmpty(actor, language = 'nl') {
     const seed = seedState();
     this.state = { teams: [], themes: [], quarters: [], capacity: [], epics: [], plans: [], dependencies: [], votes: [], discussions: [], checkIns: [], impediments: [], events: [],
-      members: seed.members.filter((m) => m.role === 'admin').map((m) => ({ ...m, teamId: null })),
+      members: seed.members.filter((m) => m.role === 'admin').map((m) => ({ ...m, teamId: null })), invitations: [],
       settings: { ...seed.settings, language, setupComplete: false, orgName: '' } };
     this.counters = { epic: 1, dependency: 1, impediment: 1 };
     return this._persist();
+  }
+  // Live updates between browser tabs (demo): another tab's write fires a `storage` event here.
+  subscribe(onState, onStatus) {
+    if (typeof window === 'undefined') { onStatus?.('error'); return () => {}; }
+    const handler = (e) => {
+      if (e.key !== KEY || !e.newValue) return;
+      try {
+        const saved = JSON.parse(e.newValue);
+        this.state = saved.state; this.counters = saved.counters; this.state.invitations ||= [];
+        onState(clone(this.state));
+      } catch { /* ignore a half-written value */ }
+    };
+    window.addEventListener('storage', handler);
+    onStatus?.('live');
+    return () => window.removeEventListener('storage', handler);
   }
   _ref(kind) {
     const n = this.counters[kind]++;
@@ -351,6 +366,63 @@ export class MockRepository {
     if (!onlyLanguage && !isAdmin(actor)) throw new PermissionError('Admin only');
     Object.assign(this.state.settings, patch);
     return this._persist();
+  }
+
+  // ── members and invitations (docs/design.md section 18) ────────────────────
+  // Demo mode has no e-mail: an invitation is accepted at once and the person appears in "Viewing as".
+  async inviteMember(actor, inv) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can invite people');
+    const email = normaliseEmail(inv.email);
+    const teamId = checkRole(inv.role, inv.teamId, this.state.teams);
+    const list = (this.state.invitations ||= []);
+    const existing = list.find((i) => i.email === email);
+    if (existing && !existing.acceptedAt) throw new ValidationError('This e-mail address has already been invited');
+    if (existing) list.splice(list.indexOf(existing), 1); // re-invite after the person was removed
+    const displayName = String(inv.displayName || '').trim();
+    const invitation = { id: uid(), email, role: inv.role, teamId, canRank: !!inv.canRank, displayName, invitedBy: actor.id, createdAt: now(), acceptedAt: now() };
+    list.push(invitation);
+    const member = { id: uid(), name: displayName || email.split('@')[0], title: email, email, role: inv.role, teamId, canRank: !!inv.canRank };
+    this.state.members.push(member);
+    this._event(actor, 'member_invited', 'invitations', invitation.id, null, '', null, { email, role: inv.role, teamId, canRank: !!inv.canRank });
+    return this._persist();
+  }
+  async updateMember(actor, userId, patch) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can change roles');
+    const m = this.state.members.find((x) => x.id === userId);
+    const role = patch.role ?? m?.role;
+    checkMemberChange(actor, this.state.members, m, role);
+    const teamId = checkRole(role, patch.teamId !== undefined ? patch.teamId : m.teamId, this.state.teams);
+    const next = { role, teamId, canRank: patch.canRank !== undefined ? !!patch.canRank : m.canRank };
+    if (patch.displayName !== undefined) {
+      if (!String(patch.displayName).trim()) throw new ValidationError('Name is required');
+      next.name = String(patch.displayName).trim();
+    }
+    this._event(actor, 'member_updated', 'memberships', userId, null, '', { role: m.role, teamId: m.teamId, canRank: m.canRank }, { role: next.role, teamId: next.teamId, canRank: next.canRank });
+    Object.assign(m, next);
+    return this._persist();
+  }
+  async removeMember(actor, userId) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can remove people');
+    const m = this.state.members.find((x) => x.id === userId);
+    checkMemberChange(actor, this.state.members, m, null);
+    this.state.members = this.state.members.filter((x) => x.id !== userId);
+    this._event(actor, 'member_removed', 'memberships', userId, null, '', { role: m.role, teamId: m.teamId, canRank: m.canRank }, null);
+    return this._persist();
+  }
+  async revokeInvitation(actor, invitationId) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can revoke invitations');
+    const inv = (this.state.invitations || []).find((i) => i.id === invitationId);
+    if (!inv) throw new ValidationError('Unknown invitation');
+    this.state.invitations = this.state.invitations.filter((i) => i.id !== invitationId);
+    this._event(actor, 'invitation_revoked', 'invitations', invitationId, null, '', { email: inv.email }, null);
+    return this._persist();
+  }
+  // No e-mail in demo mode; the UI shows a notice instead.
+  async sendSignInLink(actor, email) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can send sign-in links');
+    const e = normaliseEmail(email);
+    if (!(this.state.invitations || []).some((i) => i.email === e)) throw new ValidationError('Invite this e-mail address first');
+    return { sent: false, demo: true };
   }
 
   // ── integration import (D19-D22) ───────────────────────────────────────────

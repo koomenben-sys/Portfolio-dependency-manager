@@ -16,6 +16,7 @@ import { input } from './components/plan/ui';
 import { ErrorBoundary } from './components/plan/ErrorBoundary';
 import { OnboardingWizard } from './components/plan/OnboardingWizard';
 import { TourLauncher, TourPanel } from './components/plan/TourPanel';
+import { LiveIndicator } from './components/plan/LiveIndicator';
 import { useT, LANGUAGES } from './i18n';
 import { isAdmin } from './data/repository';
 
@@ -34,8 +35,8 @@ const VIEW_IDS = new Set(NAV.map(([id]) => id));
 const viewFromHash = () => { const h = window.location.hash.replace('#', ''); return VIEW_IDS.has(h) ? h : 'board'; };
 
 function SupabaseGate() {
-  const { user, role, loading, signOut, membership } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>;
+  const { user, role, loading, signOut, membership, membershipLoading } = useAuth();
+  if (loading || (user && membershipLoading)) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>;
   if (!user) return <LoginView />;
   const actor = membership || { id: user.id, name: user.email, role: role || 'viewer', teamId: null, canRank: false };
   return <PlanProvider authUser={actor}><Shell onSignOut={signOut} /></PlanProvider>;
@@ -77,6 +78,7 @@ function ShellInner({ ctx, onSignOut }) {
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
             {dataSource === 'mock' && state.settings.setupComplete && <TourLauncher onStart={(id) => { setSkipWizard(true); setTour(id); }} />}
+            <LiveIndicator />
             <select aria-label={t('Language')} className={`${input} !w-auto`} value={state.settings.language || 'nl'} onChange={(e) => run('updateSettings', { language: e.target.value })}>
               {LANGUAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>

@@ -7,7 +7,8 @@ import { Panel, btn, input, Field, ErrorNote, Empty, Modal } from '../components
 import { mapWorkItems, previewImport } from '../integrations/azureDevOps/mapper';
 import { MOCK_ADO_RESPONSE } from '../integrations/azureDevOps/mock';
 import { fetchEpics } from '../integrations/azureDevOps/client';
-import { SetupPanel, BulkCapacity, MembersPanel } from '../components/plan/SetupPanel';
+import { SetupPanel, BulkCapacity } from '../components/plan/SetupPanel';
+import { MembersAdmin } from '../components/plan/MembersAdmin';
 
 // Teams, themes, quarters, cadence, ADO import, JSON export, demo reset (AC A3, G1-G6).
 export function SettingsView() {
@@ -73,7 +74,7 @@ export function SettingsView() {
         </Panel>
       </div>
 
-      <div id="members"><MembersPanel /></div>
+      <div id="members"><MembersAdmin /></div>
       <div id="capacity"><BulkCapacity /></div>
       <div id="import">{admin && <AdoImport />}</div>
     </div>
