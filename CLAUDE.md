@@ -17,78 +17,43 @@ For major features, before writing code:
 ## Current Work / Last Session
 _Updated by Claude at the end of each session._
 
-- **Last session:** 2026-02-28
-- **Worked on:**
-  - Portfolio Overview: added Pending status badge to initiative list; fixed right-alignment of status labels (`shrink-0 ml-4 text-right`)
-  - Fixed broken GitBranch icon in Dependencies tab (malformed arc path → explicit SVG elements)
-  - Simplified dev server setup: retired `eloquent-jennings` worktree; root repo (`main`) now runs dev server on port 5173
-  - Feature backlog brainstorm saved to `BACKLOG.md`
-- **Next steps:**
-  - Nothing pending — app is stable and clean
-- **Future feature ideas (brainstormed, not started):**
-  - Quarter filter across all views
-  - Timing conflict detection (initiative in Q1 but dependency in Q2)
-  - Team capacity per quarter (sum effort sizes per team per quarter)
-  - Quarterly roadmap swimlane view
-  - Logo / branding
-- **Open questions / decisions:**
-  - `gh` CLI is installed and authenticated (HTTPS, koomenben-sys)
-  - Dev server runs from `eloquent-jennings` worktree (`npm run dev`) — kept updated to `main`
-  - Auth system lives in `src/context/AuthContext.jsx` + `src/views/LoginView.jsx`
-  - Admin role management is done via Supabase SQL editor directly (no client-side UI)
-  - `Icons.jsx` exports `SortUnsorted`, `SortAsc`, `SortDesc` in addition to existing icons
-  - If a commit lands on a feature branch after PR is merged, cherry-pick it directly onto `main`
+- **Last session:** 2026-10-17 — MVP iteration "Kwartaalplan" (branch `claude/enterprise-planning-mvp-23669e`)
+- **What changed:** the app was rebuilt around quarterly planning: team lanes by strategic rank, capacity (derived person-weeks, cut line), dependency asks with answers, session phases + confidence vote + lock/diff, in-quarter check-ins and impediments, director overview, "My attention" inbox, mock Azure DevOps import. Old Feb views/hooks removed.
+- **Read first:** `docs/design.md` (decisions D1-D22, build log in section 16), `docs/acceptance.md`.
+- **Data layer:** `src/data/repository.js` contract; `MockRepository` (default, localStorage) and `SupabaseRepository` (untested against a live DB). Views never call Supabase directly.
+- **Open follow-ups:** migration `005_rpc_reason.sql` (RPC so rank changes pass the reason to the trigger), `org_settings` table, pgTAP tenant-isolation tests, Edge Function for the real ADO sync, Dutch UI strings.
+- **Owner decisions 2026-10-17:** English terminology in UI; Feb tables may be dropped; name "Kwartaalplan"; old views replaced.
 
 ## Project Overview
-A React app for managing portfolios, initiatives, and cross-team dependencies.
-Deployed to **GitHub Pages** via GitHub Actions.
+An enterprise planning tool for scarce team capacity and cross-team dependencies, used in Agile quarterly planning sessions. One organisation in the MVP; schema is tenant-ready. Deployed to **GitHub Pages** via GitHub Actions.
 
 ## Tech Stack
 - **React 18** + Vite + Tailwind CSS
-- **Supabase** (data layer — migrated from localStorage in PR #3)
-- **npm** for package management (`npm run dev`, `npm run build`)
-- Dev server: `http://localhost:5173`
+- **Supabase** (Postgres + RLS + Auth) behind a repository interface; mock adapter by default
+- **npm** (`npm run dev`, `npm run build`)
+- Dev server: `http://localhost:5173/Portfolio-dependency-manager/`
 
 ## Key Architecture
 
-### Source structure
 ```
 src/
-  App.jsx                    # Auth shell (App) + authenticated UI (AuthenticatedApp)
-  lib/
-    supabase.js              # Supabase client
-    db.js                    # DB query helpers
-  hooks/
-    usePortfolios.js         # Portfolio CRUD
-    useInitiatives.js        # Initiative CRUD
-    useDependencies.js       # Dependency CRUD
-    useTeams.js              # Team management
-    useLocalStorage.js       # (legacy, mostly unused now)
-  views/                     # Pages: Portfolios, Dependencies, Prioritization, Alignment, PortfolioOverview
-  components/
-    Layout/                  # Header, Navigation, SettingsModal
-    Portfolio/PortfolioCard.jsx
-    Initiative/InitiativeCard.jsx
-    Dependency/              # DependencyItem, DependencyMatrix
-    common/Icons.jsx
-  constants/index.js         # Teams, Quarters, Effort sizes, Statuses, Value types
-  constants/design.js        # Design system — card styles, status colours, buttons, inputs, typography, accents
-  utils/
-    referenceCodeGenerator.js  # Generates PF-0001, IN-0001, DEP-0001
-    dataExport.js              # JSON export/import
+  domain/      model.js (statuses, phases), capacity.js (available/load/cut line), plan.js (selectors)
+  data/        repository.js (contract + permission helpers), mockRepository.js, supabaseRepository.js, seed.js
+  context/     PlanContext.jsx (state, actor, quarter, run()), AuthContext.jsx
+  views/       OverviewView, BoardView, DependenciesView, SessionView, InQuarterView, AttentionView, SettingsView, LoginView
+  components/plan/  ui.jsx (Pill, CapacityBar, Modal, ReasonPrompt), EpicPanel.jsx, DependencyForm.jsx
+  integrations/azureDevOps/  mapper.js, client.js, mock.js
+db/migrations/ 001_core, 002_rls, 003_functions_and_triggers, 004_bootstrap
 ```
 
-### Data model reference codes
-- Portfolios: `PF-0001`
-- Initiatives: `IN-0001`
-- Dependencies: `DEP-0001`
+### Adding a feature (pattern)
+1. Pure logic in `src/domain/` (selectors/calculations), used by every screen.
+2. Command on the repository contract: implement in `mockRepository.js` AND `supabaseRepository.js` (+ migration if schema changes).
+3. UI in `src/views/` or `src/components/plan/`, calling `run('method', ...)` from `usePlan()`.
+4. Every change to rank, commitment, dependency answer or phase must leave a `plan_events` row with a reason where required.
 
-### Adding a new feature (pattern)
-1. Add DB helper in `src/lib/db.js`
-2. Add hook in `src/hooks/`
-3. Add component(s) in `src/components/`
-4. Add view in `src/views/`
-5. Wire up in `App.jsx` and `Navigation.jsx`
+### Reference codes
+Epics `EP-0001`, dependencies `DEP-0001`, impediments `IMP-0001` (per organisation, via `next_ref()` in Postgres / counters in the mock).
 
 ## Git Workflow
 - Claude uses **worktrees** for feature branches (in `.claude/worktrees/`)
@@ -103,7 +68,6 @@ src/
 ### Important: where to make edits
 - **Edit files in the root repo `src/`** — the dev server runs from there, so hot-reload works immediately
 - Commit directly on `main` for small fixes; use a worktree + PR for larger features
-- The `eloquent-jennings` worktree is retired — no longer used
 
 ## Environment / Secrets
 - Supabase credentials are injected as GitHub Actions secrets for the Pages build
