@@ -66,6 +66,7 @@ export function SettingsView() {
           <div className="flex gap-2 mt-4">
             <button className={btn.secondary} onClick={exportJson}>Export JSON</button>
             {admin && dataSource === 'mock' && <button className={btn.secondary} onClick={() => confirm('Reset all demo data to the seed?') && reset()}>Reset demo data</button>}
+            {admin && dataSource === 'mock' && <button className={btn.secondary} onClick={async () => { if (confirm('Start with an empty organisation? The demo data is removed from this browser.')) { await run('resetEmpty', state.settings.language); window.location.hash = 'board'; } }}>Start with an empty organisation</button>}
           </div>
         </Panel>
       </div>
