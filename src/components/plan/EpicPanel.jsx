@@ -139,6 +139,7 @@ export function EpicPanel({ epicId, onClose }) {
                       <ResponsePill value={d.response} />
                     </div>
                     <div>{d.ask} <span className="text-gray-500">({d.effortLow}–{d.effortHigh} pw)</span></div>
+                    {d.respondedAt && <div className="text-xs text-gray-600 mt-1">Answered {fmtDate(d.respondedAt)}{(() => { const ev = state.events.filter((x) => x.entityId === d.id && x.action === 'dependency_answered').sort((a, b) => b.at.localeCompare(a.at))[0]; return ev?.actorName ? ` by ${ev.actorName}` : ''; })()}{['declined', 'deferred', 'needs_priority_call'].includes(d.response) && (d.acknowledgedAt ? ' · acknowledged' : mayEdit ? <> · <button className="text-indigo-700 hover:underline" onClick={() => run('acknowledgeDependency', d.id)}>Acknowledge</button></> : '')}</div>}
                     {d.responseReason && <div className="text-xs text-gray-700 mt-1">Answer: {d.responseReason}{d.deferredToQuarterId && ` (to ${quarterLabel(state.quarters.find((q) => q.id === d.deferredToQuarterId))})`}</div>}
                     {timingConflict(state, d) && <div className="text-xs text-red-700 mt-1">▲ Timing conflict: needed after the epic's planned quarter</div>}
                     {d.response === 'proposed' && <div className="text-xs text-gray-500 mt-1">No answer yet · {daysSince(d.createdAt)} days</div>}
@@ -174,7 +175,7 @@ export function EpicPanel({ epicId, onClose }) {
           {history.length === 0 ? <Empty>No changes recorded.</Empty> : (
             <ul className="space-y-1 text-xs text-gray-700">
               {history.slice(0, 12).map((e) => (
-                <li key={e.id}><span className="text-gray-500">{new Date(e.at).toLocaleDateString()} · {e.actorName || 'system'}</span> — {e.action.replace(/_/g, ' ')}{e.before && e.after ? `: ${JSON.stringify(e.before)} → ${JSON.stringify(e.after)}` : ''}{e.reason && <span className="italic"> — "{e.reason}"</span>}</li>
+                <li key={e.id}><span className="text-gray-600">{fmtDate(e.at)} · {e.actorName || 'system'}</span> — {describeEvent(e)}{e.reason && <span className="italic"> — "{e.reason}"</span>}</li>
               ))}
             </ul>
           )}
@@ -215,4 +216,23 @@ function CheckInForm({ epic, onClose }) {
       </div>
     </Modal>
   );
+}
+
+// Human-readable history line (review: PO).
+function describeEvent(e) {
+  const fmt = (v) => (v == null ? '–' : String(v).replace(/_/g, ' '));
+  switch (e.action) {
+    case 'rank_changed': return `strategic rank ${fmt(e.before?.rank ?? e.before?.strategic_rank)} → ${fmt(e.after?.rank ?? e.after?.strategic_rank)}`;
+    case 'commitment_changed': return `commitment ${fmt(e.before?.commitment)} → ${fmt(e.after?.commitment)}`;
+    case 'effort_changed': return `effort ${e.before?.effortLow}–${e.before?.effortHigh} → ${e.after?.effortLow}–${e.after?.effortHigh} pw`;
+    case 'dependency_answered': return `answer ${fmt(e.before?.response)} → ${fmt(e.after?.response)}${e.after?.grantedHigh != null ? ` (granted ${e.after.grantedLow}–${e.after.grantedHigh} pw)` : ''}`;
+    case 'dependency_added': return `ask sent: ${e.after?.ask ?? ''}`;
+    case 'dependency_edited': return `ask edited (${e.before?.effortLow}–${e.before?.effortHigh} → ${e.after?.effortLow}–${e.after?.effortHigh} pw)`;
+    case 'dependency_removed': return 'ask removed';
+    case 'dependency_acknowledged': return `answer "${fmt(e.after?.response)}" acknowledged`;
+    case 'plan_added': return 'added to the quarter';
+    case 'plan_removed': return 'removed from the quarter';
+    case 'phase_changed': return `phase ${fmt(e.before?.phase)} → ${fmt(e.after?.phase)}`;
+    default: return e.action.replace(/_/g, ' ');
+  }
 }

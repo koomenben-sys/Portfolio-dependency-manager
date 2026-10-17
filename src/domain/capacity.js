@@ -9,7 +9,8 @@
 
 export function availableWeeks(cap) {
   if (!cap) return 0;
-  const net = Math.max(0, cap.headcount * cap.weeks * cap.focusFactor - cap.absenceWeeks);
+  // Absence is calendar weeks of people, so the focus factor applies to it too (review: EM).
+  const net = Math.max(0, cap.headcount * cap.weeks - cap.absenceWeeks) * cap.focusFactor;
   return net * (1 - cap.reservePct / 100);
 }
 
@@ -39,7 +40,8 @@ export function teamLoad(state, teamId, quarterId) {
   );
   const asks = state.dependencies.filter((d) => d.providerTeamId === teamId && d.quarterId === quarterId);
   const incoming = asks.filter((d) => ['accepted', 'partial'].includes(d.response));
-  const pending = asks.filter((d) => d.response === 'proposed');
+  // Not yet decided: proposed, or waiting for a priority call.
+  const pending = asks.filter((d) => d.response === 'proposed' || d.response === 'needs_priority_call');
   const ownLow = own.reduce((s, p) => s + p.effortLow, 0);
   const ownHigh = own.reduce((s, p) => s + p.effortHigh, 0);
   const incLow = incoming.reduce((s, d) => s + incomingEffort(d).low, 0);
@@ -80,4 +82,18 @@ export function rankedLoad(state, teamId, quarterId) {
 export function cutEpicId(state, teamId, quarterId) {
   const { items } = rankedLoad(state, teamId, quarterId);
   return items.find((it) => it.kind === 'epic' && !it.fits)?.epicId ?? null;
+}
+
+// What accepting `dep` (optionally with granted effort) would do to the provider's ranked load:
+// where it lands, whether it fits, and which own epics it pushes below the cut line (review: EM).
+export function simulateAsk(state, dep, { response = 'accepted', grantedLow = null, grantedHigh = null } = {}) {
+  const before = rankedLoad(state, dep.providerTeamId, dep.quarterId);
+  const sim = { ...dep, response, grantedLow, grantedHigh };
+  const altered = { ...state, dependencies: state.dependencies.filter((d) => d.id !== dep.id).concat(['accepted', 'partial'].includes(response) ? [sim] : []) };
+  const after = rankedLoad(altered, dep.providerTeamId, dep.quarterId);
+  const me = after.items.find((i) => i.id === dep.id) || null;
+  const fitBefore = new Map(before.items.map((i) => [i.id, i.fits]));
+  const pushed = after.items.filter((i) => i.kind === 'epic' && !i.fits && fitBefore.get(i.id) === true).map((i) => i.epicId);
+  const total = after.items.reduce((s, i) => s + i.high, 0);
+  return { item: me, fits: me ? me.fits : true, cum: me?.cum ?? null, pushed, total: Math.round(total * 10) / 10, available: after.available };
 }

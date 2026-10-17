@@ -10,7 +10,7 @@ import { EpicPanel } from '../components/plan/EpicPanel';
 // Quarter board: team lanes, epics by strategic rank, capacity bar + cut line (AC B1-B8).
 export function BoardView() {
   const { state, actor, quarter, run } = usePlan();
-  const [filters, setFilters] = useState({ label: '', theme: '', commitment: '', regulatory: false, unaligned: false });
+  const [filters, setFilters] = useState({ label: '', theme: '', commitment: '', regulatory: false, unaligned: false, teams: '' });
   const [dense, setDense] = useState(false);
   const [openEpic, setOpenEpic] = useState(null);
   const [addFor, setAddFor] = useState(null);
@@ -28,6 +28,11 @@ export function BoardView() {
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <h2 className="text-xl font-bold mr-2">Quarter board · {quarterLabel(quarter)}</h2>
+        <select aria-label="Filter teams" className={`${input} !w-auto`} value={filters.teams} onChange={(e) => setFilters({ ...filters, teams: e.target.value })}>
+          <option value="">All teams</option>
+          {actor.teamId && <option value="mine">My team + teams we ask / that ask us</option>}
+          {state.teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
         <select aria-label="Filter by label" className={`${input} !w-auto`} value={filters.label} onChange={(e) => setFilters({ ...filters, label: e.target.value })}>
           <option value="">All labels</option>{labels.map((l) => <option key={l}>{l}</option>)}
         </select>
@@ -51,7 +56,11 @@ export function BoardView() {
       )}
 
       <div className="flex gap-3 overflow-x-auto pb-4 items-start">
-        {state.teams.map((team) => {
+        {state.teams.filter((team) => {
+          if (!filters.teams) return true;
+          if (filters.teams === 'mine') return team.id === actor.teamId || state.dependencies.some((d) => d.quarterId === quarter.id && ((d.requesterTeamId === actor.teamId && d.providerTeamId === team.id) || (d.providerTeamId === actor.teamId && d.requesterTeamId === team.id)));
+          return team.id === filters.teams;
+        }).map((team) => {
           const load = teamLoad(state, team.id, quarter.id);
           const plans = teamPlans(state, team.id, quarter.id).filter((p) => passes(epicsById.get(p.epicId)) && (!filters.commitment || p.commitment === filters.commitment));
           const cutEpicId = teamCutEpicId(state, team.id, quarter.id);
@@ -74,7 +83,6 @@ export function BoardView() {
                   const e = epicsById.get(p.epicId);
                   const deps = epicDeps(state, e.id, quarter.id);
                   const worst = worstResponse(deps);
-                  const askedOfUs = state.dependencies.filter((d) => d.providerTeamId === team.id && d.quarterId === quarter.id && d.epicId === e.id).length;
                   const theme = state.themes.find((t) => t.id === e.themeId);
                   const openDisc = state.discussions.some((d) => d.epicId === e.id && d.status === 'open' && d.quarterId === quarter.id);
                   const changed = quarter.baseline && changedSinceBaseline(state, e.id, quarter.id);
@@ -102,7 +110,6 @@ export function BoardView() {
                             {e.regulatory && <span className={`text-xs px-1.5 rounded border ${below.has(e.id) ? 'bg-red-50 text-red-800 border-red-300 font-semibold' : 'bg-purple-50 text-purple-800 border-purple-200'}`} title={`${e.regulation || 'Regulatory'} · deadline ${fmtDate(e.regulatoryDeadline)}`}>§ {e.regulation ? e.regulation.split(' ')[0] : 'reg.'} {daysUntil(e.regulatoryDeadline)}d{below.has(e.id) ? ' · below cut line' : ''}</span>}
                             {openDisc && <span className="text-xs px-1.5 rounded bg-amber-100 text-amber-900 border border-amber-300">? on discussion queue</span>}
                             {changed && <span className="text-xs px-1.5 rounded bg-amber-50 text-amber-900 border border-amber-200">changed since lock</span>}
-                            {askedOfUs > 0 && <span className="text-xs text-gray-600">· asked of us {askedOfUs}</span>}
                             {ci && <span className="text-xs text-gray-600">· check-in {ci.confidence}</span>}
                           </div>
                         )}
@@ -128,12 +135,15 @@ function AddEpicModal({ team, onClose, onCreated }) {
   const { state, quarter, run, actor } = usePlan();
   const [title, setTitle] = useState('');
   const [themeId, setThemeId] = useState('');
+  const [reason, setReason] = useState('');
   const [err, setErr] = useState(null);
+  const locked = !!quarter.baseline;
   const submit = async () => {
+    if (locked && !reason.trim()) return setErr('The quarter is locked: give a reason for adding an epic');
     const r = await run('upsertEpic', { teamId: team.id, title, themeId: themeId || null, ownerName: actor.name });
     if (!r.ok) return setErr(r.error);
     const created = r.result.epics[r.result.epics.length - 1];
-    const r2 = await run('upsertPlan', { epicId: created.id, quarterId: quarter.id, commitment: 'draft', effortLow: 0, effortHigh: 0 });
+    const r2 = await run('upsertPlan', { epicId: created.id, quarterId: quarter.id, commitment: 'draft', effortLow: 0, effortHigh: 0 }, reason);
     if (!r2.ok) return setErr(r2.error);
     onCreated(created.id);
   };
@@ -141,6 +151,7 @@ function AddEpicModal({ team, onClose, onCreated }) {
     <Modal title={`New epic for ${team.name}`} onClose={onClose}>
       <Field l="Title"><input className={input} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus /></Field>
       <div className="mt-2"><Field l="Strategic theme"><select className={input} value={themeId} onChange={(e) => setThemeId(e.target.value)}><option value="">— unaligned —</option>{state.themes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></Field></div>
+      {locked && <div className="mt-2"><Field l="Reason (quarter is locked)"><input className={input} value={reason} onChange={(e) => setReason(e.target.value)} /></Field></div>}
       <ErrorNote error={err} />
       <div className="flex justify-end gap-2 mt-3"><button className={btn.secondary} onClick={onClose}>Cancel</button><button className={btn.primary} onClick={submit}>Create</button></div>
     </Modal>
@@ -158,7 +169,7 @@ function AssumptionsModal({ team, onClose }) {
   const plans = teamPlans(state, team.id, quarter.id).filter((p) => p.commitment !== 'not_committed');
   return (
     <Modal title={`${team.name} · capacity ${quarterLabel(quarter)}`} onClose={onClose}>
-      <p className="text-xs text-gray-600 mb-3">available = (headcount × weeks × focus factor − absence weeks) × (1 − reserve%). Reserve covers run / on-call / support (KTLO). Absences are team totals, never per person. Load counts the high estimate; the bar also shows the low end.</p>
+      <p className="text-xs text-gray-600 mb-3">available = (headcount × weeks − absence weeks) × focus factor × (1 − reserve%). Reserve covers run / on-call / support (KTLO). Absences are team totals, never per person. Load counts the high estimate; the bar also shows the low end.</p>
       <div className="grid grid-cols-2 gap-3">
         <Field l="Headcount"><input type="number" step="0.5" className={input} value={form.headcount} disabled={!mayEdit} onChange={set('headcount')} /></Field>
         <Field l="Weeks in quarter"><input type="number" className={input} value={form.weeks} disabled={!mayEdit} onChange={set('weeks')} /></Field>

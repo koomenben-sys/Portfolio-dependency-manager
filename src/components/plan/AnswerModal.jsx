@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { usePlan } from '../../context/PlanContext';
 import { RESPONSE_META, quarterLabel } from '../../domain/model';
-import { rankedLoad } from '../../domain/capacity';
+import { simulateAsk } from '../../domain/capacity';
 import { Modal, Field, input, btn, ErrorNote } from './ui';
 
 // Provider answers an ask (AC C3). Partial asks for the granted effort; defer asks for a quarter.
@@ -14,14 +14,12 @@ export function AnswerModal({ dep, onClose }) {
   const [err, setErr] = useState(null);
   const later = state.quarters.filter((q) => q.id !== dep.quarterId && q.phase !== 'closed');
   const epic = state.epics.find((e) => e.id === dep.epicId);
-  const { items, available } = rankedLoad(state, dep.providerTeamId, dep.quarterId);
-  const used = items.reduce((s, i) => s + i.high, 0);
-  const afterAccept = used + (dep.response === 'proposed' ? dep.effortHigh : 0);
+  const sim = simulateAsk(state, dep, { response, grantedLow: granted.low === '' ? null : Number(granted.low), grantedHigh: granted.high === '' ? null : Number(granted.high) });
   return (
     <Modal title={`Answer ${dep.refCode}`} onClose={onClose}>
       <p className="text-sm mb-1"><b>{epic?.refCode} {epic?.title}</b> asks: {dep.ask} <span className="text-gray-600">({dep.effortLow}–{dep.effortHigh} pw{dep.neededBy ? `, needed by ${new Date(dep.neededBy).toLocaleDateString('nl-NL')}` : ''})</span></p>
       {dep.ifDeclined && <p className="text-xs text-gray-600 mb-1">If declined: {dep.ifDeclined}</p>}
-      <p className="text-xs text-gray-600 mb-3">Contact: {dep.requesterName || epic?.ownerName || '–'} · Your team's load after accepting in full: {Math.round(afterAccept * 10) / 10} of {available} pw{afterAccept > available ? <span className="text-red-700 font-medium"> (over capacity)</span> : ''}</p>
+      <p className="text-xs text-gray-600 mb-3">Contact: {dep.requesterName || epic?.ownerName || '–'} · With this answer your team's ranked load becomes {sim.total} of {sim.available} pw{sim.item ? (sim.fits ? <span className="text-emerald-700"> — the ask fits at rank {sim.item.rank ?? '–'} (cum. {sim.cum})</span> : <span className="text-red-700 font-medium"> — the ask lands below the cut line (cum. {sim.cum})</span>) : ''}{sim.pushed.length > 0 && <span className="text-amber-900"> — pushes {sim.pushed.map((id) => state.epics.find((e) => e.id === id)?.refCode).join(', ')} below the cut line</span>}</p>
       <div className="flex flex-wrap gap-2 mb-3" role="radiogroup" aria-label="Answer">
         {['accepted', 'partial', 'deferred', 'declined', 'needs_priority_call'].map((r) => (
           <button key={r} role="radio" aria-checked={response === r} className={`${btn.secondary} ${response === r ? 'ring-2 ring-indigo-500' : ''}`} onClick={() => setResponse(r)}>{RESPONSE_META[r].icon} {RESPONSE_META[r].label}</button>

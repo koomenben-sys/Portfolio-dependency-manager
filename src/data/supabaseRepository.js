@@ -8,7 +8,7 @@
 //   request, so writes that carry a reason go through the RPCs update_with_reason / delete_with_reason
 //   (db/migrations/005). Writes without a reason use plain PostgREST calls.
 import { supabase } from '../lib/supabase';
-import { buildBaseline } from '../domain/plan';
+import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
 import { PHASE_INDEX } from '../domain/model';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner } from './repository';
 
@@ -126,6 +126,10 @@ export class SupabaseRepository {
     }
     return this.load();
   }
+  async acknowledgeDependency(actor, depId) {
+    this._throw((await supabase.from('dependencies').update({ acknowledged_at: new Date().toISOString() }).eq('id', depId)).error);
+    return this.load();
+  }
   async updateDependency(actor, depId, patch) {
     const { reason, ...rest } = patch; const { org_id, ...row } = toRow(rest, await this._org());
     if (reason) await this._withReason('dependencies', depId, row, reason);
@@ -139,8 +143,16 @@ export class SupabaseRepository {
     if (!isAdmin(actor)) throw new PermissionError('Only an admin can change the phase');
     const patch = { phase };
     const s = await this.load(); const q = s.quarters.find((x) => x.id === quarterId);
-    if (phase === 'locked' && PHASE_INDEX[q.phase] < PHASE_INDEX.locked) { patch.baseline = buildBaseline(s, quarterId); patch.locked_at = new Date().toISOString(); }
-    if (phase === 'vote' && PHASE_INDEX[q.phase] > PHASE_INDEX.vote) patch.votes_revealed = false;
+    const from = PHASE_INDEX[q.phase]; const to = PHASE_INDEX[phase];
+    if (to < from && !reason.trim()) throw new ValidationError('Rewinding a phase requires a reason');
+    if (to > from + 1) throw new ValidationError('Phases advance one step at a time');
+    if (phase === 'locked' && from < to) {
+      if (this.settings.voteBlocksLock && s.votes.some((v) => v.quarterId === quarterId && v.vote <= 2)) throw new ValidationError('A team voted 2 or lower; resolve before locking');
+      const open = readiness(s, quarterId).filter((r) => !r.ready);
+      if (open.length && !reason.trim()) throw new ValidationError(`${open.length} team(s) not ready (${open.map((r) => r.team.name).join(', ')}). Lock anyway by giving a reason.`);
+      patch.baseline = buildBaseline(s, quarterId); patch.locked_at = new Date().toISOString();
+    }
+    if (to < from && to <= PHASE_INDEX.vote) patch.votes_revealed = false;
     await this._withReason('quarters', quarterId, patch, reason);
     return this.load();
   }
@@ -150,13 +162,17 @@ export class SupabaseRepository {
     return this.load();
   }
   async castVote(actor, teamId, quarterId, vote, reason = '') {
+    if (!canWriteTeam(actor, teamId)) throw new PermissionError('You can only vote for your own team');
     if (vote <= 3 && !reason.trim()) throw new ValidationError('A reason is required for a vote of 3 or lower');
+    const s = await this.load(); const q = s.quarters.find((x) => x.id === quarterId);
+    if (!q || !phaseAllows(q.phase, 'vote')) throw new ValidationError('Voting is open in the Vote phase (and for a re-vote while locked)');
     this._throw((await supabase.from('confidence_votes').upsert({ org_id: await this._org(), team_id: teamId, quarter_id: quarterId, vote, reason, voted_at: new Date().toISOString() }, { onConflict: 'org_id,team_id,quarter_id' })).error);
     return this.load();
   }
   async raiseDiscussion(actor, item) {
     const { depId, ...rest } = item;
     this._throw((await supabase.from('discussion_items').insert({ ...toRow(rest, await this._org()), dependency_id: depId || null, raised_by: actor.id })).error);
+    // team_id column added in migration 005b; toRow already maps teamId -> team_id
     return this.load();
   }
   async resolveDiscussion(actor, id, outcome) {

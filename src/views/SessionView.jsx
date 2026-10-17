@@ -54,7 +54,7 @@ export function SessionView() {
         <ol className="flex flex-wrap gap-1">
           {PHASES.map((p, i) => (
             <li key={p.id} className="flex items-center">
-              <button disabled={!admin || i === idx} title={p.hint} onClick={() => setPhase(p.id)}
+              <button disabled={!admin || i === idx || i > idx + 1} title={i > idx + 1 ? 'Phases advance one step at a time' : p.hint} onClick={() => setPhase(p.id)}
                 aria-current={i === idx ? 'step' : undefined}
                 className={`px-3 py-1.5 rounded text-sm border ${i === idx ? 'bg-indigo-600 text-white border-indigo-600' : i < idx ? 'bg-indigo-50 text-indigo-800 border-indigo-200' : 'bg-white text-gray-600 border-gray-300'} ${admin && i !== idx ? 'hover:border-indigo-500' : ''} disabled:cursor-default`}>
                 {i < idx ? '✓ ' : i === idx ? '▶ ' : ''}{i + 1}. {p.label}
@@ -95,7 +95,7 @@ export function SessionView() {
             {votes.filter((v) => revealed || myTeams.has(v.teamId)).map((v) => { const tn = state.teams.find((t) => t.id === v.teamId)?.name; const stale = ready.find((r) => r.team.id === v.teamId)?.reasons.includes('Plan changed after the vote'); return (
               <li key={v.id}><b>{tn}</b>: {v.vote}/5{v.reason && <span className="text-gray-700"> — {v.reason}</span>}{stale && <span className="text-amber-900"> · plan changed since, re-vote advised</span>}
                 {revealed && v.vote <= 2 && (admin || actor.role === 'planner') && !state.discussions.some((x) => x.status === 'open' && x.quarterId === quarter.id && x.reason.startsWith(`Low confidence ${tn}`)) && (
-                  <button className={`${btn.ghost} ml-2`} onClick={() => run('raiseDiscussion', { quarterId: quarter.id, epicId: null, reason: `Low confidence ${tn} (vote ${v.vote}): ${v.reason}`, ownerName: actor.name, timeboxMin: 10 })}>Add to discussion queue</button>
+                  <button className={`${btn.ghost} ml-2`} onClick={() => run('raiseDiscussion', { quarterId: quarter.id, epicId: null, teamId: v.teamId, reason: `Low confidence ${tn} (vote ${v.vote}): ${v.reason}`, ownerName: actor.name, timeboxMin: 10 })}>Add to discussion queue</button>
                 )}
               </li>); })}
             {!revealed && votes.length > 0 && <li className="text-gray-600">{votes.length} vote(s) cast, hidden.</li>}
@@ -196,7 +196,7 @@ function PlanOfRecord({ onClose }) {
           const v = votes.find((x) => x.teamId === t.id);
           return (
             <section key={t.id}>
-              <h4 className="font-semibold">{t.name} <span className="font-normal text-gray-500">— load {load.totalLow}–{load.totalHigh} of {load.available} pw ({load.pct}%) · confidence {v ? v.vote : '–'}</span></h4>
+              <h4 className="font-semibold">{t.name} <span className="font-normal text-gray-500">— load {load.totalLow}–{load.totalHigh} of {load.available} pw ({load.pct}%) · confidence {v ? (quarter.votesRevealed || PHASE_INDEX[quarter.phase] >= PHASE_INDEX.locked ? `${v.vote}/5` : 'cast, hidden until reveal') : '–'}</span></h4>
               <ul className="ml-4 list-disc">
                 {plans.map((p) => { const e = state.epics.find((x) => x.id === p.epicId); const deps = state.dependencies.filter((d) => d.epicId === e.id && d.quarterId === quarter.id); return (
                   <li key={p.id}>#{p.rank ?? '–'} {e.refCode} {e.title} — {COMMITMENT_META[p.commitment].label}, {p.effortLow}–{p.effortHigh} pw

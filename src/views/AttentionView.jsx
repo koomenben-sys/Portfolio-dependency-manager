@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePlan } from '../context/PlanContext';
 import { attention } from '../domain/plan';
 import { Panel, Empty, btn } from '../components/plan/ui';
@@ -7,8 +7,9 @@ import { AnswerModal } from '../components/plan/AnswerModal';
 
 // Notification-free inbox derived from state (AC F4). Rows are actionable (review: PO, UX).
 export function AttentionView() {
-  const { state, actor, quarter } = usePlan();
+  const { state, actor, quarter, markAttentionSeen, run } = usePlan();
   const [openEpic, setOpenEpic] = useState(null);
+  useEffect(() => () => markAttentionSeen(), [markAttentionSeen]);
   const [answering, setAnswering] = useState(null);
   const items = attention(state, actor, quarter?.id);
   const groups = [...new Set(items.map((i) => i.group))];
@@ -29,6 +30,7 @@ export function AttentionView() {
                 <button className="text-left hover:underline flex-1" onClick={() => i.epicId && setOpenEpic(i.epicId)}>{i.text}</button>
                 <span className={`text-xs whitespace-nowrap ${i.meta === 'new' ? 'text-indigo-700 font-semibold' : 'text-gray-600'}`}>{i.meta === 'new' ? 'new since your last visit' : i.meta}</span>
                 {i.action === 'answer' && <button className={btn.primary} onClick={() => setAnswering(state.dependencies.find((d) => d.id === i.depId))}>Answer</button>}
+                {i.action === 'acknowledge' && <button className={btn.secondary} title="Marks this answer as seen and handled; clears it from your team's readiness" onClick={() => run('acknowledgeDependency', i.depId)}>Acknowledge</button>}
               </li>
             ))}
           </ul>

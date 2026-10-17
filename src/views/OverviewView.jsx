@@ -24,18 +24,18 @@ export function OverviewView() {
         <Kpi label="Teams over capacity" value={o.overTeams.length} sub={o.overTeams.map((l) => l.team.name).join(', ') || 'none'} tone={o.overTeams.length ? 'bad' : 'good'} />
         <Kpi label="Regulatory at risk" value={`${o.regRisk.length}/${o.regulatoryCount}`} sub="not committed or at risk" tone={o.regRisk.length ? 'bad' : 'good'} />
         <Kpi label="Asks without answer" value={o.openAsks} sub={o.openAsks ? `oldest ${o.oldestAsk} days` : 'all answered'} tone={o.oldestAsk >= 5 ? 'warn' : 'neutral'} />
-        <Kpi label="Open impediments" value={o.openImp} sub={o.openImp ? `oldest ${o.oldestImp} days` : 'none'} tone={o.oldestImp > 7 ? 'warn' : 'neutral'} />
-        <Kpi label="Team confidence" value={o.avgVote ? `${o.avgVote.toFixed(1)} / 5` : '–'} sub={`${o.voteCount}/${state.teams.length} teams voted (fist of five)`} tone={o.avgVote == null ? 'neutral' : o.avgVote >= 3.5 ? 'good' : o.avgVote >= 3 ? 'warn' : 'bad'} />
+        <Kpi label="Open impediments" value={o.openImp} sub={o.openImp ? `on this quarter's epics · oldest ${o.oldestImp} days` : 'none on this quarter’s epics'} tone={o.oldestImp > 7 ? 'warn' : 'neutral'} />
+        <Kpi label="Team confidence" value={o.avgVote ? `${o.avgVote.toFixed(1)} / 5` : o.voteCount && !o.votesRevealed ? 'hidden' : '–'} sub={`${o.voteCount}/${state.teams.length} teams voted${o.voteCount && !o.votesRevealed ? ' · revealed by the facilitator in the session' : ' (fist of five)'}`} tone={o.avgVote == null ? 'neutral' : o.avgVote >= 3.5 ? 'good' : o.avgVote >= 3 ? 'warn' : 'bad'} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Panel title="Red flags — what needs a decision" className="xl:col-span-2">
           {o.flags.length === 0 ? <Empty>No red flags.</Empty> : (
             <table className="w-full text-sm">
-              <thead className="text-xs text-gray-600 text-left"><tr><th className="py-1">Item (highest severity first)</th><th>Why it needs a decision</th><th>Owner</th><th>Open (days)</th></tr></thead>
+              <thead className="text-xs text-gray-600 text-left"><tr><th className="py-1">Item (highest severity first)</th><th>Why it needs a decision</th><th>Owner</th><th>Since last change (days)</th></tr></thead>
               <tbody>{o.flags.map((f) => (
                 <tr key={f.key} className="border-t align-top">
-                  <td className="py-1.5 pr-2"><button className="text-left hover:underline font-medium" onClick={() => f.epicId && setOpenEpic(f.epicId)}>{f.texts[0].split(':')[0].split(' (')[0]}</button></td>
+                  <td className="py-1.5 pr-2"><button className="text-left hover:underline font-medium" onClick={() => f.epicId && setOpenEpic(f.epicId)}>{f.label}</button></td>
                   <td className="py-1.5 pr-2">
                     <div className="flex flex-wrap gap-1 mb-0.5">{f.kinds.map((k, i) => <span key={i} className={`text-xs px-1.5 py-0.5 rounded border ${f.severity >= 4 ? 'bg-red-50 text-red-800 border-red-200' : f.severity === 3 ? 'bg-orange-50 text-orange-800 border-orange-200' : 'bg-amber-50 text-amber-900 border-amber-200'}`}>▲ {k}</span>)}</div>
                     <ul className="text-xs text-gray-700">{f.texts.map((t, i) => <li key={i}>{t}</li>)}</ul>
@@ -72,7 +72,7 @@ export function OverviewView() {
                 <td className={`py-1.5 pr-2 whitespace-nowrap ${r.daysLeft != null && r.daysLeft < 90 ? 'text-red-700 font-medium' : ''}`}>{fmtDate(r.deadline)}{r.daysLeft != null && ` (${r.daysLeft}d)`}</td>
                 <td className="py-1.5 pr-2">{r.rank ?? 'unranked'}</td>
                 <td className="py-1.5 pr-2"><CommitmentPill value={r.commitment} size="xs" /></td>
-                <td className="py-1.5 pr-2">{r.belowCut ? <span className="text-red-700 font-medium">▲ below cut line</span> : <span className="text-emerald-700">✓ fits</span>}</td>
+                <td className="py-1.5 pr-2">{r.deadlineState === 'before_start' ? <span className="text-red-700 font-medium">▲ deadline before quarter start, not planned earlier</span> : r.belowCut ? <span className="text-red-700 font-medium">▲ below cut line</span> : <span className="text-emerald-700">✓ fits{r.deadlineState === 'earlier' ? ' (deadline in an earlier quarter where it is also planned)' : ''}</span>}</td>
                 <td className="py-1.5">{r.owner}</td>
               </tr>))}</tbody>
           </table>

@@ -126,7 +126,7 @@ const D = [
   [4, 4, 't-sec', 'q-27-1', 'Security review of self-service flows', 1, 2, 'accepted', '', 12],
   [5, 25, 't-clm', 'q-27-1', 'Claims intake API contract', 2, 3, 'accepted', '', 10],
   [6, 25, 't-sec', 'q-27-1', 'Mobile pen-test', 1, 2, 'needs_priority_call', 'Higher-ranked DORA work competes for the same engineers', 9],
-  [7, 11, 't-cld', 'q-27-1', 'Network connectivity for core migration wave 2', 4, 6, 'declined', 'Team at 160% load; DORA register is rank 5 and regulatory', 14],
+  [7, 11, 't-cld', 'q-27-1', 'Network connectivity for core migration wave 2', 4, 6, 'declined', 'Team over capacity; DORA register (rank 5, regulatory) comes first', 14],
   [8, 11, 't-sec', 'q-27-1', 'Access model for the new core', 2, 3, 'deferred', 'Possible from April', 14, 'q-27-2'],
   [9, 1, 't-sec', 'q-27-1', 'Fraud rules for instant payouts', 2, 3, 'accepted', '', 8],
   [10, 1, 't-cld', 'q-27-1', 'Scale payments cluster for payout peaks', 1, 2, 'proposed', '', 2],
@@ -154,7 +154,7 @@ const dependencies = D.map(([n, epicN, provider, quarterId, ask, effortLow, effo
 const votes = [
   { id: 'v1', teamId: 't-pay', quarterId: 'q-27-1', vote: 4, reason: '', votedAt: ago(1) },
   { id: 'v2', teamId: 't-clm', quarterId: 'q-27-1', vote: 2, reason: 'Two dependencies unanswered and capacity over 100%', votedAt: ago(1) },
-  { id: 'v3', teamId: 't-sec', quarterId: 'q-27-1', vote: 2, reason: 'Load is 150% of capacity', votedAt: ago(2) },
+  { id: 'v3', teamId: 't-sec', quarterId: 'q-27-1', vote: 2, reason: 'Load is above capacity and two asks are still open', votedAt: ago(2) },
 ];
 
 const discussions = [

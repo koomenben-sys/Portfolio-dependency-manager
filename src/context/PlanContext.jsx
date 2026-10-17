@@ -36,10 +36,15 @@ export function PlanProvider({ children, authUser }) {
     setQuarterId(preferred?.id ?? null);
   }, [state, quarterId]);
 
+  const [seenTick, setSeenTick] = useState(0);
   const actor = useMemo(() => {
-    if (DATA_SOURCE === 'supabase' && authUser) return authUser;
-    return PERSONAS.find((p) => p.id === actorId) || PERSONAS[0];
-  }, [actorId, authUser]);
+    const base = DATA_SOURCE === 'supabase' && authUser ? authUser : (PERSONAS.find((p) => p.id === actorId) || PERSONAS[0]);
+    let lastSeen = null;
+    try { lastSeen = localStorage.getItem(`kwartaalplan.lastSeen.${base.id}`); } catch { /* ignore */ }
+    return { ...base, lastSeen };
+  }, [actorId, authUser, seenTick]);
+  // Called when the user leaves My attention: everything shown is no longer "new".
+  const markAttentionSeen = useCallback(() => { try { localStorage.setItem(`kwartaalplan.lastSeen.${actor.id}`, new Date().toISOString()); } catch { /* ignore */ } setSeenTick((t) => t + 1); }, [actor.id]);
 
   const chooseActor = useCallback((id) => { setActorId(id); try { localStorage.setItem('kwartaalplan.actor', id); } catch { /* ignore */ } }, []);
 
@@ -59,8 +64,8 @@ export function PlanProvider({ children, authUser }) {
   const reset = useCallback(async () => { if (repo?.reset) setState(await repo.reset()); }, [repo]);
 
   const quarter = state?.quarters.find((q) => q.id === quarterId) || null;
-  const value = useMemo(() => ({ state, actor, chooseActor, personas: PERSONAS, quarter, quarterId, setQuarterId, run, reset, error, dataSource: DATA_SOURCE }),
-    [state, actor, chooseActor, quarter, quarterId, run, reset, error]);
+  const value = useMemo(() => ({ state, actor, chooseActor, personas: PERSONAS, quarter, quarterId, setQuarterId, run, reset, error, dataSource: DATA_SOURCE, markAttentionSeen }),
+    [state, actor, chooseActor, quarter, quarterId, run, reset, error, markAttentionSeen]);
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
 }

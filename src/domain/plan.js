@@ -10,6 +10,11 @@ export const daysSince = (iso, now = Date.now()) => (iso ? Math.floor((now - new
 export const daysUntil = (iso, now = Date.now()) => (iso ? Math.ceil((new Date(iso).getTime() - now) / DAY) : null);
 export const byId = (list) => new Map(list.map((x) => [x.id, x]));
 export const quarterOrdinal = (q) => q.year * 4 + q.q;
+// Calendar start of a quarter, honouring the organisation's fiscal-year start month (1 = January).
+export function quarterStart(q, fiscalStartMonth = 1) {
+  const m = (fiscalStartMonth - 1) + (q.q - 1) * 3;
+  return new Date(q.year + Math.floor(m / 12), m % 12, 1);
+}
 
 export function planFor(state, epicId, quarterId) {
   return state.plans.find((p) => p.epicId === epicId && p.quarterId === quarterId) || null;
@@ -160,10 +165,10 @@ export function readiness(state, quarterId) {
     if (open) reasons.push(`${open} unanswered ask${open > 1 ? 's' : ''}`);
     if (load.band === 'over') reasons.push(`Over capacity (${load.pct}%)`);
     const declined = state.dependencies.filter((d) => d.requesterTeamId === t.id && d.quarterId === quarterId && ['declined', 'needs_priority_call'].includes(d.response)
-      && !state.discussions.some((x) => x.depId === d.id && x.status === 'resolved')).length;
+      && !d.acknowledgedAt && !state.discussions.some((x) => x.depId === d.id && x.status === 'resolved')).length;
     if (declined) reasons.push(`${declined} declined / priority-call ask${declined > 1 ? 's' : ''} unresolved`);
     const epicIds = new Set(plans.map((p) => p.epicId));
-    const openDisc = state.discussions.filter((x) => x.quarterId === quarterId && x.status === 'open' && epicIds.has(x.epicId)).length;
+    const openDisc = state.discussions.filter((x) => x.quarterId === quarterId && x.status === 'open' && (epicIds.has(x.epicId) || x.teamId === t.id)).length;
     if (openDisc) reasons.push(`${openDisc} open discussion item${openDisc > 1 ? 's' : ''}`);
     const q = state.quarters.find((x) => x.id === quarterId);
     const vote = state.votes.find((v) => v.teamId === t.id && v.quarterId === quarterId);
@@ -188,10 +193,20 @@ export function overview(state, quarterId, now = Date.now()) {
   const regRisk = regulatory.filter((p) => ['at_risk', 'not_committed', 'discuss', 'draft'].includes(p.commitment) && p.commitment !== 'committed');
   const openAsks = state.dependencies.filter((d) => d.quarterId === quarterId && d.response === 'proposed');
   const oldestAsk = Math.max(0, ...openAsks.map((d) => daysSince(d.createdAt, now)));
-  const openImp = state.impediments.filter((i) => i.status === 'open');
+  const quarterEpicIds = new Set(plans.map((p) => p.epicId));
+  const openImp = state.impediments.filter((i) => i.status === 'open' && (!i.epicId || quarterEpicIds.has(i.epicId)));
   const oldestImp = Math.max(0, ...openImp.map((i) => daysSince(i.raisedAt, now)));
+  const q = state.quarters.find((x) => x.id === quarterId);
   const votes = state.votes.filter((v) => v.quarterId === quarterId);
-  const avgVote = votes.length ? votes.reduce((s, v) => s + v.vote, 0) / votes.length : null;
+  const votesRevealed = !!(q && (q.votesRevealed || PHASE_INDEX[q.phase] >= PHASE_INDEX.locked));
+  const avgVote = votes.length && votesRevealed ? votes.reduce((s, v) => s + v.vote, 0) / votes.length : null;
+  const qStart = q ? quarterStart(q, state.settings?.fiscalYearStartMonth || 1) : null;
+  const plannedEarlier = (epicId) => state.plans.some((p) => p.epicId === epicId && p.quarterId !== quarterId && state.quarters.find((x) => x.id === p.quarterId) && quarterOrdinal(state.quarters.find((x) => x.id === p.quarterId)) < quarterOrdinal(q));
+  const deadlineState = (e) => {
+    if (!e.regulatory || !e.regulatoryDeadline || !qStart) return 'ok';
+    if (new Date(e.regulatoryDeadline) < qStart) return plannedEarlier(e.id) ? 'earlier' : 'before_start';
+    return 'ok';
+  };
 
   // Theme coverage
   const themeRows = state.themes.map((th) => {
@@ -216,6 +231,10 @@ export function overview(state, quarterId, now = Date.now()) {
   }
   for (const p of regulatory) {
     const e = epics.get(p.epicId);
+    if (deadlineState(e) === 'before_start') {
+      flags.push({ key: `regdl-${p.id}`, severity: 5, kind: 'Deadline before quarter start', epicId: p.epicId,
+        text: `${e.refCode} ${e.title}: ${e.regulation || 'regulatory'} deadline ${e.regulatoryDeadline} is before this quarter starts and the epic is not planned earlier`, owner: e.ownerName, age: daysSince(p.updatedAt, now) });
+    }
     if (belowCutSet(state, e.teamId, quarterId).has(e.id)) {
       flags.push({ key: `regcut-${p.id}`, severity: 5, kind: 'Regulatory below cut line', epicId: p.epicId,
         text: `${e.refCode} ${e.title} does not fit in ${state.teams.find((t) => t.id === e.teamId)?.name}'s capacity`, owner: e.ownerName, age: daysSince(p.updatedAt, now) });
@@ -247,7 +266,7 @@ export function overview(state, quarterId, now = Date.now()) {
   for (const f of flags) {
     const key = f.epicId || f.key;
     const cur = merged.get(key);
-    if (!cur) merged.set(key, { ...f, kinds: [f.kind], texts: [f.text] });
+    if (!cur) merged.set(key, { ...f, kinds: [f.kind], texts: [f.text], label: f.epicId ? `${epics.get(f.epicId)?.refCode} ${epics.get(f.epicId)?.title}` : f.text });
     else { cur.kinds.push(f.kind); cur.texts.push(f.text); cur.severity = Math.max(cur.severity, f.severity); cur.age = Math.max(cur.age ?? 0, f.age ?? 0); }
   }
   const flagRows = [...merged.values()].sort((a, b) => b.severity - a.severity || (b.age ?? 0) - (a.age ?? 0));
@@ -257,7 +276,7 @@ export function overview(state, quarterId, now = Date.now()) {
     const e = epics.get(p.epicId);
     return { epicId: e.id, refCode: e.refCode, title: e.title, regulation: e.regulation || e.label || '', deadline: e.regulatoryDeadline,
       daysLeft: daysUntil(e.regulatoryDeadline, now), commitment: p.commitment, owner: e.ownerName, rank: p.rank,
-      belowCut: belowCutSet(state, e.teamId, quarterId).has(e.id), team: state.teams.find((t) => t.id === e.teamId)?.name };
+      belowCut: belowCutSet(state, e.teamId, quarterId).has(e.id), deadlineState: deadlineState(e), team: state.teams.find((t) => t.id === e.teamId)?.name };
   }).sort((a, b) => (a.daysLeft ?? 1e9) - (b.daysLeft ?? 1e9));
 
   const teamFreshness = state.teams.map((t) => {
@@ -270,7 +289,7 @@ export function overview(state, quarterId, now = Date.now()) {
 
   return {
     topN: topN.length, topCommitted, overTeams, loads, regulatoryCount: regulatory.length, regRisk,
-    openAsks: openAsks.length, oldestAsk, openImp: openImp.length, oldestImp, avgVote, voteCount: votes.length,
+    openAsks: openAsks.length, oldestAsk, openImp: openImp.length, oldestImp, avgVote, voteCount: votes.length, votesRevealed,
     themeRows, unaligned, flags: flagRows, regulatoryRows, teamFreshness, asOf,
   };
 }
@@ -283,15 +302,22 @@ export function attention(state, user, quarterId, now = Date.now()) {
   const myTeam = user?.teamId;
   if (!myTeam) return items;
   const lastSeen = user.lastSeen ? new Date(user.lastSeen).getTime() : 0;
-  for (const d of state.dependencies.filter((x) => x.providerTeamId === myTeam)) {
+  const inQ = (d) => !quarterId || d.quarterId === quarterId;
+  for (const d of state.dependencies.filter((x) => x.providerTeamId === myTeam && inQ(x))) {
     if (d.response === 'proposed') {
-      const age = daysSince(d.createdAt, now);
+      const age = daysSince(d.resentAt || d.createdAt, now);
       items.push({ key: `ask-${d.id}`, group: 'Asks waiting for your answer', depId: d.id, epicId: d.epicId, action: 'answer',
         text: `${d.ask} — asked by ${teams.get(d.requesterTeamId)?.name} (${d.refCode})`, meta: `${age} day${age === 1 ? '' : 's'} open` });
     }
   }
-  for (const d of state.dependencies.filter((x) => x.requesterTeamId === myTeam && x.response !== 'proposed')) {
-    items.push({ key: `ans-${d.id}`, group: 'Answers on your asks', depId: d.id, epicId: d.epicId,
+  const threshold = state.settings?.noResponseDays ?? NO_RESPONSE_DAYS;
+  for (const d of state.dependencies.filter((x) => x.requesterTeamId === myTeam && x.response === 'proposed' && inQ(x))) {
+    const age = daysSince(d.resentAt || d.createdAt, now);
+    items.push({ key: `open-${d.id}`, group: 'Your asks without an answer', depId: d.id, epicId: d.epicId,
+      text: `${d.ask} — asked of ${teams.get(d.providerTeamId)?.name} (${d.refCode})`, meta: age >= threshold ? `no response for ${age} days` : `${age} day${age === 1 ? '' : 's'} open` });
+  }
+  for (const d of state.dependencies.filter((x) => x.requesterTeamId === myTeam && x.response !== 'proposed' && inQ(x))) {
+    items.push({ key: `ans-${d.id}`, group: 'Answers on your asks', depId: d.id, epicId: d.epicId, action: ['declined', 'needs_priority_call', 'deferred'].includes(d.response) && !d.acknowledgedAt ? 'acknowledge' : undefined,
       text: `${teams.get(d.providerTeamId)?.name} answered "${RESPONSE_META[d.response].label}" on ${d.ask} (${d.refCode})${d.responseReason ? ` — ${d.responseReason}` : ''}`,
       meta: d.respondedAt && new Date(d.respondedAt).getTime() > lastSeen ? 'new' : `${daysSince(d.respondedAt, now)} days ago` });
   }

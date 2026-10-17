@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { usePlan } from '../context/PlanContext';
 import { canWriteTeam } from '../data/repository';
-import { teamLoad, rankedLoad, incomingEffort } from '../domain/capacity';
+import { teamLoad, rankedLoad, incomingEffort, simulateAsk } from '../domain/capacity';
 import { planFor, timingConflict, noResponseDays, daysSince, worstResponse, phaseAllows } from '../domain/plan';
 import { RESPONSE_META, quarterLabel } from '../domain/model';
 import { ResponsePill, Panel, btn, input, Modal, Empty, Pill, RankBadge, fmtDate } from '../components/plan/ui';
@@ -60,7 +60,9 @@ export function DependenciesView() {
                     </td>
                     <td className="py-2 pr-2">{state.teams.find((t) => t.id === d.requesterTeamId)?.name}<div className="text-xs text-gray-600">{d.requesterName || epic?.ownerName}</div></td>
                     <td className="py-2 pr-2 whitespace-nowrap">{d.effortLow}–{d.effortHigh} pw{d.response === 'partial' && <div className="text-xs text-lime-800">granted {eff.low}–{eff.high}</div>}</td>
-                    <td className="py-2 pr-2 text-xs whitespace-nowrap">{fit ? (fit.fits ? <span className="text-emerald-700">✓ fits (cum. {fit.cum})</span> : <span className="text-red-700">▲ below cut line (cum. {fit.cum})</span>) : d.response === 'proposed' ? <span className="text-gray-600">{load.remaining - d.effortHigh >= 0 ? `✓ would fit (${Math.round((load.remaining - d.effortHigh) * 10) / 10} left)` : `▲ would exceed by ${Math.round((d.effortHigh - load.remaining) * 10) / 10}`}</span> : '–'}</td>
+                    <td className="py-2 pr-2 text-xs">{fit ? (fit.fits ? <span className="text-emerald-700">✓ fits at rank {fit.rank ?? '–'} (cum. {fit.cum})</span> : <span className="text-red-700">▲ below cut line (cum. {fit.cum})</span>) : ['proposed', 'needs_priority_call'].includes(d.response) ? (() => { const sim = simulateAsk(state, d); return sim.fits
+                      ? <span className={sim.pushed.length ? 'text-amber-900' : 'text-emerald-700'}>{sim.pushed.length ? '!' : '✓'} would fit at rank {plan?.rank ?? '–'} (cum. {sim.cum}){sim.pushed.length > 0 && <>; pushes {sim.pushed.map((id) => state.epics.find((e) => e.id === id)?.refCode).join(', ')} below the cut line</>}</span>
+                      : <span className="text-red-700">▲ would land below the cut line (cum. {sim.cum} of {sim.available})</span>; })() : '–'}</td>
                     <td className="py-2 pr-2 whitespace-nowrap text-xs">{daysSince(d.createdAt)} days{nr && <div className="text-red-700 font-semibold">No response – {nr} days</div>}</td>
                     <td className="py-2 pr-2"><ResponsePill value={d.response} />{d.responseReason && <div className="text-xs text-gray-700 mt-1 max-w-[220px]">{d.responseReason}</div>}</td>
                     <td className="py-2">{mayAnswer && <button className={d.response === 'proposed' ? btn.primary : btn.secondary} aria-label={`${d.response === 'proposed' ? 'Answer' : 'Change answer'} ${d.refCode}`} onClick={() => setAnswering(d)}>{d.response === 'proposed' ? 'Answer' : 'Change answer'}</button>}</td>

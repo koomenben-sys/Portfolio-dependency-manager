@@ -95,6 +95,7 @@ export class MockRepository {
       const changed = ['commitment', 'rank', 'effortLow', 'effortHigh'].some((k) => plan[k] !== undefined && plan[k] !== existing[k]);
       if (changed) throw new ValidationError('The quarter is locked: a reason is required for changes');
     }
+    if (!existing && isLockedPhase(q.phase) && !reason.trim()) throw new ValidationError('The quarter is locked: a reason is required to add an epic');
     if (existing) {
       if (rankChanged) this._event(actor, 'rank_changed', 'plans', existing.id, q.id, reason, { rank: existing.rank }, { rank: plan.rank });
       if (plan.commitment !== undefined && plan.commitment !== existing.commitment) this._event(actor, 'commitment_changed', 'plans', existing.id, q.id, reason, { commitment: existing.commitment }, { commitment: plan.commitment });
@@ -157,6 +158,14 @@ export class MockRepository {
     }
     return this._persist();
   }
+  async acknowledgeDependency(actor, depId) {
+    const d = this.state.dependencies.find((x) => x.id === depId);
+    if (!d) throw new ValidationError('Unknown dependency');
+    if (!canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can acknowledge an answer');
+    d.acknowledgedAt = now();
+    this._event(actor, 'dependency_acknowledged', 'dependencies', d.id, d.quarterId, '', null, { response: d.response });
+    return this._persist();
+  }
   async updateDependency(actor, depId, patch) {
     const d = this.state.dependencies.find((x) => x.id === depId);
     if (!d) throw new ValidationError('Unknown dependency');
@@ -169,7 +178,7 @@ export class MockRepository {
     this._event(actor, 'dependency_edited', 'dependencies', d.id, d.quarterId, reason, { ask: d.ask, effortLow: d.effortLow, effortHigh: d.effortHigh }, { ask: next.ask, effortLow: next.effortLow, effortHigh: next.effortHigh });
     Object.assign(d, rest);
     // An answered ask whose scope changed goes back to the provider for a new answer.
-    if (effortChanged && d.response !== 'proposed') { d.response = 'proposed'; d.responseReason = ''; d.respondedAt = null; d.grantedLow = null; d.grantedHigh = null; }
+    if (effortChanged && d.response !== 'proposed') { d.response = 'proposed'; d.responseReason = ''; d.respondedAt = null; d.grantedLow = null; d.grantedHigh = null; d.resentAt = now(); }
     return this._persist();
   }
   async deleteDependency(actor, depId, reason = '') {
@@ -187,6 +196,7 @@ export class MockRepository {
     const from = PHASES.findIndex((p) => p.id === q.phase);
     const to = PHASES.findIndex((p) => p.id === phase);
     if (to < from && !reason.trim()) throw new ValidationError('Rewinding a phase requires a reason');
+    if (to > from + 1) throw new ValidationError(`Phases advance one step at a time (next: ${PHASES[from + 1].label})`);
     if (phase === 'locked' && this.state.settings.voteBlocksLock) {
       const low = this.state.votes.filter((v) => v.quarterId === quarterId && v.vote <= 2);
       if (low.length) throw new ValidationError(`${low.length} team(s) voted 2 or lower; resolve before locking (setting: low vote blocks lock)`);
@@ -201,7 +211,7 @@ export class MockRepository {
       if (q.baseline) this._event(actor, 'baseline_replaced', 'quarters', q.id, q.id, reason, { takenAt: q.baseline.takenAt }, null);
       q.baseline = buildBaseline(this.state, quarterId); q.lockedAt = now();
     }
-    if (phase === 'vote' && to < from) q.votesRevealed = false;
+    if (to < from && to <= PHASES.findIndex((p) => p.id === 'vote')) q.votesRevealed = false;
     this._event(actor, 'phase_changed', 'quarters', q.id, q.id, reason, { phase: q.phase }, { phase });
     q.phase = phase;
     return this._persist();
@@ -227,7 +237,7 @@ export class MockRepository {
   async raiseDiscussion(actor, item) {
     if (!isPlanner(actor)) throw new PermissionError('Viewers cannot raise discussion items');
     if (!item.reason?.trim()) throw new ValidationError('Say why this needs discussion');
-    this.state.discussions.push({ id: uid(), ownerName: actor.name, timeboxMin: 10, status: 'open', outcome: '', createdAt: now(), depId: null, epicId: null, ...item });
+    this.state.discussions.push({ id: uid(), ownerName: actor.name, timeboxMin: 10, status: 'open', outcome: '', createdAt: now(), depId: null, epicId: null, teamId: null, ...item });
     return this._persist();
   }
   async resolveDiscussion(actor, id, outcome) {

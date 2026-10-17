@@ -13,6 +13,12 @@ alter table dependencies add column if not exists needed_by      date;
 alter table dependencies add column if not exists requester_name text not null default '';
 alter table dependencies add column if not exists granted_low    numeric(5,1);
 alter table dependencies add column if not exists granted_high   numeric(5,1);
+alter table dependencies add column if not exists acknowledged_at timestamptz;
+alter table dependencies add column if not exists resent_at       timestamptz;
+alter table discussion_items add column if not exists team_id uuid;
+alter table discussion_items drop constraint if exists discussion_items_team_fk;
+alter table discussion_items add constraint discussion_items_team_fk foreign key (org_id, team_id) references teams(org_id, id) on delete set null (team_id);
+alter table discussion_items drop constraint if exists discussion_items_check;  -- allow cross-cutting items (no epic, no dependency)
 alter table dependencies drop constraint if exists dependencies_granted_chk;
 alter table dependencies add constraint dependencies_granted_chk
   check (response <> 'partial' or (granted_high is not null and granted_high >= coalesce(granted_low, 0) and granted_high <= effort_high));
@@ -69,3 +75,18 @@ begin
   perform set_config('app.reason', coalesce(_reason, ''), true);
   execute format('delete from %I where id = %L', _table, _id);
 end $$;
+
+-- Capacity formula aligned with the app (focus factor applies to absence as well):
+-- available = (headcount * weeks - absence) * focus * (1 - reserve%)
+create or replace view team_load with (security_invoker = true) as
+select c.org_id, c.team_id, c.quarter_id,
+       greatest(0, c.headcount * c.weeks - c.absence_weeks) * c.focus_factor * (1 - c.reserve_pct / 100.0) as available,
+       coalesce((select sum(p.effort_low)  from epic_plans p join epics e on e.org_id = p.org_id and e.id = p.epic_id
+                  where e.org_id = c.org_id and e.team_id = c.team_id and p.quarter_id = c.quarter_id and p.commitment <> 'not_committed'), 0) as own_low,
+       coalesce((select sum(p.effort_high) from epic_plans p join epics e on e.org_id = p.org_id and e.id = p.epic_id
+                  where e.org_id = c.org_id and e.team_id = c.team_id and p.quarter_id = c.quarter_id and p.commitment <> 'not_committed'), 0) as own_high,
+       coalesce((select sum(case when d.response = 'partial' then coalesce(d.granted_low, d.effort_low) else d.effort_low end) from dependencies d
+                  where d.org_id = c.org_id and d.provider_team_id = c.team_id and d.quarter_id = c.quarter_id and d.response in ('accepted','partial')), 0) as incoming_low,
+       coalesce((select sum(case when d.response = 'partial' then coalesce(d.granted_high, d.effort_high) else d.effort_high end) from dependencies d
+                  where d.org_id = c.org_id and d.provider_team_id = c.team_id and d.quarter_id = c.quarter_id and d.response in ('accepted','partial')), 0) as incoming_high
+from team_capacity c;

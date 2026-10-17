@@ -269,6 +269,22 @@ Reviewers: director, product owner, engineering manager (platform team), agile c
 | Asks not tied to provider work items (PO) | follow-up: optional `provider_external_id` on dependencies and ADO child-item creation via Edge Function |
 | Skill split / multi-pool capacity (EM) | rejected for MVP: one pool per planning unit keeps the model explainable; a "sub-team" planning unit is the workaround |
 
+### Validation round 3 (Fable role agents on the iterated build) and what changed
+
+| Finding (who) | Change |
+|---|---|
+| My attention ignored the quarter and `lastSeen` was never written; own open asks missing (PO) | scoped to the selected quarter; `lastSeen` persisted per user when leaving the view; new group "Your asks without an answer" |
+| Re-sent asks kept the old age; `askedOfUs` always 0; raw JSON in history (PO) | `resentAt`; removed the dead badge and added a team filter ("my team + teams we ask / that ask us"); readable history lines and "answered on/by" per ask |
+| Open asks judged against the aggregate remaining while answered asks used the ranked cut: two models on one screen (EM) | `simulateAsk()` inserts the ask at the requester's rank and reports fit, cumulative load and which own epics it pushes below the cut line; used in the intake queue and in the answer dialog (per chosen answer, incl. partial) |
+| Absence subtracted after the focus factor; priority-call asks invisible in "if all accepted" (EM) | formula = (headcount × weeks − absence) × focus × (1 − reserve); pending = proposed + needs priority call; SQL view aligned (005) |
+| Hidden votes leaked via Overview average and Plan of record (director, coach) | both hide until revealed or locked |
+| Regulatory deadline before the quarter start shown as "fits" (director, EM) | new state "deadline before quarter start, not planned earlier" (severity 5 flag + register column), honouring the fiscal-year start month |
+| Impediments KPI mixed quarters; "Open (days)" misleading; flag label from text splitting (director) | scoped to this quarter's epics; column renamed "Since last change"; label = epic ref + title |
+| Decline dead-end in readiness; phases could be skipped; Supabase adapter lacked session rules (coach) | requester can **Acknowledge** a decline / deferral / priority call (clears readiness); phases advance one step at a time in both adapters; Supabase `setPhase`/`castVote` carry override, vote-blocks-lock, rewind reason, phase and own-team checks |
+| New epic in a locked quarter needed no reason; low-vote queue item not tied to a team; reveal not reset on rewind (coach) | all three fixed (`teamId` on discussion items, reset when rewinding to Vote or earlier) |
+
+Rejected / deferred from round 3: regulation as a configured list with 2nd-line owner and audit export (follow-up, section 17.4); per-skill capacity pools (D23); provider-side work-item link (follow-up).
+
 ### Owner questions during the build
 - "Which agent is the coordinator?" - this session; the role agents are one-shot reviewers.
 - Model: switched to Fable 5.1 mid-session by the owner.
