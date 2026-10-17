@@ -1,161 +1,128 @@
 import React, { useState } from 'react';
+import { X, Check } from 'lucide-react';
 import { usePlan } from '../../context/PlanContext';
 import { useT, LANGUAGES } from '../../i18n';
 import { quarterLabel } from '../../domain/model';
-import { btn, input, Field, ErrorNote } from './ui';
+import { cls, ErrorLine } from './core';
 
-// Guided setup for a new organisation (docs/design.md section 17). Shown to admins while
-// settings.setupComplete is false. Every step writes through the repository, so leaving halfway keeps progress.
-const STEPS = ['Welcome', 'Teams', 'Themes', 'Quarter', 'Capacity', 'Epics', 'Done'];
+// Three steps to a first ranked list (docs/design.md section 19, D32): organisation, teams, quarter + first
+// epics. Every step writes through the repository, so leaving halfway keeps progress. Themes, capacity and
+// fiscal-year settings live in Instellingen / the extended modules, not here.
+const STEPS = ['Organisation', 'Teams', 'Quarter and epics'];
 
 export function OnboardingWizard({ onDone }) {
   const t = useT();
   const { state, run, reset, dataSource } = usePlan();
   const [step, setStep] = useState(0);
   const [err, setErr] = useState(null);
-  const s = state.settings;
-  const next = () => setStep((x) => Math.min(STEPS.length - 1, x + 1));
-  const prev = () => setStep((x) => Math.max(0, x - 1));
-  const act = async (m, ...a) => { const r = await run(m, ...a); setErr(r.ok ? null : r.error); return r.ok; };
+  const act = async (m, ...a) => { const r = await run(m, ...a); setErr(r.ok ? null : r.error); return r; };
+  const finish = async (target) => { const r = await act('updateSettings', { setupComplete: true }); if (r.ok) onDone(target); };
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <ol className="flex flex-wrap gap-1 text-xs mb-4" aria-label={t('Setup steps')}>
-        {STEPS.map((label, i) => <li key={label} className={`px-2 py-1 rounded ${i === step ? 'bg-indigo-600 text-white' : i < step ? 'bg-indigo-50 text-indigo-800' : 'bg-gray-100 text-gray-600'}`}>{i < step ? '✓ ' : ''}{i + 1}. {t(label)}</li>)}
+    <div className="max-w-2xl mx-auto mt-6">
+      <ol className="flex items-center gap-2 text-caption mb-5" aria-label={t('Setup steps')}>
+        {STEPS.map((label, i) => (
+          <li key={label} className="flex items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 h-7 px-2 rounded-full tnum ${i === step ? 'bg-accent text-accent-fg font-medium' : i < step ? 'bg-accent-50 text-accent-700' : 'bg-surface-2 text-muted'}`}>{i < step ? <Check size={12} aria-hidden="true" /> : <span>{i + 1}</span>}{t(label)}</span>
+            {i < STEPS.length - 1 && <span className="w-6 border-t border-border" aria-hidden="true" />}
+          </li>
+        ))}
       </ol>
-      <section className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 space-y-4">
-        {step === 0 && <Welcome />}
-        {step === 1 && <ListStep title={t('Which teams plan their quarter here?')} hint={t('One per line. A team is anything that owns epics, has capacity and answers asks from others: a squad, a department, a platform team, an external supplier.')} items={state.teams} onAdd={(name) => act('upsertTeam', { name })} onRemove={(id) => act('deleteTeam', id)} placeholder={t('e.g. Payments')} />}
-        {step === 2 && <ListStep title={t('Which strategic themes does leadership steer on?')} hint={t('Three to seven themes work best. Epics without a theme are shown as "unaligned", which is useful information in itself.')} items={state.themes} onAdd={(name) => act('upsertTheme', { name })} onRemove={(id) => act('deleteTheme', id)} placeholder={t('e.g. Customer experience')} />}
-        {step === 3 && <QuarterStep />}
-        {step === 4 && <CapacityStep />}
-        {step === 5 && <EpicsStep />}
-        {step === 6 && <DoneStep />}
-        <ErrorNote error={err} />
-        <div className="flex items-center justify-between pt-2 border-t">
-          <div>
-            {dataSource === 'mock' && <button className={btn.ghost} onClick={async () => { if (confirm(t('Replace everything with the demo organisation?'))) { await reset(); onDone(); } }}>{t('Load the demo organisation instead')}</button>}
-          </div>
+      <section className={`${cls.card} p-6 space-y-5`}>
+        {step === 0 && <OrgStep state={state} act={act} t={t} />}
+        {step === 1 && <TeamsStep state={state} act={act} t={t} />}
+        {step === 2 && <QuarterStep state={state} act={act} t={t} setErr={setErr} finish={finish} />}
+        <ErrorLine error={err} />
+        <div className="flex items-center justify-between pt-4 border-t border-border">
+          <div>{dataSource === 'mock' && <button className={cls.quiet} onClick={async () => { if (confirm(t('Replace everything with the demo organisation?'))) { await reset(); onDone('prioriteren'); } }}>{t('Load the demo organisation instead')}</button>}</div>
           <div className="flex gap-2">
-            {step > 0 && <button className={btn.secondary} onClick={prev}>{t('Back')}</button>}
-            {step < STEPS.length - 1 && <button className={btn.primary} onClick={next} disabled={(step === 1 && state.teams.length < 2) || (step === 3 && state.quarters.length === 0)}>{t('Next')}</button>}
-            {step === STEPS.length - 1 && <button className={btn.primary} onClick={async () => { if (await act('updateSettings', { setupComplete: true })) onDone(); }}>{t('Open the board')}</button>}
+            {step > 0 && <button className={cls.secondary} onClick={() => setStep(step - 1)}>{t('Back')}</button>}
+            {step < 2 && <button className={cls.primary} onClick={() => setStep(step + 1)} disabled={step === 1 && state.teams.length < 2}>{t('Next')}</button>}
           </div>
         </div>
       </section>
     </div>
   );
-
-  function Welcome() {
-    const [form, setForm] = useState({ language: s.language || 'nl', orgName: s.orgName || '', unitLabel: s.unitLabel || 'team', capacityUnit: s.capacityUnit || 'person-weeks', fiscalYearStartMonth: s.fiscalYearStartMonth || 1 });
-    const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.value });
-    const save = async (patch) => act('updateSettings', patch);
-    return (
-      <div className="space-y-4">
-        <h2 className="text-xl font-bold">{t('Set up your organisation')}</h2>
-        <p className="text-sm text-gray-700">{t('Seven short steps: profile, teams, strategic themes, the first quarter, capacity, epics. You can change everything later in Settings.')}</p>
-        <div className="grid grid-cols-2 gap-3">
-          <Field l={t('Language')}><select className={input} value={form.language} onChange={(e) => { set('language')(e); save({ language: e.target.value }); }}>{LANGUAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-          <Field l={t('Organisation name')}><input className={input} value={form.orgName} onChange={set('orgName')} onBlur={() => save({ orgName: form.orgName })} placeholder={t('e.g. Gemeente Rivierenland')} /></Field>
-          <Field l={t('What do you call a planning unit?')}><select className={input} value={form.unitLabel} onChange={(e) => { set('unitLabel')(e); save({ unitLabel: e.target.value }); }}>{['team', 'squad', 'product team', 'department', 'tribe'].map((u) => <option key={u} value={u}>{t(u)}</option>)}</select></Field>
-          <Field l={t('Capacity unit')}><select className={input} value={form.capacityUnit} onChange={(e) => { set('capacityUnit')(e); save({ capacityUnit: e.target.value }); }}><option value="person-weeks">{t('person-weeks')}</option><option value="person-days">{t('person-days (shown as weeks ÷ 5)')}</option></select></Field>
-          <Field l={t('Fiscal year starts in month')}><input type="number" min="1" max="12" className={input} value={form.fiscalYearStartMonth} onChange={set('fiscalYearStartMonth')} onBlur={() => save({ fiscalYearStartMonth: form.fiscalYearStartMonth })} /></Field>
-        </div>
-      </div>
-    );
-  }
-
-  function QuarterStep() {
-    const now = new Date(); const curQ = Math.floor(now.getMonth() / 3) + 1;
-    const nextQ = curQ === 4 ? { year: now.getFullYear() + 1, q: 1 } : { year: now.getFullYear(), q: curQ + 1 };
-    const [year, setYear] = useState(nextQ.year); const [q, setQ] = useState(nextQ.q);
-    return (
-      <div className="space-y-3">
-        <h2 className="text-xl font-bold">{t('Which quarter are you planning?')}</h2>
-        <p className="text-sm text-gray-700">{t('Usually the next quarter. The current quarter can be added later as the "active" one for check-ins.')}</p>
-        <div className="flex items-end gap-2">
-          <Field l={t('Year')}><input type="number" className={`${input} !w-24`} value={year} onChange={(e) => setYear(Number(e.target.value))} /></Field>
-          <Field l="Q"><select className={`${input} !w-16`} value={q} onChange={(e) => setQ(Number(e.target.value))}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}</select></Field>
-          <button className={btn.secondary} onClick={() => act('upsertQuarter', { year, q })}>{t('Add quarter')}</button>
-        </div>
-        <ul className="text-sm">{state.quarters.map((x) => <li key={x.id}>✓ {quarterLabel(x)} — {t(x.phase)}</li>)}</ul>
-      </div>
-    );
-  }
-
-  function CapacityStep() {
-    const planning = state.quarters.find((x) => !['closed', 'active'].includes(x.phase)) || state.quarters[0];
-    const d = s.capacityDefaults || { weeks: 13, focusFactor: 0.65, reservePct: 20 };
-    const [rows, setRows] = useState(() => Object.fromEntries(state.teams.map((tm) => { const c = state.capacity.find((x) => x.teamId === tm.id && x.quarterId === planning?.id); return [tm.id, { headcount: c?.headcount ?? '', absenceWeeks: c?.absenceWeeks ?? 0 }]; })));
-    const [defaults, setDefaults] = useState(d);
-    if (!planning) return <p className="text-sm">{t('Add a quarter first.')}</p>;
-    return (
-      <div className="space-y-3">
-        <h2 className="text-xl font-bold">{t('How much capacity does each team have in {q}?', { q: quarterLabel(planning) })}</h2>
-        <p className="text-sm text-gray-700">{t('Enter headcount and planned absence (team total, never per person). Available capacity = (headcount × weeks − absence) × focus factor × (1 − reserve). Teams can refine their own assumptions on the board.')}</p>
-        <div className="grid grid-cols-3 gap-3 max-w-md">
-          <Field l={t('Weeks per quarter')}><input type="number" className={input} value={defaults.weeks} onChange={(e) => setDefaults({ ...defaults, weeks: Number(e.target.value) })} /></Field>
-          <Field l={t('Focus factor')}><input type="number" step="0.05" className={input} value={defaults.focusFactor} onChange={(e) => setDefaults({ ...defaults, focusFactor: Number(e.target.value) })} /></Field>
-          <Field l={t('Reserve % (run / on-call)')}><input type="number" className={input} value={defaults.reservePct} onChange={(e) => setDefaults({ ...defaults, reservePct: Number(e.target.value) })} /></Field>
-        </div>
-        <table className="text-sm"><thead className="text-xs text-gray-600 text-left"><tr><th className="pr-3 py-1">{t('Team')}</th><th className="pr-3">{t('Headcount')}</th><th>{t('Absence weeks (team total)')}</th></tr></thead>
-          <tbody>{state.teams.map((tm) => <tr key={tm.id}><td className="pr-3 py-1">{tm.name}</td>
-            <td className="pr-3"><input type="number" step="0.5" aria-label={`${t('Headcount')} ${tm.name}`} className={`${input} !w-24`} value={rows[tm.id]?.headcount ?? ''} onChange={(e) => setRows({ ...rows, [tm.id]: { ...rows[tm.id], headcount: e.target.value } })} /></td>
-            <td><input type="number" step="0.5" aria-label={`${t('Absence weeks')} ${tm.name}`} className={`${input} !w-24`} value={rows[tm.id]?.absenceWeeks ?? 0} onChange={(e) => setRows({ ...rows, [tm.id]: { ...rows[tm.id], absenceWeeks: e.target.value } })} /></td></tr>)}</tbody></table>
-        <button className={btn.secondary} onClick={async () => {
-          await act('updateSettings', { capacityDefaults: defaults });
-          for (const tm of state.teams) { const r = rows[tm.id]; if (r?.headcount === '' || r?.headcount == null) continue;
-            if (!await act('upsertCapacity', { teamId: tm.id, quarterId: planning.id, headcount: Number(r.headcount), absenceWeeks: Number(r.absenceWeeks || 0), weeks: defaults.weeks, focusFactor: defaults.focusFactor, reservePct: defaults.reservePct })) return; }
-        }}>{t('Save capacity')}</button>
-        <p className="text-xs text-gray-600">{t('{n} of {total} teams have capacity for this quarter.', { n: state.teams.filter((tm) => state.capacity.some((c) => c.teamId === tm.id && c.quarterId === planning.id && c.headcount > 0)).length, total: state.teams.length })}</p>
-      </div>
-    );
-  }
-
-  function EpicsStep() {
-    return (
-      <div className="space-y-3">
-        <h2 className="text-xl font-bold">{t('Where do your epics come from?')}</h2>
-        <ul className="text-sm space-y-2 list-disc ml-5">
-          <li>{t('Type them in on the Board (per team, "+ Add epic"). Give each a strategic rank from the top and a low–high effort estimate.')}</li>
-          <li>{t('Import them read-only from Azure DevOps in Settings › Import (demo data available; the real connection runs server-side). Planning fields stay in Kwartaalplan.')}</li>
-          <li>{t('Loose epics are fine: a program or portfolio label is only a filter.')}</li>
-        </ul>
-        <p className="text-sm text-gray-700">{t('Invite people as planners per team and give a few people "can rank" (strategic priority). In demo mode the roles are the personas in "Viewing as"; with a database, memberships drive this.')}</p>
-      </div>
-    );
-  }
-
-  function DoneStep() {
-    return (
-      <div className="space-y-3">
-        <h2 className="text-xl font-bold">{t('Ready for the first session')}</h2>
-        <ol className="text-sm list-decimal ml-5 space-y-1">
-          <li>{t('Prep: teams enter epics and estimates; leadership sets strategic ranks and themes.')}</li>
-          <li>{t('Draft and Negotiate: teams send asks to other teams; providers answer from the intake queue.')}</li>
-          <li>{t('Review: the cut line shows what does not fit; the discussion queue is the live agenda.')}</li>
-          <li>{t('Vote and Lock: a hidden confidence vote, then a locked baseline. Everything after that carries a reason.')}</li>
-          <li>{t('Active: light check-ins and impediments; directors read the Overview.')}</li>
-        </ol>
-        <p className="text-sm text-gray-700">{t('The facilitator drives the phases from the Session screen. Use "Demo tour" in the header to see each role\'s view.')}</p>
-      </div>
-    );
-  }
 }
 
-function ListStep({ title, hint, items, onAdd, onRemove, placeholder }) {
-  const t = useT();
-  const [text, setText] = useState('');
+function OrgStep({ state, act, t }) {
+  const s = state.settings;
   return (
-    <div className="space-y-3">
-      <h2 className="text-xl font-bold">{title}</h2>
-      <p className="text-sm text-gray-700">{hint}</p>
-      <div className="flex gap-2 items-start">
-        <textarea className={input} rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} />
-        <button className={btn.secondary} onClick={async () => { for (const name of text.split('\n').map((x) => x.trim()).filter(Boolean)) { if (!await onAdd(name)) return; } setText(''); }}>{t('Add')}</button>
+    <div className="space-y-4">
+      <h1 className="text-title">{t('Your organisation')}</h1>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block"><span className={cls.label}>{t('Name')}</span><input className={cls.input} defaultValue={s.orgName || ''} placeholder={t('e.g. Gemeente Rivierenland')} onBlur={(e) => e.target.value !== (s.orgName || '') && act('updateSettings', { orgName: e.target.value })} /></label>
+        <label className="block"><span className={cls.label}>{t('Language')}</span><select className={cls.input} value={s.language || 'nl'} onChange={(e) => act('updateSettings', { language: e.target.value })}>{LANGUAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
       </div>
-      <ul className="flex flex-wrap gap-2 text-sm">{items.map((it) => <li key={it.id} className="bg-gray-100 rounded px-2 py-1 flex items-center gap-2">{it.name}<button className="text-gray-500 hover:text-red-700" aria-label={`${t('Remove')} ${it.name}`} onClick={() => onRemove(it.id)}>×</button></li>)}</ul>
-      {items.length === 0 && <p className="text-xs text-gray-600">{t('Nothing added yet.')}</p>}
+    </div>
+  );
+}
+
+function TeamsStep({ state, act, t }) {
+  const [text, setText] = useState('');
+  const add = async () => { for (const name of text.split('\n').map((x) => x.trim()).filter(Boolean)) { const r = await act('upsertTeam', { name }); if (!r.ok) return; } setText(''); };
+  return (
+    <div className="space-y-4">
+      <h1 className="text-title">{t('Which teams plan here?')}</h1>
+      <div className="flex gap-2 items-start">
+        <textarea className={cls.textarea} rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('One team per line')} aria-label={t('Teams')} />
+        <button className={cls.secondary} onClick={add} disabled={!text.trim()}>{t('Add')}</button>
+      </div>
+      <ul className="flex flex-wrap gap-2">{state.teams.map((x) => <li key={x.id} className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full bg-surface-2 text-label">{x.name}<button className={`${cls.icon} !w-6 !h-6`} aria-label={`${t('Remove')} ${x.name}`} onClick={() => act('deleteTeam', x.id)}><X size={12} /></button></li>)}</ul>
+      {state.teams.length < 2 && <p className="text-caption text-muted">{t('At least two teams.')}</p>}
+    </div>
+  );
+}
+
+function QuarterStep({ state, act, t, setErr, finish }) {
+  const now = new Date(); const curQ = Math.floor(now.getMonth() / 3) + 1;
+  const nextQ = curQ === 4 ? { year: now.getFullYear() + 1, q: 1 } : { year: now.getFullYear(), q: curQ + 1 };
+  const existing = state.quarters.find((x) => !['closed', 'active'].includes(x.phase));
+  const [year, setYear] = useState(existing?.year ?? nextQ.year);
+  const [q, setQ] = useState(existing?.q ?? nextQ.q);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const teamByName = new Map(state.teams.map((x) => [x.name.toLowerCase(), x.id]));
+
+  const go = async () => {
+    setBusy(true);
+    try {
+      let quarter = state.quarters.find((x) => x.year === Number(year) && x.q === Number(q));
+      if (!quarter) {
+        const r = await act('upsertQuarter', { year: Number(year), q: Number(q) }); if (!r.ok) return;
+        quarter = r.result.quarters.find((x) => x.year === Number(year) && x.q === Number(q));
+      }
+      const lines = text.split('\n').map((x) => x.trim()).filter(Boolean);
+      const parsed = lines.map((line) => { const m = line.match(/^(.+?)\s*:\s*(.+)$/); return m ? { team: m[1].trim(), title: m[2].trim() } : { team: null, title: line }; });
+      const unknown = parsed.find((p) => !p.team || !teamByName.has(p.team.toLowerCase()));
+      if (unknown) { setErr(t('Unknown team in "{line}". Use "Team: title".', { line: unknown.team ? `${unknown.team}: ${unknown.title}` : unknown.title })); return; }
+      const planIds = [];
+      for (const p of parsed) {
+        const r = await act('createEpic', { teamId: teamByName.get(p.team.toLowerCase()), title: p.title }); if (!r.ok) return;
+        const r2 = await act('upsertPlan', { epicId: r.result.id, quarterId: quarter.id, commitment: 'draft', effortLow: 0, effortHigh: 0 }); if (!r2.ok) return;
+        const plan = r2.result.plans.find((x) => x.epicId === r.result.id && x.quarterId === quarter.id); if (plan) planIds.push(plan.id);
+      }
+      if (planIds.length) { const r = await act('reorderPlans', quarter.id, planIds, t('First entry')); if (!r.ok) return; }
+      await finish('prioriteren');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <h1 className="text-title">{t('Quarter and first epics')}</h1>
+      <div className="flex items-end gap-2">
+        <label className="block"><span className={cls.label}>{t('Year')}</span><input type="number" className={`${cls.input} !w-24 tnum`} value={year} onChange={(e) => setYear(e.target.value)} /></label>
+        <label className="block"><span className={cls.label}>Q</span><select className={`${cls.input} !w-16`} value={q} onChange={(e) => setQ(Number(e.target.value))}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+        {existing && <span className="text-caption text-muted pb-2">{t('Existing: {q}', { q: quarterLabel(existing) })}</span>}
+      </div>
+      <label className="block"><span className={cls.label}>{t('First epics')}</span>
+        <textarea className={`${cls.textarea} font-mono text-label`} rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder={`${state.teams[0]?.name || 'Team'}: ${t('Example epic')}\n${state.teams[1]?.name || 'Team'}: …`} />
+      </label>
+      <p className="text-caption text-muted">{t('One per line, "Team: title".')}</p>
+      <div className="flex items-center justify-between">
+        <button className={cls.quiet} onClick={() => finish('instellingen')}>{t('Import from Azure DevOps (demo)')}</button>
+        <button className={cls.primary} onClick={go} disabled={busy}>{t('Go to Prioritise')}</button>
+      </div>
     </div>
   );
 }

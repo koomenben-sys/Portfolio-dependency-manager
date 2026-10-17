@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canWriteTeam } from '../data/repository';
@@ -8,6 +8,7 @@ import { useT } from '../i18n';
 import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, EmptyLine, ViewHeader, ErrorLine } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
+import { useTourNudge } from '../components/plan/TourPanel';
 
 // Screen 2 — Afhankelijkheden, per team like the Feb version (docs/design.md section 19, D26/D29/D31).
 // "Wij vragen": our epics in rank order with their asks and an inline "+ Verzoek".
@@ -19,6 +20,7 @@ export function DependenciesView() {
   const [teamId, setTeamId] = useState(firstTeam);
   useEffect(() => { setTeamId(actor.teamId || state.teams[0]?.id || ''); }, [actor.id]);
   const [tab, setTab] = useState('outgoing');
+  useTourNudge(useCallback((d) => { if (d.tab) setTab(d.tab); }, []));
   const [openEpic, setOpenEpic] = useState(null);
   const [err, setErr] = useState(null);
   if (!quarter) return <NoQuarter />;

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ChevronDown, Table2, ArrowRight } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { ASK_META, needsTalk } from '../domain/model';
@@ -7,6 +7,7 @@ import { useT } from '../i18n';
 import { cls, StatusChip, AskIcon, RankNo, toneClass, EmptyLine, ViewHeader } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
+import { useTourNudge } from '../components/plan/TourPanel';
 
 // Screen 3 — Afstemmen (docs/design.md section 19, D26): four counts, the "Te bespreken" pairs sorted by the
 // highest-ranked epic involved (the agenda of the alignment meeting) and an optional team x team matrix.
@@ -21,6 +22,7 @@ export function AlignView() {
   const [pairFocus, setPairFocus] = useState(null); // { req, prov } from the matrix
   const [showMatrix, setShowMatrix] = useState(false);
   const [openEpic, setOpenEpic] = useState(null);
+  useTourNudge(useCallback((d) => { if (d.matrix != null) setShowMatrix(!!d.matrix); }, []));
   const epics = useMemo(() => byId(state.epics), [state.epics]);
   const teams = useMemo(() => byId(state.teams), [state.teams]);
   if (!quarter) return <NoQuarter />;
