@@ -322,9 +322,23 @@ Differences that remain between mock mode and Supabase mode (by design or accept
 - Each command re-reads the whole state after the write (one request per table); mock mode is in-memory. Screens refresh every 30 s in Supabase mode; there is no realtime (follow-up).
 - Settings: `staleDays` and `voteBlocksLock` are columns, the rest of the profile is a jsonb document; the mock keeps one object.
 - `members` comes from `member_directory` (006); without 006 a non-admin sees only their own row and history falls back to "former member" for other actors.
-- Reload signs the user out (behaviour inherited from the Feb auth shell, `AuthContext`).
+- Reload keeps the session (the Feb-era sign-out-on-reload was removed with the auth-lock fix).
 
-Live walk-through (to be filled in after the owner has run the migrations): see the table at the end of this section.
+Live walk-through (2026-10-17, owner's project, migrations 001-006 run by the owner, signed in as admin):
+
+| Area | Result |
+|---|---|
+| Auth | **Blocker found and fixed**: every request after the first token refresh hung because `AuthContext` awaited Supabase calls inside `onAuthStateChange` (supabase-js holds its auth lock while the callback runs; `navigator.locks.query()` showed `lock:sb-…-auth-token` held forever). The callback now defers its work to the next tick, ignores `TOKEN_REFRESHED`, reads the role from `memberships` only (`user_roles` was dropped by 001) and no longer signs the user out on reload (that workaround existed for this very hang). Reload keeps the session. |
+| Setup | teams, themes, quarters (duplicate → "Quarter exists"), organisation profile (`org_settings.profile` + `organisations.name`), capacity incl. change event: all ok; display name from 006 shown in the header. |
+| Epics / plans | create (EP-0001…), validation, partial updates, `plan_added` / `effort_changed` / `commitment_changed` / `rank_changed` events; rank without reason rejected, rank with reason through `update_with_reason`: ok. |
+| Dependencies | add (requester team and contact from the epic), self-dependency and zero-effort rejected, answers in Prep rejected by phase rule, decline/defer/partial validations, partial granted effort, priority call creates the discussion item, defer + acknowledge, scope edit resets to Proposed with `resentAt`, delete with reason via `delete_with_reason`: ok. |
+| Session | one-step phase rule, votes only in Vote, reason at ≤3, hidden until reveal, cross-cutting discussion item, resolve needs outcome, lock blocked until override reason, baseline stored (plans/deps/capacity), locked-quarter rules for plan / removal / ask / capacity, rewind needs reason and hides votes, vote-blocks-lock setting, re-lock takes a fresh baseline with `baseline_replaced`: ok. |
+| In-quarter | check-in with author name, impediment + risk with ROAM, resolve sets ROAM to resolved, `IMP-0001…`: ok. |
+| Import | mock ADO: 6 created, 2 suggestions; re-import updates title/state and keeps rank/effort/commitment; title edits on imported epics ignored (D20): ok. |
+| Deletes | `deleteTeam` with epics refused; theme delete nulls `themeId`; epic delete cascades and keeps events: ok. |
+| Screens | Overview, Board, Dependencies, Session, In-quarter, My attention, Settings render the live data; polling picks up changes within 30 s. |
+| Not tested live | planner / viewer accounts (only the owner's admin account exists): RLS for non-admins is desk-checked and mirrored in JS but not exercised against the database — invite a second user to verify (follow-up, section 17.4). A write through the UI forms was not repeated separately; the forms call the same `run()` path. |
+
 
 ### Owner questions during the build
 - "Which agent is the coordinator?" - this session; the role agents are one-shot reviewers.
