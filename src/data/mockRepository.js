@@ -1,6 +1,6 @@
 // In-memory + localStorage implementation of the repository contract (docs/design.md D12, AC A1-A5).
 import { seedState } from './seed';
-import { buildBaseline } from '../domain/plan';
+import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
 import { PHASES, isLockedPhase } from '../domain/model';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner } from './repository';
 
@@ -42,6 +42,12 @@ export class MockRepository {
     this.state.events.push({ id: uid(), at: now(), actorId: actor?.id, actorName: actor?.name, action, entity, entityId, quarterId, reason: reason || '', before, after });
   }
   _quarter(id) { const q = this.state.quarters.find((x) => x.id === id); if (!q) throw new ValidationError('Unknown quarter'); return q; }
+  _guardPhase(quarterId, reason, what) {
+    const q = this._quarter(quarterId);
+    if (q.phase === 'closed') throw new ValidationError('Quarter is closed');
+    if (isLockedPhase(q.phase) && !String(reason || '').trim()) throw new ValidationError(`The quarter is locked: a reason is required to ${what}`);
+    return q;
+  }
   _epic(id) { const e = this.state.epics.find((x) => x.id === id); if (!e) throw new ValidationError('Unknown epic'); return e; }
 
   // ── epics and plans ────────────────────────────────────────────────────────
@@ -104,13 +110,14 @@ export class MockRepository {
     }
     return this._persist();
   }
-  async removePlan(actor, planId) {
+  async removePlan(actor, planId, reason = '') {
     const p = this.state.plans.find((x) => x.id === planId);
     if (!p) return this._persist();
     const e = this._epic(p.epicId);
     if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Not your team');
+    this._guardPhase(p.quarterId, reason, 'remove an epic from the quarter');
     this.state.plans = this.state.plans.filter((x) => x.id !== planId);
-    this._event(actor, 'plan_removed', 'plans', planId, p.quarterId, '', { epicId: p.epicId }, null);
+    this._event(actor, 'plan_removed', 'plans', planId, p.quarterId, reason, { epicId: p.epicId }, null);
     return this._persist();
   }
 
@@ -120,13 +127,16 @@ export class MockRepository {
     if (!canWriteTeam(actor, epic.teamId)) throw new PermissionError('Only the requesting team can add an ask');
     if (dep.providerTeamId === epic.teamId) throw new ValidationError('A team cannot depend on itself');
     if (!dep.ask?.trim()) throw new ValidationError('Describe the ask');
-    this._quarter(dep.quarterId);
-    const created = { id: uid(), refCode: this._ref('dependency'), requesterTeamId: epic.teamId, ifDeclined: '', effortLow: 0, effortHigh: 0, response: 'proposed', responseReason: '', deferredToQuarterId: null, respondedAt: null, createdAt: now(), ...dep };
+    if (!(dep.effortHigh > 0)) throw new ValidationError('Give an effort estimate (high estimate above 0)');
+    if (dep.effortLow > dep.effortHigh) throw new ValidationError('High estimate must be at least the low estimate');
+    this._guardPhase(dep.quarterId, dep.reason, 'add an ask');
+    const created = { id: uid(), refCode: this._ref('dependency'), requesterTeamId: epic.teamId, requesterName: epic.ownerName || actor.name, ifDeclined: '', neededBy: null, effortLow: 0, effortHigh: 0, grantedLow: null, grantedHigh: null, response: 'proposed', responseReason: '', deferredToQuarterId: null, respondedAt: null, createdAt: now(), ...dep };
+    delete created.reason;
     this.state.dependencies.push(created);
     this._event(actor, 'dependency_added', 'dependencies', created.id, dep.quarterId, '', null, { ask: dep.ask });
     return this._persist();
   }
-  async answerDependency(actor, depId, { response, reason = '', deferredToQuarterId = null }) {
+  async answerDependency(actor, depId, { response, reason = '', deferredToQuarterId = null, grantedLow = null, grantedHigh = null }) {
     const d = this.state.dependencies.find((x) => x.id === depId);
     if (!d) throw new ValidationError('Unknown dependency');
     if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can answer');
@@ -134,20 +144,38 @@ export class MockRepository {
     if (['prep', 'draft'].includes(q.phase)) throw new ValidationError(`Answers open in the negotiate phase (now: ${q.phase})`);
     if (response !== 'accepted' && response !== 'proposed' && !reason.trim()) throw new ValidationError('A reason is required for this answer');
     if (response === 'deferred' && !deferredToQuarterId) throw new ValidationError('Choose the quarter to defer to');
-    this._event(actor, 'dependency_answered', 'dependencies', d.id, d.quarterId, reason, { response: d.response }, { response });
-    Object.assign(d, { response, responseReason: reason, deferredToQuarterId: response === 'deferred' ? deferredToQuarterId : null, respondedAt: response === 'proposed' ? null : now() });
+    if (response === 'partial') {
+      if (!(grantedHigh > 0) || grantedLow == null) throw new ValidationError('Say how much you can do (granted person-weeks)');
+      if (grantedHigh > d.effortHigh) throw new ValidationError('Granted effort cannot exceed the ask');
+    }
+    this._event(actor, 'dependency_answered', 'dependencies', d.id, d.quarterId, reason, { response: d.response }, { response, grantedLow, grantedHigh });
+    Object.assign(d, { response, responseReason: reason, deferredToQuarterId: response === 'deferred' ? deferredToQuarterId : null,
+      grantedLow: response === 'partial' ? grantedLow : null, grantedHigh: response === 'partial' ? grantedHigh : null, respondedAt: response === 'proposed' ? null : now() });
+    // A priority call is by definition a discussion item for the session (review: coach).
+    if (response === 'needs_priority_call' && !this.state.discussions.some((x) => x.depId === d.id && x.status === 'open')) {
+      this.state.discussions.push({ id: uid(), quarterId: d.quarterId, epicId: d.epicId, depId: d.id, reason: `Priority call needed on ${d.refCode}: ${reason}`, ownerName: actor.name, timeboxMin: 10, status: 'open', outcome: '', createdAt: now() });
+    }
     return this._persist();
   }
   async updateDependency(actor, depId, patch) {
     const d = this.state.dependencies.find((x) => x.id === depId);
     if (!d) throw new ValidationError('Unknown dependency');
     if (!canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can edit the ask');
-    Object.assign(d, patch);
+    const { reason, ...rest } = patch;
+    this._guardPhase(d.quarterId, reason, 'edit an ask');
+    const next = { ...d, ...rest };
+    if (!(next.effortHigh > 0) || next.effortLow > next.effortHigh) throw new ValidationError('Check the effort estimate');
+    const effortChanged = next.effortHigh !== d.effortHigh || next.effortLow !== d.effortLow || next.ask !== d.ask;
+    this._event(actor, 'dependency_edited', 'dependencies', d.id, d.quarterId, reason, { ask: d.ask, effortLow: d.effortLow, effortHigh: d.effortHigh }, { ask: next.ask, effortLow: next.effortLow, effortHigh: next.effortHigh });
+    Object.assign(d, rest);
+    // An answered ask whose scope changed goes back to the provider for a new answer.
+    if (effortChanged && d.response !== 'proposed') { d.response = 'proposed'; d.responseReason = ''; d.respondedAt = null; d.grantedLow = null; d.grantedHigh = null; }
     return this._persist();
   }
-  async deleteDependency(actor, depId) {
+  async deleteDependency(actor, depId, reason = '') {
     const d = this.state.dependencies.find((x) => x.id === depId);
     if (d && !canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can remove the ask');
+    if (d) { this._guardPhase(d.quarterId, reason, 'remove an ask'); this._event(actor, 'dependency_removed', 'dependencies', d.id, d.quarterId, reason, { ask: d.ask, response: d.response }, null); }
     this.state.dependencies = this.state.dependencies.filter((x) => x.id !== depId);
     return this._persist();
   }
@@ -163,7 +191,17 @@ export class MockRepository {
       const low = this.state.votes.filter((v) => v.quarterId === quarterId && v.vote <= 2);
       if (low.length) throw new ValidationError(`${low.length} team(s) voted 2 or lower; resolve before locking (setting: low vote blocks lock)`);
     }
-    if (phase === 'locked' && !q.baseline) { q.baseline = buildBaseline(this.state, quarterId); q.lockedAt = now(); }
+    if (phase === 'locked' && !q.baseline && from < to) {
+      // Locking with open items needs an explicit facilitator override (review: coach).
+      const open = readiness(this.state, quarterId).filter((r) => !r.ready);
+      if (open.length && !reason.trim()) throw new ValidationError(`${open.length} team(s) not ready (${open.map((r) => r.team.name).join(', ')}). Lock anyway by giving a reason.`);
+    }
+    if (phase === 'locked' && from < to) {
+      // Always a fresh baseline when (re)locking after a rewind; the previous one is kept in the event log.
+      if (q.baseline) this._event(actor, 'baseline_replaced', 'quarters', q.id, q.id, reason, { takenAt: q.baseline.takenAt }, null);
+      q.baseline = buildBaseline(this.state, quarterId); q.lockedAt = now();
+    }
+    if (phase === 'vote' && to < from) q.votesRevealed = false;
     this._event(actor, 'phase_changed', 'quarters', q.id, q.id, reason, { phase: q.phase }, { phase });
     q.phase = phase;
     return this._persist();
@@ -172,11 +210,18 @@ export class MockRepository {
     if (!canWriteTeam(actor, teamId)) throw new PermissionError('You can only vote for your own team');
     if (vote <= 3 && !reason.trim()) throw new ValidationError('A reason is required for a vote of 3 or lower');
     const q = this._quarter(quarterId);
-    if (q.phase === 'prep' || q.phase === 'closed') throw new ValidationError('Voting is not open in this phase');
+    if (!phaseAllows(q.phase, 'vote')) throw new ValidationError('Voting is open in the Vote phase (and for a re-vote while locked)');
     const existing = this.state.votes.find((v) => v.teamId === teamId && v.quarterId === quarterId);
     if (existing) Object.assign(existing, { vote, reason, votedAt: now() });
     else this.state.votes.push({ id: uid(), teamId, quarterId, vote, reason, votedAt: now() });
     this._event(actor, 'vote_cast', 'votes', teamId, quarterId, reason, null, { vote });
+    return this._persist();
+  }
+  async revealVotes(actor, quarterId) {
+    if (!isAdmin(actor)) throw new PermissionError('Only the facilitator reveals votes');
+    const q = this._quarter(quarterId);
+    q.votesRevealed = true;
+    this._event(actor, 'votes_revealed', 'quarters', q.id, q.id, '', null, null);
     return this._persist();
   }
   async raiseDiscussion(actor, item) {
@@ -220,8 +265,11 @@ export class MockRepository {
   // ── setup ──────────────────────────────────────────────────────────────────
   async upsertCapacity(actor, cap) {
     if (!canWriteTeam(actor, cap.teamId)) throw new PermissionError('Not your team');
+    const { reason, ...capFields } = cap; cap = capFields;
+    this._guardPhase(cap.quarterId, reason, 'change capacity');
     const existing = this.state.capacity.find((c) => c.teamId === cap.teamId && c.quarterId === cap.quarterId);
-    if (existing) { this._event(actor, 'capacity_changed', 'capacity', existing.id, cap.quarterId, '', { ...existing }, { ...existing, ...cap }); Object.assign(existing, cap); }
+    if (existing) { this._event(actor, 'capacity_changed', 'capacity', existing.id, cap.quarterId, reason, { ...existing }, { ...existing, ...cap }); Object.assign(existing, cap); }
+    // eslint-disable-next-line no-unused-vars
     else this.state.capacity.push({ id: uid(), headcount: 0, weeks: 13, focusFactor: 0.65, absenceWeeks: 0, reservePct: 20, ...cap });
     return this._persist();
   }

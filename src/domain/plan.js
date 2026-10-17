@@ -1,6 +1,6 @@
 // Selectors and derived views over the plan state. Pure functions; every screen uses these so the
 // Overview, Board and Attention numbers cannot drift apart (docs/design.md D11, AC E5).
-import { teamLoad, cutLineIndex } from './capacity';
+import { teamLoad, cutEpicId } from './capacity';
 import {
   PHASES, PHASE_INDEX, RESPONSE_META, NO_RESPONSE_DAYS, IMPEDIMENT_AGING_DAYS, STALE_TEAM_DAYS,
 } from './model';
@@ -25,10 +25,16 @@ export function teamPlans(state, teamId, quarterId) {
 
 // Cut line position within the team's ranked plans (excluding not_committed ones), as epic id of first epic below the line.
 export function teamCutEpicId(state, teamId, quarterId) {
-  const load = teamLoad(state, teamId, quarterId);
-  const active = teamPlans(state, teamId, quarterId).filter((p) => p.commitment !== 'not_committed');
-  const idx = cutLineIndex(active, load.available, load.incHigh);
-  return idx >= 0 ? active[idx].epicId : null;
+  return cutEpicId(state, teamId, quarterId);
+}
+
+// Epics of a team that sit below the cut line (do not fit), by id.
+export function belowCutSet(state, teamId, quarterId) {
+  const cut = cutEpicId(state, teamId, quarterId);
+  if (!cut) return new Set();
+  const plans = teamPlans(state, teamId, quarterId).filter((p) => p.commitment !== 'not_committed');
+  const idx = plans.findIndex((p) => p.epicId === cut);
+  return new Set(plans.slice(idx).map((p) => p.epicId));
 }
 
 // Dependency badges of an epic in a quarter: outgoing (we need), incoming (asked of our team via epic's team)
@@ -115,13 +121,26 @@ export function diffAgainstBaseline(state, quarterId) {
     if (b.effortHigh !== p.effortHigh || b.effortLow !== p.effortLow) out.push({ kind: 'effort', epicId: p.epicId, text: `${title(p.epicId)}: effort ${b.effortLow}–${b.effortHigh} → ${p.effortLow}–${p.effortHigh} pw`, reason: lastReason(state, p.id, ['effort_changed']) });
   }
   for (const b of base.plans) {
-    if (!curPlans.some((p) => p.epicId === b.epicId)) out.push({ kind: 'epic dropped', epicId: b.epicId, text: `${title(b.epicId)} dropped from the quarter`, reason: '' });
+    if (!curPlans.some((p) => p.epicId === b.epicId)) {
+      const ev = state.events.filter((e) => e.action === 'plan_removed' && e.quarterId === quarterId && e.before?.epicId === b.epicId).sort((x, y) => y.at.localeCompare(x.at))[0];
+      out.push({ kind: 'epic dropped', epicId: b.epicId, text: `${title(b.epicId)} dropped from the quarter`, reason: ev?.reason || '' });
+    }
   }
   const curDeps = state.dependencies.filter((d) => d.quarterId === quarterId);
   for (const d of curDeps) {
     const b = base.dependencies.find((x) => x.id === d.id);
-    if (!b) out.push({ kind: 'dependency added', epicId: d.epicId, text: `New ask ${d.refCode} added after lock`, reason: '' });
+    if (!b) out.push({ kind: 'dependency added', epicId: d.epicId, text: `New ask ${d.refCode} added after lock`, reason: lastReason(state, d.id, ['dependency_added']) });
     else if (b.response !== d.response) out.push({ kind: 'dependency', epicId: d.epicId, text: `${d.refCode}: ${b.response} → ${d.response}`, reason: d.responseReason });
+  }
+  for (const b of base.dependencies) {
+    if (!curDeps.some((d) => d.id === b.id)) out.push({ kind: 'dependency removed', epicId: b.epicId, text: `Ask on ${title(b.epicId)} removed after lock`, reason: lastReason(state, b.id, ['dependency_removed']) });
+  }
+  const teams = byId(state.teams);
+  for (const c of state.capacity.filter((x) => x.quarterId === quarterId)) {
+    const b = (base.capacity || []).find((x) => x.teamId === c.teamId);
+    if (b && ['headcount', 'weeks', 'focusFactor', 'absenceWeeks', 'reservePct'].some((k) => b[k] !== c[k])) {
+      out.push({ kind: 'capacity', epicId: null, text: `${teams.get(c.teamId)?.name}: capacity assumptions changed (headcount ${b.headcount} → ${c.headcount}, absence ${b.absenceWeeks} → ${c.absenceWeeks}, reserve ${b.reservePct}% → ${c.reservePct}%)`, reason: lastReason(state, c.id, ['capacity_changed']) });
+    }
   }
   return out;
 }
@@ -139,8 +158,20 @@ export function readiness(state, quarterId) {
     if (!load.cap || !load.available) reasons.push('Capacity not set');
     const open = incomingForTeam(state, t.id, quarterId).filter((d) => d.response === 'proposed').length;
     if (open) reasons.push(`${open} unanswered ask${open > 1 ? 's' : ''}`);
-    if (!state.votes.some((v) => v.teamId === t.id && v.quarterId === quarterId)) reasons.push('No confidence vote');
-    return { team: t, ready: reasons.length === 0, reasons };
+    if (load.band === 'over') reasons.push(`Over capacity (${load.pct}%)`);
+    const declined = state.dependencies.filter((d) => d.requesterTeamId === t.id && d.quarterId === quarterId && ['declined', 'needs_priority_call'].includes(d.response)
+      && !state.discussions.some((x) => x.depId === d.id && x.status === 'resolved')).length;
+    if (declined) reasons.push(`${declined} declined / priority-call ask${declined > 1 ? 's' : ''} unresolved`);
+    const epicIds = new Set(plans.map((p) => p.epicId));
+    const openDisc = state.discussions.filter((x) => x.quarterId === quarterId && x.status === 'open' && epicIds.has(x.epicId)).length;
+    if (openDisc) reasons.push(`${openDisc} open discussion item${openDisc > 1 ? 's' : ''}`);
+    const q = state.quarters.find((x) => x.id === quarterId);
+    const vote = state.votes.find((v) => v.teamId === t.id && v.quarterId === quarterId);
+    if (q && PHASE_INDEX[q.phase] >= PHASE_INDEX.vote) {
+      if (!vote) reasons.push('No confidence vote');
+      else if (plans.some((p) => p.updatedAt > vote.votedAt)) reasons.push('Plan changed after the vote');
+    }
+    return { team: t, ready: reasons.length === 0, reasons, vote };
   });
 }
 
@@ -183,6 +214,13 @@ export function overview(state, quarterId, now = Date.now()) {
         owner: epics.get(p.epicId).ownerName, age: daysSince(p.updatedAt, now) });
     }
   }
+  for (const p of regulatory) {
+    const e = epics.get(p.epicId);
+    if (belowCutSet(state, e.teamId, quarterId).has(e.id)) {
+      flags.push({ key: `regcut-${p.id}`, severity: 5, kind: 'Regulatory below cut line', epicId: p.epicId,
+        text: `${e.refCode} ${e.title} does not fit in ${state.teams.find((t) => t.id === e.teamId)?.name}'s capacity`, owner: e.ownerName, age: daysSince(p.updatedAt, now) });
+    }
+  }
   for (const p of regRisk) {
     const e = epics.get(p.epicId);
     flags.push({ key: `reg-${p.id}`, severity: 4, kind: 'Regulatory at risk', epicId: p.epicId,
@@ -204,7 +242,23 @@ export function overview(state, quarterId, now = Date.now()) {
         text: `${i.refCode} ${i.title}`, owner: i.ownerName, age });
     }
   }
-  flags.sort((a, b) => b.severity - a.severity || (b.age ?? 0) - (a.age ?? 0));
+  // One row per epic: merge tags, keep the highest severity (review: director).
+  const merged = new Map();
+  for (const f of flags) {
+    const key = f.epicId || f.key;
+    const cur = merged.get(key);
+    if (!cur) merged.set(key, { ...f, kinds: [f.kind], texts: [f.text] });
+    else { cur.kinds.push(f.kind); cur.texts.push(f.text); cur.severity = Math.max(cur.severity, f.severity); cur.age = Math.max(cur.age ?? 0, f.age ?? 0); }
+  }
+  const flagRows = [...merged.values()].sort((a, b) => b.severity - a.severity || (b.age ?? 0) - (a.age ?? 0));
+
+  // Regulatory register: every regulatory epic planned this quarter, with deadline, status and cut-line position.
+  const regulatoryRows = regulatory.map((p) => {
+    const e = epics.get(p.epicId);
+    return { epicId: e.id, refCode: e.refCode, title: e.title, regulation: e.regulation || e.label || '', deadline: e.regulatoryDeadline,
+      daysLeft: daysUntil(e.regulatoryDeadline, now), commitment: p.commitment, owner: e.ownerName, rank: p.rank,
+      belowCut: belowCutSet(state, e.teamId, quarterId).has(e.id), team: state.teams.find((t) => t.id === e.teamId)?.name };
+  }).sort((a, b) => (a.daysLeft ?? 1e9) - (b.daysLeft ?? 1e9));
 
   const teamFreshness = state.teams.map((t) => {
     const last = lastTeamUpdate(state, t.id);
@@ -217,7 +271,7 @@ export function overview(state, quarterId, now = Date.now()) {
   return {
     topN: topN.length, topCommitted, overTeams, loads, regulatoryCount: regulatory.length, regRisk,
     openAsks: openAsks.length, oldestAsk, openImp: openImp.length, oldestImp, avgVote, voteCount: votes.length,
-    themeRows, unaligned, flags, teamFreshness, asOf,
+    themeRows, unaligned, flags: flagRows, regulatoryRows, teamFreshness, asOf,
   };
 }
 
@@ -232,13 +286,13 @@ export function attention(state, user, quarterId, now = Date.now()) {
   for (const d of state.dependencies.filter((x) => x.providerTeamId === myTeam)) {
     if (d.response === 'proposed') {
       const age = daysSince(d.createdAt, now);
-      items.push({ key: `ask-${d.id}`, group: 'Asks waiting for your answer', depId: d.id, epicId: d.epicId,
-        text: `${d.refCode} from ${teams.get(d.requesterTeamId)?.name}: ${d.ask}`, meta: `${age} day${age === 1 ? '' : 's'} open` });
+      items.push({ key: `ask-${d.id}`, group: 'Asks waiting for your answer', depId: d.id, epicId: d.epicId, action: 'answer',
+        text: `${d.ask} — asked by ${teams.get(d.requesterTeamId)?.name} (${d.refCode})`, meta: `${age} day${age === 1 ? '' : 's'} open` });
     }
   }
   for (const d of state.dependencies.filter((x) => x.requesterTeamId === myTeam && x.response !== 'proposed')) {
     items.push({ key: `ans-${d.id}`, group: 'Answers on your asks', depId: d.id, epicId: d.epicId,
-      text: `${d.refCode} to ${teams.get(d.providerTeamId)?.name}: ${RESPONSE_META[d.response].label}${d.responseReason ? ` – ${d.responseReason}` : ''}`,
+      text: `${teams.get(d.providerTeamId)?.name} answered "${RESPONSE_META[d.response].label}" on ${d.ask} (${d.refCode})${d.responseReason ? ` — ${d.responseReason}` : ''}`,
       meta: d.respondedAt && new Date(d.respondedAt).getTime() > lastSeen ? 'new' : `${daysSince(d.respondedAt, now)} days ago` });
   }
   const activeQ = state.quarters.find((q) => q.phase === 'active');
@@ -269,7 +323,7 @@ export function phaseAllows(phase, what) {
   const i = PHASE_INDEX[phase];
   if (what === 'answer') return i >= PHASE_INDEX.negotiate && phase !== 'closed';
   if (what === 'edit') return phase !== 'closed';
-  if (what === 'vote') return phase !== 'prep' && phase !== 'closed';
+  if (what === 'vote') return phase === 'vote' || phase === 'locked';
   return true;
 }
 export { PHASES };

@@ -33,7 +33,7 @@ const THEMES = [
 const QUARTERS = [
   { id: 'q-26-3', year: 2026, q: 3, phase: 'closed', baseline: null },
   { id: 'q-26-4', year: 2026, q: 4, phase: 'active', baseline: null },
-  { id: 'q-27-1', year: 2027, q: 1, phase: 'negotiate', baseline: null },
+  { id: 'q-27-1', year: 2027, q: 1, phase: 'negotiate', baseline: null, votesRevealed: false },
   { id: 'q-27-2', year: 2027, q: 2, phase: 'prep', baseline: null },
 ];
 
@@ -44,7 +44,7 @@ const capacity = QUARTERS.flatMap((q) => Object.entries(CAP).map(([teamId, [head
   id: `c-${teamId}-${q.id}`, teamId, quarterId: q.id, headcount, weeks: 13, focusFactor: 0.65, absenceWeeks, reservePct,
 })));
 
-// epic: [n, team, title, theme, label, owner, regulatoryDeadlineDays|null]
+// epic: [n, team, title, theme, label, owner, regulatoryDeadlineDays|null]  (regulation name derived below)
 const E = [
   [1, 't-pay', 'Instant payouts (iDEAL / Wero)', 'th-cx', 'Payments 2027', 'Joris Smit', null],
   [2, 't-pay', 'Recurring premium collection v2', 'th-eff', 'Payments 2027', 'Joris Smit', null],
@@ -83,6 +83,7 @@ const eid = (n) => `e-${String(n).padStart(2, '0')}`;
 const epics = E.map(([n, teamId, title, themeId, label, ownerName, reg]) => ({
   id: eid(n), refCode: `EP-${String(n).padStart(4, '0')}`, teamId, themeId: themeId || null, title, description: '',
   ownerName, label, regulatory: reg != null, regulatoryDeadline: reg != null ? inDays(reg) : null,
+  regulation: reg == null ? '' : /DORA/.test(title) ? 'DORA (DNB)' : /AVG/.test(title) ? 'AVG / GDPR (AP)' : /IFRS/.test(title) ? 'IFRS 17' : /WCAG/.test(title) ? 'WCAG 2.2 / EAA' : /PSD3/.test(title) ? 'PSD3' : /DNB/.test(title) ? 'DNB reporting' : 'Regulatory',
   externalSource: n % 3 === 0 || n === 7 || n === 17 ? 'azure_devops' : null,
   externalId: n % 3 === 0 || n === 7 || n === 17 ? String(48000 + n * 7) : null,
   externalUrl: n % 3 === 0 || n === 7 || n === 17 ? `https://dev.azure.com/oranje/Digital/_workitems/edit/${48000 + n * 7}` : null,
@@ -144,6 +145,8 @@ const dependencies = D.map(([n, epicN, provider, quarterId, ask, effortLow, effo
   id: `d-${n}`, refCode: `DEP-${String(n).padStart(4, '0')}`, epicId: eid(epicN),
   requesterTeamId: E.find((x) => x[0] === epicN)[1], providerTeamId: provider, quarterId, ask,
   ifDeclined: n % 2 ? 'Epic slips one quarter' : '', effortLow, effortHigh, response, responseReason,
+  requesterName: E.find((x) => x[0] === epicN)[5], neededBy: null,
+  grantedLow: response === 'partial' ? Math.max(0, effortLow - 1) : null, grantedHigh: response === 'partial' ? Math.max(1, effortHigh - 1) : null,
   deferredToQuarterId: deferredTo || null, createdAt: ago(created),
   respondedAt: response === 'proposed' ? null : ago(Math.max(1, created - 3)),
 }));

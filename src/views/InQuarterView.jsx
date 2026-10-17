@@ -41,9 +41,9 @@ export function InQuarterView() {
                     <li key={p.id} className={`flex items-center gap-2 rounded px-2 py-1 ${st ? 'bg-red-50' : 'bg-gray-50'}`}>
                       <button className="flex-1 text-left truncate hover:underline" onClick={() => setOpenEpic(e.id)}>{e.refCode} {e.title}</button>
                       <CommitmentPill value={p.commitment} size="xs" />
-                      {ci ? <span className="text-xs text-gray-600 whitespace-nowrap"><ConfidenceMark value={ci.confidence} /> {daysSince(ci.createdAt)}d</span> : <span className="text-xs text-gray-500">no check-in</span>}
+                      {ci ? <span className="text-xs text-gray-600 whitespace-nowrap"><ConfidenceMark value={ci.confidence} /> {daysSince(ci.createdAt)}d</span> : <span className="text-xs text-amber-900">no check-in yet</span>}
                       {st && <span className="text-xs text-red-700 whitespace-nowrap">▲ {st.days == null ? 'never' : `${st.days}d`}</span>}
-                      {mayEdit && <button className="text-xs text-indigo-700 hover:underline" onClick={() => setQuick(e)}>check-in</button>}
+                      {mayEdit && <button className="text-xs text-indigo-700 hover:underline" aria-label={`Check in on ${e.refCode}`} onClick={() => setQuick(e)}>check-in</button>}
                     </li>); })}
                 </ul>
               </div>

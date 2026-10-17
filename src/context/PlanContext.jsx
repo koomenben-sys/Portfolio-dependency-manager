@@ -23,6 +23,13 @@ export function PlanProvider({ children, authUser }) {
     return () => { alive = false; };
   }, []);
 
+  // No real-time sync in the MVP; in Supabase mode refresh every 30 s so a facilitator's screen does not go stale.
+  useEffect(() => {
+    if (!repo || DATA_SOURCE !== 'supabase') return undefined;
+    const id = setInterval(() => repo.load().then(setState).catch(() => {}), 30000);
+    return () => clearInterval(id);
+  }, [repo]);
+
   useEffect(() => {
     if (!state || quarterId) return;
     const preferred = state.quarters.find((q) => !['closed', 'active'].includes(q.phase)) || state.quarters.find((q) => q.phase === 'active') || state.quarters[0];

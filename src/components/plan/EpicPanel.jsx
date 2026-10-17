@@ -3,7 +3,7 @@ import { usePlan } from '../../context/PlanContext';
 import { canWriteTeam, canRank } from '../../data/repository';
 import { COMMITMENTS, COMMITMENT_META, CONFIDENCE, RESPONSE_META, quarterLabel, isLockedPhase } from '../../domain/model';
 import { planFor, epicDeps, latestCheckIn, daysSince, changedSinceBaseline, timingConflict } from '../../domain/plan';
-import { CommitmentPill, ResponsePill, ConfidenceMark, Field, input, btn, ErrorNote, ReasonPrompt, Modal, Empty } from './ui';
+import { CommitmentPill, ResponsePill, ConfidenceMark, Field, input, btn, ErrorNote, ReasonPrompt, Modal, Empty, fmtDate } from './ui';
 import { DependencyForm } from './DependencyForm';
 
 // Side panel for one epic: edit, plan for the selected quarter, dependencies, check-ins, history.
@@ -14,6 +14,9 @@ export function EpicPanel({ epicId, onClose }) {
   const [reasonFor, setReasonFor] = useState(null); // { patch, title }
   const [showAsk, setShowAsk] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
+  const [editAsk, setEditAsk] = useState(null);
+  const [removeAsk, setRemoveAsk] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   if (!epic || !quarter) return null;
   const plan = planFor(state, epic.id, quarter.id);
   const team = state.teams.find((t) => t.id === epic.teamId);
@@ -37,21 +40,21 @@ export function EpicPanel({ epicId, onClose }) {
   };
 
   return (
-    <aside className="fixed right-0 top-0 h-full w-[520px] max-w-[95vw] bg-white shadow-2xl border-l border-gray-200 z-30 overflow-y-auto">
+    <aside role="dialog" aria-modal="false" aria-label={`${epic.refCode} ${epic.title}`} className="fixed right-0 top-0 h-full w-[520px] max-w-[95vw] bg-white shadow-2xl border-l border-gray-200 z-30 overflow-y-auto">
       <header className="sticky top-0 bg-white border-b px-4 py-3 flex items-start justify-between gap-2">
         <div>
           <div className="text-xs font-mono text-gray-500">{epic.refCode} · {team?.name}{epic.externalSource && <> · <a className="text-indigo-700 hover:underline" href={epic.externalUrl} target="_blank" rel="noreferrer">Open in Azure DevOps ↗</a></>}</div>
           {mayEdit && !epic.externalSource ? (
             <input className="text-lg font-semibold w-full border-b border-transparent focus:border-indigo-400 focus:outline-none" defaultValue={epic.title} onBlur={(e) => e.target.value !== epic.title && saveEpic({ title: e.target.value })} />
           ) : <h2 className="text-lg font-semibold">{epic.title}</h2>}
-          {epic.externalSource && <p className="text-xs text-gray-500">Title and state are mastered by Azure DevOps (read-only).</p>}
+          {epic.externalSource && <p className="text-xs text-gray-600">Title and state come from Azure DevOps (read-only){epic.externalState ? `, state there: ${epic.externalState}` : ''}{epic.externalSyncedAt ? `, last synced ${fmtDate(epic.externalSyncedAt)}` : ', not synced yet'}. Rank, effort, commitment and asks live only here.</p>}
         </div>
         <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-xl leading-none" aria-label="Close">×</button>
       </header>
 
       <div className="p-4 space-y-5">
         <ErrorNote error={err} />
-        {changed && <p className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded px-2 py-1">Changed since baseline (quarter locked)</p>}
+        {changed && <p className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded px-2 py-1">Changed since the plan was locked — see the Session diff.</p>}
 
         {/* Epic attributes */}
         <section className="grid grid-cols-2 gap-3">
@@ -66,7 +69,7 @@ export function EpicPanel({ epicId, onClose }) {
               {state.themes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </Field>
-          <Field l="Label (program / portfolio, filter only)">
+          <Field l="Program / portfolio label (used as a filter)">
             <input className={input} defaultValue={epic.label} disabled={!mayEdit} onBlur={(e) => e.target.value !== epic.label && saveEpic({ label: e.target.value })} />
           </Field>
           <Field l="Owner">
@@ -78,6 +81,7 @@ export function EpicPanel({ epicId, onClose }) {
           <Field l="Deadline">
             <input type="date" className={input} value={epic.regulatoryDeadline || ''} disabled={!mayEdit || !epic.regulatory} onChange={(e) => saveEpic({ regulatoryDeadline: e.target.value || null })} />
           </Field>
+          {epic.regulatory && <div className="col-span-2"><Field l="Regulation / regulator (e.g. DORA (DNB), AVG, IFRS 17)"><input className={input} defaultValue={epic.regulation || ''} disabled={!mayEdit} onBlur={(e) => e.target.value !== (epic.regulation || '') && saveEpic({ regulation: e.target.value })} /></Field></div>}
         </section>
 
         {/* Plan for the selected quarter */}
@@ -105,14 +109,14 @@ export function EpicPanel({ epicId, onClose }) {
               <Field l="Effort high (person-weeks)">
                 <input type="number" min="0" step="0.5" className={input} defaultValue={plan.effortHigh} disabled={!mayEdit} onBlur={(e) => Number(e.target.value) !== plan.effortHigh && savePlan({ effortHigh: Number(e.target.value) })} />
               </Field>
-              <Field l="Planning confidence">
+              <Field l="How sure is the team about this estimate?">
                 <select className={input} value={plan.confidence} disabled={!mayEdit} onChange={(e) => savePlan({ confidence: e.target.value })}>
                   {CONFIDENCE.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </Field>
               <div className="flex items-end gap-3">
                 <CommitmentPill value={plan.commitment} />
-                {mayEdit && <button className={btn.danger} onClick={() => run('removePlan', plan.id)}>Remove from quarter</button>}
+                {mayEdit && <button className={btn.danger} onClick={() => locked ? setReasonFor({ remove: true, title: 'Quarter is locked: reason for removing this epic' }) : run('removePlan', plan.id)}>Remove from quarter</button>}
               </div>
             </div>
           )}
@@ -138,7 +142,9 @@ export function EpicPanel({ epicId, onClose }) {
                     {d.responseReason && <div className="text-xs text-gray-700 mt-1">Answer: {d.responseReason}{d.deferredToQuarterId && ` (to ${quarterLabel(state.quarters.find((q) => q.id === d.deferredToQuarterId))})`}</div>}
                     {timingConflict(state, d) && <div className="text-xs text-red-700 mt-1">▲ Timing conflict: needed after the epic's planned quarter</div>}
                     {d.response === 'proposed' && <div className="text-xs text-gray-500 mt-1">No answer yet · {daysSince(d.createdAt)} days</div>}
-                    {mayEdit && <button className={`${btn.danger} mt-1`} onClick={() => run('deleteDependency', d.id)}>Remove ask</button>}
+                    {d.neededBy && <div className="text-xs text-gray-600">Needed by {fmtDate(d.neededBy)}</div>}
+                    {d.response === 'partial' && d.grantedHigh != null && <div className="text-xs text-lime-800">Granted {d.grantedLow}–{d.grantedHigh} pw of {d.effortLow}–{d.effortHigh}</div>}
+                    {mayEdit && <div className="flex gap-3 mt-1"><button className={btn.ghost} onClick={() => setEditAsk(d)}>Edit ask</button><button className={btn.danger} onClick={() => setRemoveAsk(d)}>Remove ask</button></div>}
                   </li>
                 );
               })}
@@ -173,10 +179,18 @@ export function EpicPanel({ epicId, onClose }) {
             </ul>
           )}
         </section>
-        {mayEdit && <button className={btn.danger} onClick={async () => { if (confirm('Delete this epic and its plans and asks?')) { await run('deleteEpic', epic.id); onClose(); } }}>Delete epic</button>}
+        {mayEdit && <div className="border-t pt-3"><button className={btn.danger} onClick={() => setConfirmDelete(true)}>Delete epic…</button></div>}
       </div>
 
-      {reasonFor && <ReasonPrompt title={reasonFor.title} onClose={() => setReasonFor(null)} onSubmit={(reason) => savePlan(reasonFor.patch, reason)} />}
+      {reasonFor && <ReasonPrompt title={reasonFor.title} onClose={() => setReasonFor(null)} onSubmit={(reason) => reasonFor.remove ? run('removePlan', plan.id, reason) : savePlan(reasonFor.patch, reason)} />}
+      {editAsk && <Modal title={`Edit ask ${editAsk.refCode}`} onClose={() => setEditAsk(null)}><DependencyForm epic={epic} existing={editAsk} onDone={() => setEditAsk(null)} /></Modal>}
+      {removeAsk && <ReasonPrompt title={`Remove ask ${removeAsk.refCode}`} hint={locked ? 'The quarter is locked; a reason is required.' : 'Optional reason, kept in history.'} submitLabel="Remove" onClose={() => setRemoveAsk(null)} onSubmit={(reason) => run('deleteDependency', removeAsk.id, reason)} />}
+      {confirmDelete && (
+        <Modal title={`Delete ${epic.refCode}?`} onClose={() => setConfirmDelete(false)}>
+          <p className="text-sm">This removes the epic, {state.plans.filter((p) => p.epicId === epic.id).length} quarter plan(s), {state.dependencies.filter((d) => d.epicId === epic.id).length} ask(s), {state.checkIns.filter((c) => c.epicId === epic.id).length} check-in(s) and {state.impediments.filter((i) => i.epicId === epic.id).length} impediment(s). History entries are kept.</p>
+          <div className="flex justify-end gap-2 mt-3"><button className={btn.secondary} onClick={() => setConfirmDelete(false)}>Cancel</button><button className="bg-red-600 text-white text-sm px-3 py-1.5 rounded hover:bg-red-700" onClick={async () => { await run('deleteEpic', epic.id); onClose(); }}>Delete epic</button></div>
+        </Modal>
+      )}
       {showAsk && <Modal title={`Ask a team for ${epic.refCode}`} onClose={() => setShowAsk(false)}><DependencyForm epic={epic} onDone={() => setShowAsk(false)} /></Modal>}
       {showCheckIn && <CheckInForm epic={epic} onClose={() => setShowCheckIn(false)} />}
     </aside>

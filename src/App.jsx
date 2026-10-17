@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { PlanProvider, usePlan } from './context/PlanContext';
 import { useAuth } from './context/AuthContext';
 import { DATA_SOURCE } from './data/repository';
@@ -13,6 +13,7 @@ import { InQuarterView } from './views/InQuarterView';
 import { AttentionView } from './views/AttentionView';
 import { SettingsView } from './views/SettingsView';
 import { input } from './components/plan/ui';
+import { ErrorBoundary } from './components/plan/ErrorBoundary';
 
 const NAV = [
   ['overview', 'Overview'], ['board', 'Board'], ['dependencies', 'Dependencies'], ['session', 'Session'],
@@ -21,9 +22,12 @@ const NAV = [
 
 // Mock mode: no login, persona switcher. Supabase mode: existing auth flow, membership becomes the actor.
 export default function App() {
-  if (DATA_SOURCE === 'supabase') return <SupabaseGate />;
-  return <PlanProvider><Shell /></PlanProvider>;
+  return <ErrorBoundary>{DATA_SOURCE === 'supabase' ? <SupabaseGate /> : <PlanProvider><Shell /></PlanProvider>}</ErrorBoundary>;
 }
+
+// Screen lives in the URL hash (#board, #session, ...) so a facilitator can share a link to a screen.
+const VIEW_IDS = new Set(NAV.map(([id]) => id));
+const viewFromHash = () => { const h = window.location.hash.replace('#', ''); return VIEW_IDS.has(h) ? h : 'board'; };
 
 function SupabaseGate() {
   const { user, role, loading, signOut, membership } = useAuth();
@@ -35,7 +39,9 @@ function SupabaseGate() {
 
 function Shell({ onSignOut }) {
   const { state, actor, chooseActor, personas, quarter, quarterId, setQuarterId, error, dataSource } = usePlan();
-  const [view, setView] = useState('board');
+  const [view, setViewState] = useState(viewFromHash);
+  const setView = (id) => { setViewState(id); window.location.hash = id; };
+  useEffect(() => { const on = () => setViewState(viewFromHash()); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
   if (error) return <div className="p-8 text-red-700">Could not load data: {error}</div>;
   if (!state || !quarter) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>;
   const attentionCount = attention(state, actor, quarterId).length;
