@@ -20,6 +20,7 @@ import { OnboardingWizard } from './components/plan/OnboardingWizard';
 import { TourPanel } from './components/plan/TourPanel';
 import { SCENARIOS } from './components/plan/tourScenarios';
 import { Menu, MenuLabel, MenuSep, menuItem, cls } from './components/plan/core';
+import { LiveIndicator } from './components/plan/LiveIndicator';
 import { useT, LANGUAGES } from './i18n';
 
 // The product is three numbered screens (docs/design.md section 19, D26). Everything else sits behind
@@ -48,8 +49,8 @@ export default function App() {
 }
 
 function SupabaseGate() {
-  const { user, role, loading, signOut, membership } = useAuth();
-  if (loading) return <Loading />;
+  const { user, role, loading, signOut, membership, membershipLoading } = useAuth();
+  if (loading || (user && membershipLoading)) return <Loading />;
   if (!user) return <LoginView />;
   const actor = membership || { id: user.id, name: user.email, role: role || 'viewer', teamId: null, canRank: false };
   return <PlanProvider authUser={actor}><Shell onSignOut={signOut} /></PlanProvider>;
@@ -112,6 +113,7 @@ function ShellInner({ ctx, onSignOut }) {
 
           <div className="ml-auto flex items-center gap-2">
             {dataSource === 'mock' && <span className="hidden md:inline-flex items-center h-6 px-2 rounded-full bg-surface-2 text-micro font-semibold uppercase tracking-wide text-muted" title={t('Fictional data, stored in this browser')}>Demo</span>}
+            <LiveIndicator />
             <label className="flex items-center gap-1.5 text-label text-muted">
               <span className="sr-only">{t('Quarter')}</span>
               <select className={`${cls.input} !w-auto !h-8 text-ink font-medium`} value={quarterId || ''} onChange={(e) => setQuarterId(e.target.value)} data-tour="quarter">

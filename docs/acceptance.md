@@ -445,6 +445,80 @@ Feature: Three-step wizard
     Then Prioriteren shows the two epics ranked #1 and #2
 ```
 
+## G5. P1: invites, RLS tests, realtime (docs/design.md section 18)
+
+- A15. An admin invites someone by e-mail with a role (admin / planner / viewer), a team (required for planners) and a rank flag. The invitation shows as a row with an "Invited" chip until it is accepted. A duplicate open invitation is refused; an invalid e-mail address is refused.
+- A16. Signing in with an invited, confirmed e-mail address creates the membership automatically, with the invited role, team and rank flag. This happens once, after sign-in, before the plan loads.
+- A17. An admin changes a member's role, team or rank flag inline, and removes a member after confirming. An admin cannot remove themselves or change their own role. The organisation always keeps one admin. Non-admins see the list read-only; the database refuses member writes from non-admins (RLS).
+- A18. "Send link" e-mails a sign-in link only after an admin's click, only for invited addresses. Demo mode sends nothing and says so.
+- A19. `db/tests/rls_test.sql` runs in the Supabase SQL editor without extensions and shows a PASS/FAIL grid. It leaves no test data behind and can run again. It covers:
+  - team scope, rank permission and viewers;
+  - tenant isolation on every table;
+  - insert-only `plan_events`;
+  - provider-only answers;
+  - admin-only invitations and the member guards.
+
+  `npm run test:rls` runs the same checks locally.
+- A20. In Supabase mode a change by another user appears without reloading (Realtime). If the subscription fails, the screen refreshes every 30 s. The header shows "Live", "30 s" or "Offline". In demo mode two tabs of the same browser stay in sync.
+
+```gherkin
+Feature: Invitations and roles
+
+  Scenario: Admin invites a planner
+    Given I am an admin in Settings, People and roles
+    When I click "Invite", enter "Pieter@Gemeente.nl", role Planner, team "Burgerzaken"
+    Then the table shows "pieter@gemeente.nl" with the chip "Invited", role Planner, team Burgerzaken
+    When I click "Send link" for that row
+    Then a sign-in link is e-mailed to pieter@gemeente.nl
+    And my own session is unchanged
+
+  Scenario: Invitee signs in for the first time
+    Given an open invitation for "pieter@gemeente.nl" as planner of "Burgerzaken"
+    When Pieter opens the sign-in link
+    Then he is a planner of Burgerzaken without anyone running SQL
+    And the invitation is no longer shown as "Invited"
+
+  Scenario: Guards on member changes
+    Given I am the only admin
+    Then I cannot change my own role or remove myself
+    When I change Joris from Planner to Viewer
+    Then Joris can no longer edit the epics of his former team
+
+  Scenario: Demo mode invite
+    Given demo mode as the facilitator
+    When I invite "nieuw.lid@example.nl" as planner of Payments
+    Then "Nieuw Lid" appears in the table and in "Viewing as"
+    And the screen says that no e-mail was sent
+
+Feature: RLS test script
+
+  Scenario: Owner runs the test
+    Given migrations 001-008 have been run
+    When the owner pastes db/tests/rls_test.sql into the SQL editor and runs it
+    Then the first row reads "73 checks: 73 passed, 0 failed" with result PASS
+    And no organisation named "RLS test A" or user "rls-*@example.invalid" remains
+
+  Scenario: A loosened policy is caught
+    Given someone drops the dependencies_guard trigger
+    When the test runs
+    Then the check "requester team cannot answer its own ask" shows FAIL
+
+Feature: Live updates
+
+  Scenario: Two facilitators' screens
+    Given two people have the board open in Supabase mode and the header shows "Live"
+    When one of them moves an epic's rank with a reason
+    Then the other screen shows the new rank within a few seconds without a reload
+
+  Scenario: Realtime unavailable
+    Given the Realtime subscription fails
+    Then the header shows "30 s" and the screen refreshes every 30 seconds
+
+  Scenario: Two demo tabs
+    Given demo mode open in two tabs
+    When I untick "can rank" for a member in the first tab
+    Then the second tab shows the change without a reload
+
 ## H. Out of scope (explicit)
 
 Multi-tenant signup/billing, SSO, Jira/Trello, e-mail notifications, real-time presence, change-request workflow, cross-quarter heatmap, network graph, Program/Portfolio entities, Dutch UI text.

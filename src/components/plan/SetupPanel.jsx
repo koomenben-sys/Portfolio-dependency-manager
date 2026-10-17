@@ -112,21 +112,3 @@ export function BulkCapacity() {
     </Panel>
   );
 }
-
-// People and roles. Mock mode: the persona list; Supabase mode: memberships (managed in SQL for now).
-export function MembersPanel() {
-  const { state, dataSource } = usePlan();
-  const t = useT();
-  const members = state.members || [];
-  return (
-    <Panel title={t('People and roles')} right={<span className="text-xs text-gray-600">{t('admin = facilitator · planner = writes own team · viewer = read · "can rank" = sets strategic priority')}</span>}>
-      {members.length === 0 ? <p className="text-sm text-gray-600">{t('No members loaded.')}</p> : (
-        <table className="w-full text-sm">
-          <thead className="text-xs text-gray-600 text-left"><tr><th className="py-1">{t('Name')}</th><th>{t('Role')}</th><th>{t('Team')}</th><th>{t('Can rank')}</th></tr></thead>
-          <tbody>{members.map((m) => <tr key={m.id} className="border-t"><td className="py-1">{m.name}<div className="text-xs text-gray-600">{m.title}</div></td><td>{m.role}</td><td>{state.teams.find((x) => x.id === m.teamId)?.name || '–'}</td><td>{m.canRank ? '✓' : '–'}</td></tr>)}</tbody>
-        </table>
-      )}
-      <p className="text-xs text-gray-600 mt-2">{dataSource === 'mock' ? t('In demo mode these are the personas in the "Viewing as" switcher.') : t('Membership rows live in the memberships table (db/migrations/002); an invite flow is a follow-up (docs/design.md section 17).')}</p>
-    </Panel>
-  );
-}

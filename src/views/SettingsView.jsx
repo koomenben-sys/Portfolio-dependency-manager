@@ -9,7 +9,8 @@ import { Field, input, btn, ErrorNote } from '../components/plan/ui';
 import { mapWorkItems, previewImport } from '../integrations/azureDevOps/mapper';
 import { MOCK_ADO_RESPONSE } from '../integrations/azureDevOps/mock';
 import { fetchEpics } from '../integrations/azureDevOps/client';
-import { BulkCapacity, MembersPanel } from '../components/plan/SetupPanel';
+import { BulkCapacity } from '../components/plan/SetupPanel';
+import { MembersAdmin } from '../components/plan/MembersAdmin';
 
 // Instellingen (docs/design.md section 19): plain sections — Organisatie · Teams · Kwartalen · Mensen & rollen ·
 // Import · Demo · Uitgebreide modules (beta). The setup checklist shows only the three essentials, only while
@@ -68,7 +69,7 @@ export function SettingsView() {
           {admin && <NewQuarter onAdd={(year, q) => act('upsertQuarter', { year, q })} />}
         </Section>
 
-        <Section id="members" title={t('People and roles')}><MembersPanel /></Section>
+        <Section id="members" title={t('People and roles')}><MembersAdmin /></Section>
 
         {admin && <Section id="import" title={t('Import')}><AdoImport /></Section>}
 

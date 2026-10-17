@@ -1,6 +1,6 @@
 # Backlog — Kwartaalplan
 
-_Bijgewerkt 2026-10-17, na merge van PR #15 (MVP), #16 (wizard, rondleiding, Nederlandse UI) en #17 (Supabase live getest)._
+_Bijgewerkt 2026-10-17, na merge van PR #15 (MVP), #16 (wizard, rondleiding, Nederlandse UI) en #17 (Supabase live getest); P1-punten 1–3 gebouwd op `claude/p1-invites-rls-realtime`._
 Achtergrond en beslissingen: `docs/design.md` (§16 build- en validatielog, §17 organisatie-inrichting). De oudere backlog van februari staat onderaan; de meeste punten daarvan zitten nu in de MVP.
 
 Prioriteit: **P1** = nodig voor een pilot met 3–5 teams bij een echte klant, **P2** = maakt de pilot sterk / verkoopbaar, **P3** = later.
@@ -8,9 +8,9 @@ Prioriteit: **P1** = nodig voor een pilot met 3–5 teams bij een echte klant, *
 ## P1 — pilotklaar maken
 | Item | Waarom | Bron |
 |---|---|---|
-| Uitnodigen en rollen beheren in de app (invite-UI op `memberships`, magic link) | Nu alleen via SQL; een klant kan zelf geen planners/kijkers toevoegen | §17.4, rolreview |
-| RLS-test met een tweede account (planner + viewer) en pgTAP-tests voor tenant-scheiding | Rechten voor niet-admins zijn nagelopen maar niet live beproefd | PR #17, architect |
-| Realtime in plaats van 30 s pollen (Supabase Realtime op plan-tabellen) | Live sessie met 8–12 teams vraagt een actueel scherm | coach r2 |
+| ~~Uitnodigen en rollen beheren in de app~~ — **gebouwd** (branch `claude/p1-invites-rls-realtime`, 007); wacht op eigenaar: 007 draaien, redirect-URL in Supabase Auth, live test met een tweede account | Nu alleen via SQL; een klant kan zelf geen planners/kijkers toevoegen | §18.1 |
+| ~~RLS-test voor niet-admins en tenant-scheiding~~ — **gebouwd** (`db/tests/rls_test.sql`, 73 checks, lokaal `npm run test:rls`); wacht op eigenaar: script draaien in de SQL-editor | Rechten voor niet-admins zijn nagelopen maar niet live beproefd; drie gaten gevonden en gedicht in 007 | §18.2 |
+| ~~Realtime in plaats van 30 s pollen~~ — **gebouwd** (008, fallback naar 30 s); wacht op eigenaar: 008 draaien, live controleren met twee schermen | Live sessie met 8–12 teams vraagt een actueel scherm | §18.3 |
 | SSO (Entra ID / SAML) en EU-hosting vastleggen | Voorwaarde bij directie, security en OR; semi-overheid vraagt dit expliciet | directeur r1, §11 |
 | Hosting buiten GitHub Pages (eigen domein, CSP, verwerkersovereenkomst) | Pages is een demo-plek, geen productie voor klantdata | §11 |
 | Geautomatiseerde tests (Vitest voor `src/domain` en beide repositories; contracttests) | Regressies voorkomen nu er twee adapters zijn | code-review |
@@ -41,6 +41,7 @@ Prioriteit: **P1** = nodig voor een pilot met 3–5 teams bij een echte klant, *
 ## Bekende kleine punten
 - Datum- en getalnotatie volgt nu `nl-NL`; Engelstalige weergave gebruikt nog dezelfde notatie op enkele plekken.
 - Inlogscherm (`LoginView.jsx`) en foutscherm zijn nog Engels.
+- Uitgenodigde mensen hebben geen wachtwoord: na uitloggen hebben ze een nieuwe link nodig ("stuur mij een inloglink" op het inlogscherm, §18.4).
 - Tour-teksten staan inline tweetalig in `tourScenarios.js`; bij een derde taal naar `i18n` verplaatsen.
 
 ---

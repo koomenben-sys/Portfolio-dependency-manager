@@ -21,7 +21,9 @@ _Updated by Claude at the end of each session._
 - **What changed:** the product is three numbered screens again — 1 Prioriteren (ranked table, drag & drop, inline optional reason), 2 Afhankelijkheden (per team: Wij vragen / Aan ons gevraagd, three-button answers), 3 Afstemmen (four counts, "Te bespreken" pairs by highest rank, matrix) — plus a simplified epic panel, a 3-step wizard, 3 short tours and plain settings. Overzicht, Bord, Sessie, In het kwartaal, Mijn aandacht and the old intake screen are kept in the repo behind Instellingen › "Uitgebreide modules (beta)" (`settings.modules`, default off). New command `reorderPlans`; reason required only for Kan niet / Uitgesteld; effort on an ask optional; calmer seed (6 teams, 16 epics, 13 asks).
 - **Read first:** `docs/design.md` section 19 (D26-D34) and section 16, `docs/acceptance.md` section J.
 - **Data layer:** `src/data/repository.js` contract; `MockRepository` (default, localStorage) and `SupabaseRepository` (live-tested 2026-10-17, see `docs/design.md` section 16 "Supabase mode"). Views never call Supabase directly. Start Supabase mode locally with `VITE_DATA_SOURCE=supabase npm run dev` (launch config `mvp-supabase`, port 5175).
-- **Open follow-ups:** invite UI for memberships, Supabase Realtime instead of 30 s polling, pgTAP tenant-isolation tests, RLS test with a planner/viewer account, Edge Function for the real ADO sync. Full list: `BACKLOG.md`.
+- **P1 invites / RLS tests / realtime (branch `claude/p1-invites-rls-realtime`, `docs/design.md` section 18):** migrations 007 (invitations, `accept_invitations()`, member/ask/plan guards) and 008 (realtime publication); `MembersAdmin.jsx`, `LiveIndicator.jsx`; `db/tests/rls_test.sql` (run in the SQL editor) and `npm run test:rls` (PGlite, local). Owner still has to run 007, 008 and the test, and add the redirect URL in Supabase Auth.
+- **Open follow-ups:** live test of invites and realtime with a second account, sign-in-link option on the login screen, SSO/EU hosting, Vitest, Edge Function for the real ADO sync. Full list: `BACKLOG.md`.
+- **UI rule (owner, 2026-10-17):** lightweight tool — compact tables, no explanatory paragraphs, at most one short helper line.
 - **Owner decisions 2026-10-17:** Feb tables may be dropped; name "Kwartaalplan"; old views replaced; Dutch UI by default (`src/i18n/`, English strings are the keys, `nl.js` holds Dutch); onboarding wizard and demo tour per role (`docs/demo-script.md`). PRs #15, #16, #17 merged into `main`.
 
 ## Project Overview
@@ -46,7 +48,7 @@ src/
                SimpleEpicPanel.jsx, OnboardingWizard.jsx (3 steps), TourPanel.jsx + tourScenarios.js (3 tours),
                legacy for beta views: ui.jsx, EpicPanel.jsx, DependencyForm.jsx, AnswerModal.jsx, SetupPanel.jsx
   integrations/azureDevOps/  mapper.js, client.js, mock.js
-db/migrations/ 001_core, 002_rls, 003_functions_and_triggers, 004_bootstrap, 005_review_round2, 006_live_test (run in order; all re-runnable)
+db/migrations/ 001_core … 008_realtime   db/tests/ rls_test.sql, run_pglite.mjs, 005_review_round2, 006_live_test (run in order; all re-runnable)
 ```
 
 ### Adding a feature (pattern)
