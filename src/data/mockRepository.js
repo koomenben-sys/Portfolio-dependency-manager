@@ -1,10 +1,10 @@
 // In-memory + localStorage implementation of the repository contract (docs/design.md D12, AC A1-A5).
 import { seedState } from './seed';
 import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
-import { PHASES, isLockedPhase } from '../domain/model';
-import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner } from './repository';
+import { PHASES, isLockedPhase, REASON_REQUIRED } from '../domain/model';
+import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange } from './repository';
 
-const KEY = 'kwartaalplan.mock.v1';
+const KEY = 'kwartaalplan.mock.v2'; // v2: calmer seed of the 2026-10-17 reset
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const now = () => new Date().toISOString();
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -24,12 +24,12 @@ export class MockRepository {
     if (this.state) return clone(this.state);
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) { const saved = JSON.parse(raw); this.state = saved.state; this.counters = saved.counters; return clone(this.state); }
+      if (raw) { const saved = JSON.parse(raw); this.state = saved.state; this.counters = saved.counters; this.state.invitations ||= []; return clone(this.state); }
     } catch { /* fall through */ }
     return this.reset();
   }
   async reset() {
-    this.state = seedState();
+    this.state = { invitations: [], ...seedState() };
     this.counters = { epic: 33, dependency: 21, impediment: 6 };
     return this._persist();
   }
@@ -37,10 +37,25 @@ export class MockRepository {
   async resetEmpty(actor, language = 'nl') {
     const seed = seedState();
     this.state = { teams: [], themes: [], quarters: [], capacity: [], epics: [], plans: [], dependencies: [], votes: [], discussions: [], checkIns: [], impediments: [], events: [],
-      members: seed.members.filter((m) => m.role === 'admin').map((m) => ({ ...m, teamId: null })),
+      members: seed.members.filter((m) => m.role === 'admin').map((m) => ({ ...m, teamId: null })), invitations: [],
       settings: { ...seed.settings, language, setupComplete: false, orgName: '' } };
     this.counters = { epic: 1, dependency: 1, impediment: 1 };
     return this._persist();
+  }
+  // Live updates between browser tabs (demo): another tab's write fires a `storage` event here.
+  subscribe(onState, onStatus) {
+    if (typeof window === 'undefined') { onStatus?.('error'); return () => {}; }
+    const handler = (e) => {
+      if (e.key !== KEY || !e.newValue) return;
+      try {
+        const saved = JSON.parse(e.newValue);
+        this.state = saved.state; this.counters = saved.counters; this.state.invitations ||= [];
+        onState(clone(this.state));
+      } catch { /* ignore a half-written value */ }
+    };
+    window.addEventListener('storage', handler);
+    onStatus?.('live');
+    return () => window.removeEventListener('storage', handler);
   }
   _ref(kind) {
     const n = this.counters[kind]++;
@@ -76,7 +91,8 @@ export class MockRepository {
       }
       Object.assign(existing, epic);
     } else {
-      this.state.epics.push({ id: uid(), refCode: this._ref('epic'), description: '', ownerName: '', label: '', regulatory: false, regulatoryDeadline: null, themeId: null, externalSource: null, externalId: null, externalUrl: null, ...epic });
+      const { id: _ignored, ...fields } = epic; // createEpic passes id: undefined; never let it override the uid
+      this.state.epics.push({ id: uid(), refCode: this._ref('epic'), description: '', ownerName: '', label: '', regulatory: false, regulatoryDeadline: null, themeId: null, externalSource: null, externalId: null, externalUrl: null, ...fields });
     }
     return this._persist();
   }
@@ -145,14 +161,31 @@ export class MockRepository {
     return this._persist();
   }
 
+  // Drag-and-drop / keyboard reorder of the strategic list (D28): ranks 1..n in the given order, one
+  // rank_changed event for the plan that moved furthest (the dragged one), reason optional unless locked.
+  async reorderPlans(actor, quarterId, orderedPlanIds, reason = '') {
+    if (!canRank(actor)) throw new PermissionError('Changing the strategic rank needs rank permission');
+    const q = this._quarter(quarterId);
+    if (q.phase === 'closed') throw new ValidationError('Quarter is closed');
+    if (isLockedPhase(q.phase) && !reason.trim()) throw new ValidationError('The quarter is locked: a reason is required to change the strategic rank');
+    const plans = orderedPlanIds.map((id) => this.state.plans.find((p) => p.id === id && p.quarterId === quarterId));
+    if (plans.some((p) => !p)) throw new ValidationError('Unknown plan in the new order');
+    let moved = null; let maxShift = 0;
+    plans.forEach((p, i) => { const shift = Math.abs((p.rank ?? plans.length + 1) - (i + 1)); if (shift > maxShift) { moved = p; maxShift = shift; } });
+    if (!moved) return this._persist();
+    const before = moved.rank; const after = plans.indexOf(moved) + 1;
+    plans.forEach((p, i) => { if (p.rank !== i + 1) { p.rank = i + 1; p.updatedAt = now(); } });
+    this._event(actor, 'rank_changed', 'plans', moved.id, quarterId, reason, { rank: before }, { rank: after });
+    return this._persist();
+  }
+
   // ── dependencies ───────────────────────────────────────────────────────────
   async addDependency(actor, dep) {
     const epic = this._epic(dep.epicId);
     if (!canWriteTeam(actor, epic.teamId)) throw new PermissionError('Only the requesting team can add an ask');
     if (dep.providerTeamId === epic.teamId) throw new ValidationError('A team cannot depend on itself');
     if (!dep.ask?.trim()) throw new ValidationError('Describe the ask');
-    if (!(dep.effortHigh > 0)) throw new ValidationError('Give an effort estimate (high estimate above 0)');
-    if (dep.effortLow > dep.effortHigh) throw new ValidationError('High estimate must be at least the low estimate');
+    if ((dep.effortLow || 0) > (dep.effortHigh || 0)) throw new ValidationError('High estimate must be at least the low estimate');
     this._guardPhase(dep.quarterId, dep.reason, 'add an ask');
     const created = { id: uid(), refCode: this._ref('dependency'), requesterTeamId: epic.teamId, requesterName: epic.ownerName || actor.name, ifDeclined: '', neededBy: null, effortLow: 0, effortHigh: 0, grantedLow: null, grantedHigh: null, response: 'proposed', responseReason: '', deferredToQuarterId: null, respondedAt: null, createdAt: now(), ...dep };
     delete created.reason;
@@ -166,7 +199,7 @@ export class MockRepository {
     if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can answer');
     const q = this._quarter(d.quarterId);
     if (!phaseAllows(q.phase, 'answer')) throw new ValidationError(`Answers are open from the Negotiate phase until the quarter closes (now: ${q.phase})`);
-    if (response !== 'accepted' && response !== 'proposed' && !reason.trim()) throw new ValidationError('A reason is required for this answer');
+    if (REASON_REQUIRED.has(response) && !reason.trim()) throw new ValidationError('A reason is required for this answer');
     if (response === 'deferred' && !deferredToQuarterId) throw new ValidationError('Choose the quarter to defer to');
     if (response === 'partial') {
       if (!(grantedHigh > 0)) throw new ValidationError('Say how much you can do (granted person-weeks)');
@@ -198,7 +231,7 @@ export class MockRepository {
     const { reason, ...rest } = patch;
     this._guardPhase(d.quarterId, reason, 'edit an ask');
     const next = { ...d, ...rest };
-    if (!(next.effortHigh > 0) || next.effortLow > next.effortHigh) throw new ValidationError('Check the effort estimate');
+    if ((next.effortLow || 0) > (next.effortHigh || 0)) throw new ValidationError('Check the effort estimate');
     const effortChanged = next.effortHigh !== d.effortHigh || next.effortLow !== d.effortLow || next.ask !== d.ask;
     this._event(actor, 'dependency_edited', 'dependencies', d.id, d.quarterId, reason, { ask: d.ask, effortLow: d.effortLow, effortHigh: d.effortHigh }, { ask: next.ask, effortLow: next.effortLow, effortHigh: next.effortHigh });
     Object.assign(d, rest);
@@ -351,6 +384,63 @@ export class MockRepository {
     if (!onlyLanguage && !isAdmin(actor)) throw new PermissionError('Admin only');
     Object.assign(this.state.settings, patch);
     return this._persist();
+  }
+
+  // ── members and invitations (docs/design.md section 18) ────────────────────
+  // Demo mode has no e-mail: an invitation is accepted at once and the person appears in "Viewing as".
+  async inviteMember(actor, inv) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can invite people');
+    const email = normaliseEmail(inv.email);
+    const teamId = checkRole(inv.role, inv.teamId, this.state.teams);
+    const list = (this.state.invitations ||= []);
+    const existing = list.find((i) => i.email === email);
+    if (existing && !existing.acceptedAt) throw new ValidationError('This e-mail address has already been invited');
+    if (existing) list.splice(list.indexOf(existing), 1); // re-invite after the person was removed
+    const displayName = String(inv.displayName || '').trim();
+    const invitation = { id: uid(), email, role: inv.role, teamId, canRank: !!inv.canRank, displayName, invitedBy: actor.id, createdAt: now(), acceptedAt: now() };
+    list.push(invitation);
+    const member = { id: uid(), name: displayName || email.split('@')[0], title: email, email, role: inv.role, teamId, canRank: !!inv.canRank };
+    this.state.members.push(member);
+    this._event(actor, 'member_invited', 'invitations', invitation.id, null, '', null, { email, role: inv.role, teamId, canRank: !!inv.canRank });
+    return this._persist();
+  }
+  async updateMember(actor, userId, patch) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can change roles');
+    const m = this.state.members.find((x) => x.id === userId);
+    const role = patch.role ?? m?.role;
+    checkMemberChange(actor, this.state.members, m, role);
+    const teamId = checkRole(role, patch.teamId !== undefined ? patch.teamId : m.teamId, this.state.teams);
+    const next = { role, teamId, canRank: patch.canRank !== undefined ? !!patch.canRank : m.canRank };
+    if (patch.displayName !== undefined) {
+      if (!String(patch.displayName).trim()) throw new ValidationError('Name is required');
+      next.name = String(patch.displayName).trim();
+    }
+    this._event(actor, 'member_updated', 'memberships', userId, null, '', { role: m.role, teamId: m.teamId, canRank: m.canRank }, { role: next.role, teamId: next.teamId, canRank: next.canRank });
+    Object.assign(m, next);
+    return this._persist();
+  }
+  async removeMember(actor, userId) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can remove people');
+    const m = this.state.members.find((x) => x.id === userId);
+    checkMemberChange(actor, this.state.members, m, null);
+    this.state.members = this.state.members.filter((x) => x.id !== userId);
+    this._event(actor, 'member_removed', 'memberships', userId, null, '', { role: m.role, teamId: m.teamId, canRank: m.canRank }, null);
+    return this._persist();
+  }
+  async revokeInvitation(actor, invitationId) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can revoke invitations');
+    const inv = (this.state.invitations || []).find((i) => i.id === invitationId);
+    if (!inv) throw new ValidationError('Unknown invitation');
+    this.state.invitations = this.state.invitations.filter((i) => i.id !== invitationId);
+    this._event(actor, 'invitation_revoked', 'invitations', invitationId, null, '', { email: inv.email }, null);
+    return this._persist();
+  }
+  // No e-mail in demo mode; the UI shows a notice instead.
+  async sendSignInLink(actor, email) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can send sign-in links');
+    const e = normaliseEmail(email);
+    if (!(this.state.invitations || []).some((i) => i.email === e)) throw new ValidationError('Invite this e-mail address first');
+    return { sent: false, demo: true };
   }
 
   // ── integration import (D19-D22) ───────────────────────────────────────────

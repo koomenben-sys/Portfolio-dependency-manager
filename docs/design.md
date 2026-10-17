@@ -205,7 +205,7 @@ Tables: `organisations`, `memberships(user_id, org_id, role, team_id, can_rank)`
 - Entra ID SSO: Supabase SSO (SAML) on a paid plan; required for real enterprise use (director critique). Not in MVP.
 - Audit log retention vs erasure: `plan_event.actor_id` can be pseudonymised, rows are not deleted.
 - Absences are aggregated weeks only. Works-council (OR) concerns: no individual productivity data is collected.
-- Multi-tenant signup, billing, per-org settings UI, tenant isolation tests (pgTAP) are the next phase; the schema already carries org_id.
+- Multi-tenant signup, billing, per-org settings UI, tenant isolation tests: `db/tests/rls_test.sql` (section 18.2); the schema already carries org_id.
 - Pages hosting is static; anything with secrets goes through Edge Functions.
 
 ## 12. Role-play validation: conflicts and resolutions
@@ -319,7 +319,7 @@ Differences that remain between mock mode and Supabase mode (by design or accept
 - When an answered ask is edited with a reason, the dependency trigger also logs `dependency_answered` (accepted → proposed) next to `dependency_edited`; the mock logs only the edit.
 - Deleting an epic cascades in SQL and leaves `epic_plans_removed` / `dependencies_removed` events with an empty reason; the mock deletes silently.
 - `plan_events` carry `strategic_rank` (trigger) or `rank` (adapter / mock) in before/after; the UI reads both.
-- Each command re-reads the whole state after the write (one request per table); mock mode is in-memory. Screens refresh every 30 s in Supabase mode; there is no realtime (follow-up).
+- Each command re-reads the whole state after the write (one request per table); mock mode is in-memory. Screens update through Supabase Realtime (008, section 18.3), with a fallback to refreshing every 30 s.
 - Settings: `staleDays` and `voteBlocksLock` are columns, the rest of the profile is a jsonb document; the mock keeps one object.
 - `members` comes from `member_directory` (006); without 006 a non-admin sees only their own row and history falls back to "former member" for other actors.
 - Reload keeps the session (the Feb-era sign-out-on-reload was removed with the auth-lock fix).
@@ -340,6 +340,8 @@ Live walk-through (2026-10-17, owner's project, migrations 001-006 run by the ow
 | UI forms (after merging `main` with the Dutch UI and onboarding wizard, PR #15 and #16) | wizard in Dutch with the profile from Supabase; team added through the form, duplicate name shows the Dutch message; capacity saved through the form with the profile defaults; "Open het bord" stores `setupComplete` (wizard does not return after reload); check-in through the dialog; admin language switch to English and back persists across reloads: ok. |
 | Not tested live | planner / viewer accounts (only the owner's admin account exists): RLS for non-admins is desk-checked and mirrored in JS but not exercised against the database — invite a second user to verify (follow-up, section 17.4). |
 
+**RLS test (added in section 18).** `db/tests/rls_test.sql` checks the policies and triggers for non-admin roles and tenant isolation without real accounts. To run it: open the Supabase SQL editor, paste the whole file, click Run. The grid shows a TOTAL row and one PASS/FAIL row per check. The script makes its own test users (`rls-*@example.invalid`, no password) and two test organisations, runs every check as one of those users inside a rolled-back sub-transaction, and deletes everything again. Locally, `npm run test:rls` runs migrations 001-008 and the same script in PGlite (Postgres in WASM with a minimal Supabase stand-in).
+
 
 ### Owner questions during the build
 - "Which agent is the coordinator?" - this session; the role agents are one-shot reviewers.
@@ -354,7 +356,7 @@ The owner asked how an arbitrary organisation is mapped correctly. The answer is
 |---|---|---|---|
 | 1. Organisation profile | name; what a planning unit is called (team / squad / product team / department / tribe); capacity unit (person-weeks, or person-days shown as weeks); fiscal-year start month; default weeks per quarter, focus factor, reserve %; check-in cadence; "no response" threshold | Settings > Organisation setup | admin |
 | 2. Planning units | the teams that own epics and answer asks; optional ADO area path / Jira project key per team (import mapping) | Settings > Planning units; mapping in the import panel | admin |
-| 3. People and roles | admin (facilitator), planner (bound to one planning unit), viewer; `can_rank` flag for whoever sets strategic priority | mock: personas; Supabase: `memberships` rows (*follow-up: invite UI*) | admin |
+| 3. People and roles | admin (facilitator), planner (bound to one planning unit), viewer; `can_rank` flag for whoever sets strategic priority | Settings > People and roles (invite by e-mail, edit role / team / rank, remove; section 18) | admin |
 | 4. Strategic themes | the ordered list the top steers on; "unaligned" is always available | Settings > Strategic themes | can_rank |
 | 5. Quarters | the quarter being planned (+ optionally the active one); phases are driven from Session | Settings > Quarters | admin |
 | 6. Capacity | headcount + absence per team for the planning quarter, defaults from the profile; teams refine focus/reserve on the board | Settings > Capacity for all teams at once; Board > Capacity assumptions | admin / planner |
@@ -395,7 +397,134 @@ The owner asked how an arbitrary organisation is mapped correctly. The answer is
 - **Language** (`src/i18n/`): English strings are keys, `nl.js` holds Dutch; default `nl` (semi-government is the first target market); switch in the header; stored in `settings.language`. Decision D24: a minimal in-house `t()` instead of i18next. Reason: ~400 strings, no plural/ICU needs yet, zero dependencies; rejected: i18next (weight), separate Dutch build (two deployments).
 
 ### 17.4 Follow-ups for configuration
-- Invite / membership UI (Supabase: insert into `memberships`, send magic link); today SQL.
+- ~~Invite / membership UI~~ — built, section 18.
 - Multiple concurrent sessions (per tribe/ART) = quarter scoped to a label; schema already allows several quarters, a `scope_label` column is the small addition.
 - Terminology overrides beyond the unit label (e.g. "epic" -> "feature", "ask" -> "dependency request") as an i18n table; Dutch UI strings.
 - Import mapping persistence (`integration_connections.config.teamMapping`) and Jira/Trello adapters behind the same `ExternalEpic` contract.
+
+## 18. Visual foundation (2026-10-17, commit 4822c13)
+- **D25 — Design tokens as CSS variables.** Inter Variable (`@fontsource-variable/inter`), `lucide-react` line icons, slate neutrals, one teal accent (#0E7490), status = icon + short label + pastel fill, radius 4/6/8/12, shadows only on floating layers, 150-200 ms motion with `prefers-reduced-motion` honoured, focus rings everywhere. Tokens live in `src/index.css` and are mapped in `tailwind.config.js` (`canvas`, `surface`, `border`, `ink`, `muted`, `accent`, `ok/warn/danger/info`), so a tenant theme (`[data-theme="overheid"]`) swaps colours without a rebuild. Rejected: a component library (weight, look-alike), indigo accent (kept from the Feb prototype, too loud).
+
+## 19. Less is more reset (2026-10-17)
+
+Owner, verbatim gist, late 2026-10-17: *"This is first and foremost about aligning dependencies BASED ON PRIORITISATION (for which we had a nice solution). The Jan/Feb version already had a very nice basis. You turned it into a bloated, unclear monster. ... Less is more."*
+
+The product in one sentence: **rank the epics top-down, then let teams agree on the dependencies — highest priority first.** The reset brings back the Feb information architecture (Prioritization · Dependencies · Alignment, commit `10fe602`) on the current data model and the new visual foundation. Binding spec: `core-reset-spec.md` (side-session notes); it supersedes the earlier revamp brief's screen designs.
+
+### Decisions
+- **D26 — Exactly three numbered screens.** `#prioriteren` (home), `#afhankelijkheden`, `#afstemmen`, plus Instellingen (gear) and an account menu (Bekijken als, language, Rondleiding). Slim top bar instead of a sidebar: the Feb version had numbered tabs and three items do not justify a 240 px rail. Rejected: the revamp brief's sidebar + command palette + toasts (more surface, no more clarity).
+- **D27 — Extended modules behind one toggle, code kept.** Overzicht, Bord (capacity lanes / cut line), Intake & capaciteit (old Dependencies screen, now `DependenciesView.legacy.jsx`), Sessie (phases, votes, lock), In het kwartaal (check-ins, impediments) and Mijn aandacht leave the navigation. `settings.modules` (default **off**, mock state / `org_settings.profile` jsonb) adds them back as the "Uitgebreid (beta)" group and shows themes, capacity and cadence in Instellingen. Nothing is deleted: the capacity maths, session model and selectors keep working for a later iteration. Rejected: deleting the views (other work may build on them), keeping them in the nav as "advanced" tabs (that is the monster).
+- **D28 — `reorderPlans(actor, quarterId, orderedPlanIds, reason='')`.** One command for drag & drop and the arrow buttons: needs rank permission, assigns ranks 1..n in the given order, logs one `rank_changed` event for the plan that moved furthest. The reason is optional (inline "Waarom? (optioneel)", no modal) except in a locked quarter. Supabase: the 005 trigger insists on a reason, so an empty one is stored as "Herprioritering"; only rows whose rank changes are written, each through `update_with_reason`. The panel's rank field also goes through this command so the list never has gaps or duplicates. Rejected: a numeric rank field with mandatory reason modal (the old flow; slow and nobody wrote a useful reason).
+- **D29 — Reason required only for "Kan niet" (declined) and "Uitgesteld" (deferred).** "Bespreken" (needs_priority_call) takes an optional reason; "Toezeggen" none. `REASON_REQUIRED` in `domain/model.js`, mirrored in both adapters.
+- **D30 — Effort on an ask is optional.** The Feb version had a T-shirt size at most; the inline "+ Verzoek" row has an optional "pw" field. Both adapters only check low <= high. Capacity maths treats 0 as 0.
+- **D31 — Four answer states in the UI.** Open · Toegezegd · Bespreken · Kan niet (`ASK_META`). Existing `partial` / `deferred` data is displayed read-only as "Toegezegd (deels)" / "Uitgesteld" and no longer offered as an answer in the core screens; the legacy answer dialog (with partial/deferred) stays in the beta Intake screen.
+- **D32 — Wizard in three steps.** Organisatie (name, language) · Teams (one per line, at least two) · Kwartaal + eerste epics ("Team: titel" per line, ranked in the order typed via `reorderPlans`) → "Naar prioriteren". Themes, capacity, fiscal year and unit label left the wizard (still in Instellingen / modules). Optional link to the Azure DevOps demo import.
+- **D33 — Three short role tours.** Directeur (prioriteren), Teamlead (aan ons gevraagd), Facilitator (afstemmen); 3-4 steps, one sentence each, Dutch + English, small coach card bottom-right with a `[data-tour]` highlight ring and view nudges (tab, matrix) via a window event. The five long tours were removed.
+- **D34 — Copy and density rules.** No explanatory paragraphs; helper text <= 6 words; empty state = one line + one button; max two chips per row; numbers and icons over sentences; demo banner replaced by a small "Demo" chip.
+
+### What each screen shows
+1. **Prioriteren** — one table of the quarter's epics by strategic rank (# · Epic · Team · Afhankelijkheden as tiny count chips · Status), drag & drop or arrow buttons (Alt+↑/↓), inline optional reason after a move, flash on the dropped row, collapsed "Nog niet geprioriteerd (n)" with a one-click "Rang" action, a subtle left marker (amber/red) when an ask is Bespreken / Kan niet, search, "+ Epic". Row click opens the simplified panel.
+2. **Afhankelijkheden** — team selector; tabs "Wij vragen (n)" (our epics in rank order with their asks and an inline "+ Verzoek" row: team · what · optional pw) and "Aan ons gevraagd (n)" (asks ordered by the requesting epic's rank; segmented Toezeggen / Bespreken / Kan niet; Kan niet asks an inline required reason, Bespreken an optional one).
+3. **Afstemmen** — four clickable count tiles; "Te bespreken" = team pairs with Bespreken / Kan niet asks sorted by the highest-ranked epic involved, expandable to the concrete asks (rank · epic · what · status · reason); matrix toggle (team × team, counts, worst-status colour + glyph, axes "vraagt ↓ levert →"), a cell focuses its pair.
+- **Epic panel** (`SimpleEpicPanel.jsx`): title, team, quarter, rank (via reorderPlans), effort low–high, asks with status, "Meer" (description, label, team, remove from quarter), "Historie" collapsed. Docked right, slide-in, Esc closes, focus returns. The full `EpicPanel.jsx` stays for the beta views.
+- **Instellingen**: Organisatie · Teams · Kwartalen · Mensen & rollen (existing members panel) · Import · Demo · Uitgebreide modules (beta); setup checklist only for teams / quarter / epics while incomplete.
+
+### Seed
+Six teams (Payments, Klantportaal, Claims, Polisadministratie, Data Platform, Platform & Security), 16 epics in 2027 Q1 (14 ranked), 13 asks (6 Toegezegd, 3 Bespreken, 2 Kan niet, 2 Open) giving four pairs on Afstemmen. Mock storage key bumped to `kwartaalplan.mock.v2` so existing browsers pick up the calmer seed. Bug fixed on the way: the mock's `createEpic` let `id: undefined` override the generated id.
+
+### Verified
+`npm run build` after every step; a bundled Node smoke test against `MockRepository` (seed shape, reorderPlans permissions / ranks / event, answer-reason rules, ask without effort, wizard flow). Browser verification by the lead.
+
+### Iteration 1 (fictive-user tests, 2026-10-18)
+
+Four fictive users (director, team lead / planner, facilitator, viewer) walked the three screens; all scored "calm & clear" 8/10 and "I'd use it" 5-7/10. Every change below removes something or answers the persona's one question in one glance; no explanatory text was added. Binding list: `reset-iteration-1.md` (side-session notes).
+
+| Persona | Finding | Change |
+|---|---|---|
+| Director, planner, viewer | "Toegezegd" in the Status column: three of four did not know what it referred to. | Status (epic commitment) column removed from Prioriteren; the one signal per row is the dependency state. |
+| Director | Count chips "2 ✓ 1 ?" did not answer "what and with whom". | One readable worst-issue cell per row: "✕ Kan niet · Platform & Security", "? Bespreken · Team", "◷ 1 open", "✓ 2 toegezegd", "–"; several asks show the worst plus "+n"; the tooltip lists them all (`WorstIssue` in `core.jsx`). Open uses a clock glyph everywhere. |
+| Director | EP-codes and the "Sleep, of Alt+↑/↓" hint were noise. | Codes stay in the panel only; the hint is the drag handle's tooltip. |
+| All | Teal badges for ranks 1-3 were unexplained. | One neutral rank badge style; the left marker for Kan niet / Bespreken rows stays. |
+| Planner | Wanted to see only her team on Prioriteren. | Team filter "Alle teams" next to search (default all; reordering pauses while filtering). |
+| Team lead | Needed the counts of a tab before reading rows, and the load an incoming list puts on the team. | One line of icon+number chips per tab (✕ · ? · ◷ · ✓), each a filter; "Aan ons gevraagd" adds "Gevraagd n pw · beschikbaar n pw" when capacity is set for the quarter (requested = effortHigh of asks not declined; available from `availableWeeks`), red when requested > available. |
+| Planner | Epics without asks took space on "Wij vragen"; reasons were too small to read. | Epics without asks collapse into "n epics zonder verzoeken"; reasons under an ask in normal muted text; rank order kept. |
+| Planner | "2–3 pw" on outgoing rows was never used. | Effort text removed from "Wij vragen" rows (kept in "Aan ons gevraagd" and the form). |
+| Planner | The bin icon on every ask invited mistakes. | Delete appears on hover / keyboard focus only. |
+| Team lead | "Bespreken" opened a reason box like "Kan niet". | Bespreken answers in one click; only Kan niet asks for a reason inline. |
+| Team lead | The team selector did not read as the page subject. | Title row "Afhankelijkheden · [team ▾]", defaulting to the actor's team. |
+| Facilitator | Eye landed on Open/Toegezegd first. | Tiles ordered Kan niet · Bespreken · Open · Toegezegd; the last two quieter (smaller number, muted). |
+| Facilitator, director | "Are the top priorities safe?" needed a scan of the list. | One line "Top 5: n in gevaar (rang 2, 5)" from the five highest-ranked epics with a Kan niet / Bespreken ask; rank numbers open the pair. |
+| Facilitator | Open asks between two teams were invisible on the agenda. | Open-only pairs listed after the problem pairs in a quieter style; one worst-status chip per pair. |
+| Facilitator | Outcomes had to be recorded on another screen during the meeting. | Segmented Toezeggen / Bespreken / Kan niet inline per ask for the provider's planner or an admin; "Besproken" check per pair, session-local (`localStorage` key `kp.discussed.<quarter>`, no domain change). |
+| Facilitator | The matrix button competed with the agenda. | Matrix behind a text link "Matrix tonen" at the bottom. |
+| All | "Live"/"30 s" chip meant nothing in the demo. | Shown only in Supabase mode; the small DEMO chip stays. |
+| Viewer | Disabled inputs in the panel looked broken. | Rank, effort, description and label render as plain text without the rights. |
+
+Deliberate deviations: the optional reason for "Bespreken" has no entry point in the core screens yet (the panel is read-only for asks; adding a field there would be new UI) — the reason survives from an earlier "Kan niet" answer and is shown wherever it exists. The "Besproken" check is per browser, as the list asked.
+
+### Visual polish (2026-10-18)
+
+CSS/Tailwind only, no new UI or text (review: `polish-review.md` in the side-session notes). Rows 48 → 44px; epic titles regular weight and team names muted so the dependency cell is the one medium-weight element per row; table header "#" aligned to the rank badge. Chips are tint-only (no 1px border; `toneBorder()` exists for buttons such as matrix cells); zero-count chips go grey instead of translucent. Nav: active item = ink text + filled number, no tinted pill. Afstemmen: icon inline before the tile label, 32px counts for Kan niet / Bespreken (quiet at zero), 24px muted for the rest; pairs are one card with `divide-y`, expanded asks on the canvas background. `--color-muted` nudged to `#5f6b80` so muted text stays ≥ 4.5:1 on canvas and surface-2.
+Wow detail: FLIP reorder on Prioriteren — displaced rows glide 260ms (`useLayoutEffect` measuring `getBoundingClientRect`, skipped under `prefers-reduced-motion`).
+
+## 20. P1: invites, RLS tests, realtime (built 2026-10-17, branch `claude/p1-invites-rls-realtime`)
+
+Migrations `007_invitations.sql` and `008_realtime.sql` (both additive and re-runnable), test `db/tests/rls_test.sql`.
+
+### 18.1 Invitations and member admin
+**D35 - An invitation is a row, not an account.** `invitations(org_id, email, role, team_id, can_rank, display_name, invited_by, created_at, accepted_at)`, e-mail lower case and unique per organisation. After sign-in the app calls `accept_invitations()` once (SECURITY DEFINER). The function turns open invitations for the user's **confirmed** e-mail address into `memberships` rows and marks them accepted. An existing membership is left alone. The call runs in an effect after the user is set, never inside `onAuthStateChange` (see section 16). The plan only loads once that call is done, so a new invitee does not see "no membership".
+Rejected: creating `auth.users` from the browser (needs the service key); a trigger on `auth.users` insert (the trigger would sit in the auth schema and fire for every sign-up, including people with no invite); `supabase.auth.admin.inviteUserByEmail` (service key, so it would need an Edge Function — a good later option for branded invitation e-mails).
+
+**D36 - The sign-in link only goes out when an admin clicks it.** "Send link" calls `signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: <app url> } })`. This works only for invited addresses and does not touch the admin's own session. With the implicit flow (the supabase-js default here), the link works in the invitee's own browser. In demo mode the invitation is accepted at once, the person shows up in "Viewing as", and the screen says that no e-mail was sent.
+
+**D37 - Invitations are visible to admins only.** The brief also mentioned "member read own org". It was not built: invitees' e-mail addresses are personal data, and acceptance does not need to read the table.
+
+**Guards (same texts in JS and SQL):** an admin cannot remove themselves or change their own role, and an organisation keeps at least one admin (trigger `memberships_guard`, applies only to app users; the SQL editor is not restricted). A planner needs a team, and other roles have no team.
+
+UI: `src/components/plan/MembersAdmin.jsx`, one compact table. It lists members with inline role / team / rank controls, then open invitations as rows with an "Invited" chip, "Send link" and "revoke". An "Invite" button opens a small form. Following owner feedback ("lightweight tool"), the screen has no explanatory text.
+
+### 18.2 RLS and tenant-isolation test
+**D38 - Plain SQL, no pgTAP.** The script runs as-is in the Supabase SQL editor. It creates seven throw-away users directly in `auth.users` plus two organisations. Each check switches to role `authenticated` with `request.jwt.claims` (as PostgREST does), inside a sub-transaction that is always rolled back. It compares the count returned, or the error raised, with the expected result. The 73 checks cover:
+- team scope;
+- strategic rank without `can_rank`;
+- viewer read-only;
+- a `can_rank` viewer changing the rank only;
+- tenant isolation over every table and view in both directions;
+- `plan_events` insert-only;
+- requester / provider split on asks;
+- invitations admin-only, plus acceptance;
+- membership guards.
+
+The script cleans up after itself and is re-runnable. Rejected: pgTAP (an extension to enable, and less readable for the owner); a Node test against the live project (needs real accounts or the service key).
+
+**Gaps found while writing the test (fixed in 007).** The 002 policies were wider than the app's rules; the JS adapters hid this, but a direct API call would not have been stopped:
+- the requesting team could answer its own ask (`deps_write` covers both teams);
+- the provider team could create, edit or delete an ask in the requester's name;
+- a `can_rank` user could add or remove plans (`epic_plans_write ... or can_rank`).
+
+Triggers `dependencies_guard` and `epic_plans_guard` now enforce these rules in SQL, with the adapters' error texts.
+
+**Local run:** `npm run test:rls` (PGlite, devDependency `@electric-sql/pglite`). It approximates Supabase (simplified `auth.users`, non-superuser owner) and is not a substitute for running the script on the real project. A negative control was checked: with the 007 guards dropped, the script reports FAIL.
+
+### 18.3 Realtime
+**D39 - Supabase Realtime `postgres_changes`, one channel per organisation, debounced reload.** 008 adds the 15 tables `load()` reads to the `supabase_realtime` publication; it checks `pg_publication_tables` first, so it is safe to re-run. `SupabaseRepository.subscribe(onState, onStatus)` listens on every table, filtered on `org_id=eq.<org>` (RLS still decides what each subscriber receives). Events are debounced for 400 ms, because one write fires several (row plus `plan_events`); then the whole state is reloaded once. `MockRepository.subscribe` listens to the browser `storage` event, so two demo tabs stay in sync.
+
+`PlanContext` exposes `liveStatus`:
+- `live` (subscribed): a safety refresh runs every 2 minutes, in case events are missed (for example when 008 was not run — Realtime then still reports SUBSCRIBED);
+- `polling` (subscription failed or not yet up): refresh every 30 s;
+- `offline` (browser offline): the state reloads when the network returns.
+
+`LiveIndicator.jsx` shows a dot plus "Live" / "30 s" / "Offline" in the header.
+
+Rejected: applying the change payload to local state (two code paths, and delete events carry only primary keys under RLS); Broadcast from the client (it would skip RLS and miss writes from triggers or SQL); Presence (not needed yet).
+
+### 18.4 Owner actions and open points
+1. Run `007_invitations.sql`, then `008_realtime.sql`, in the SQL editor. Then run `db/tests/rls_test.sql` and check that the TOTAL row says PASS.
+2. Supabase Auth > URL configuration: add the app URL (`https://koomenben-sys.github.io/Portfolio-dependency-manager/` and the local dev URL) to the Redirect URLs, otherwise sign-in links fall back to the Site URL.
+3. Keep "Confirm email" switched on. Otherwise someone could sign up by password with an invited address and claim the invitation (`accept_invitations` only accepts confirmed e-mail addresses).
+4. The built-in Supabase e-mail sender is rate-limited to a few e-mails per hour; for a pilot, set up custom SMTP.
+
+Not tested against the live project: sending sign-in links, accepting an invitation, the Realtime subscription, `rls_test.sql` in the Supabase SQL editor. Possible follow-ups:
+- a "send me a sign-in link" option on the login screen (invitees have no password; the session persists, but after sign-out they need a new link from an admin);
+- branded invitation e-mails via an Edge Function.
+

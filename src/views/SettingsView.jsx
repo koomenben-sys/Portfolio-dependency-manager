@@ -1,98 +1,136 @@
 import React, { useState } from 'react';
+import { Check, Circle } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { isAdmin, canRank } from '../data/repository';
 import { PHASES, quarterLabel } from '../domain/model';
-import { useT } from '../i18n';
-import { Panel, btn, input, Field, ErrorNote, Empty, Modal } from '../components/plan/ui';
+import { useT, LANGUAGES } from '../i18n';
+import { cls, ViewHeader, ErrorLine } from '../components/plan/core';
+import { Field, input, btn, ErrorNote } from '../components/plan/ui';
 import { mapWorkItems, previewImport } from '../integrations/azureDevOps/mapper';
 import { MOCK_ADO_RESPONSE } from '../integrations/azureDevOps/mock';
 import { fetchEpics } from '../integrations/azureDevOps/client';
-import { SetupPanel, BulkCapacity, MembersPanel } from '../components/plan/SetupPanel';
+import { BulkCapacity } from '../components/plan/SetupPanel';
+import { MembersAdmin } from '../components/plan/MembersAdmin';
 
-// Teams, themes, quarters, cadence, ADO import, JSON export, demo reset (AC A3, G1-G6).
+// Instellingen (docs/design.md section 19): plain sections — Organisatie · Teams · Kwartalen · Mensen & rollen ·
+// Import · Demo · Uitgebreide modules (beta). The setup checklist shows only the three essentials, only while
+// incomplete. Themes, capacity and cadence appear only when the extended modules are on.
 export function SettingsView() {
   const { state, actor, run, reset, dataSource } = usePlan();
   const t = useT();
   const [err, setErr] = useState(null);
   const admin = isAdmin(actor);
+  const modules = !!state.settings.modules;
   const act = async (m, ...a) => { const r = await run(m, ...a); setErr(r.ok ? null : r.error); return r; };
-
+  const planning = state.quarters.find((q) => !['closed', 'active'].includes(q.phase)) || state.quarters[0];
+  const essentials = [
+    { id: 'teams', label: t('Teams'), done: state.teams.length >= 2 },
+    { id: 'quarters', label: t('Quarter'), done: !!planning },
+    { id: 'epics', label: t('Epics'), done: !!planning && state.plans.some((p) => p.quarterId === planning.id), href: '#prioriteren' },
+  ];
+  const incomplete = essentials.some((e) => !e.done);
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `kwartaalplan-export-${new Date().toISOString().slice(0, 10)}.json`; a.click();
   };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-bold">{t('Settings')} <span className="text-sm font-normal text-gray-600">— {t('data source: {source}', { source: dataSource })}</span></h2>
-      <ErrorNote error={err} />
-      <SetupPanel onGoTo={(id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
-      {!admin && <Empty>{t('Most settings are admin-only. Themes can be edited by users with rank permission.')}</Empty>}
+    <div className="max-w-3xl">
+      <ViewHeader title={t('Settings')} meta={dataSource === 'mock' ? 'Demo' : 'Supabase'} />
+      <ErrorLine error={err} />
+      {incomplete && (
+        <ol className={`${cls.card} p-3 mb-5 flex flex-wrap gap-4 text-label`} aria-label={t('Setup')}>
+          {essentials.map((e) => <li key={e.id} className="inline-flex items-center gap-1.5">{e.done ? <Check size={14} className="text-ok" aria-hidden="true" /> : <Circle size={14} className="text-faint" aria-hidden="true" />}<a className={e.done ? 'text-muted' : 'text-accent hover:underline'} href={e.href || `#${e.id}`} onClick={(ev) => { if (!e.href) { ev.preventDefault(); document.getElementById(e.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }}>{e.label}</a></li>)}
+        </ol>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div id="teams"><Panel title={t('Planning units ({unit})', { unit: state.settings.unitLabel ? t(state.settings.unitLabel) : t('teams') })}>
-          <ul className="space-y-1 text-sm">
+      <div className="space-y-8">
+        <Section id="organisation" title={t('Organisation')}>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block"><span className={cls.label}>{t('Name')}</span><input className={cls.input} defaultValue={state.settings.orgName || ''} disabled={!admin} onBlur={(e) => e.target.value !== (state.settings.orgName || '') && act('updateSettings', { orgName: e.target.value })} /></label>
+            <label className="block"><span className={cls.label}>{t('Language')}</span><select className={cls.input} value={state.settings.language || 'nl'} onChange={(e) => act('updateSettings', { language: e.target.value })}>{LANGUAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+          </div>
+        </Section>
+
+        <Section id="teams" title={t('Teams')} meta={state.teams.length}>
+          <ul className="divide-y divide-border">
             {state.teams.map((x) => (
-              <li key={x.id} className="flex items-center gap-2">
-                <input className={input} defaultValue={x.name} disabled={!admin} onBlur={(e) => e.target.value !== x.name && act('upsertTeam', { id: x.id, name: e.target.value })} />
-                {admin && <button className={btn.danger} onClick={() => act('deleteTeam', x.id)}>{t('remove')}</button>}
+              <li key={x.id} className="flex items-center gap-2 py-1.5">
+                <input className={`${cls.input} max-w-sm`} defaultValue={x.name} disabled={!admin} aria-label={t('Team')} onBlur={(e) => e.target.value.trim() && e.target.value !== x.name && act('upsertTeam', { id: x.id, name: e.target.value.trim() })} />
+                {admin && <button className={`${cls.quiet} text-danger-fg`} onClick={() => act('deleteTeam', x.id)}>{t('remove')}</button>}
               </li>
             ))}
           </ul>
           {admin && <AddRow placeholder={t('New team')} onAdd={(name) => act('upsertTeam', { name })} />}
-          <p className="text-xs text-gray-600 mt-2">{t('Capacity per team per quarter: below ("Capacity for all teams at once") or per team on the board ("Capacity assumptions").')}</p>
-        </Panel></div>
+        </Section>
 
-        <div id="themes"><Panel title={t('Strategic themes (top-down)')}>
-          <ul className="space-y-1 text-sm">
-            {state.themes.map((x) => (
-              <li key={x.id} className="flex items-center gap-2">
-                <input className={input} defaultValue={x.name} disabled={!canRank(actor)} onBlur={(e) => e.target.value !== x.name && act('upsertTheme', { id: x.id, name: e.target.value })} />
-                {canRank(actor) && <button className={btn.danger} onClick={() => act('deleteTheme', x.id)}>{t('remove')}</button>}
-              </li>
-            ))}
-          </ul>
-          {canRank(actor) && <AddRow placeholder={t('New theme')} onAdd={(name) => act('upsertTheme', { name })} />}
-        </Panel></div>
-
-        <div id="quarters"><Panel title={t('Quarters')}>
-          <ul className="space-y-1 text-sm">{state.quarters.map((q) => <li key={q.id} className="flex justify-between"><span>{quarterLabel(q)}</span><span className="text-xs text-gray-500">{t(PHASES.find((p) => p.id === q.phase)?.label || q.phase)}{q.baseline ? ` · ${t('baseline')}` : ''}</span></li>)}</ul>
+        <Section id="quarters" title={t('Quarters')}>
+          <ul className="divide-y divide-border">{state.quarters.map((q) => <li key={q.id} className="flex justify-between py-1.5 text-body"><span className="tnum">{quarterLabel(q)}</span>{modules && <span className="text-caption text-muted">{t(PHASES.find((p) => p.id === q.phase)?.label || q.phase)}{q.baseline ? ` · ${t('baseline')}` : ''}</span>}</li>)}</ul>
           {admin && <NewQuarter onAdd={(year, q) => act('upsertQuarter', { year, q })} />}
-          <p className="text-xs text-gray-600 mt-2">{t('Phases are advanced from the Session screen.')}</p>
-        </Panel></div>
+        </Section>
 
-        <Panel title={t('Cadence and data')}>
-          <Field l={t('Check-in cadence (days before an epic is stale)')}>
-            <input type="number" min="1" className={`${input} !w-24`} defaultValue={state.settings.staleDays} disabled={!admin} onBlur={(e) => Number(e.target.value) !== state.settings.staleDays && act('updateSettings', { staleDays: Number(e.target.value) })} />
-          </Field>
-          <div className="flex gap-2 mt-4">
-            <button className={btn.secondary} onClick={exportJson}>{t('Export JSON')}</button>
-            {admin && dataSource === 'mock' && <button className={btn.secondary} onClick={() => confirm(t('Reset all demo data to the seed?')) && reset()}>{t('Reset demo data')}</button>}
-            {admin && dataSource === 'mock' && <button className={btn.secondary} onClick={async () => { if (confirm(t('Start with an empty organisation? The demo data is removed from this browser.'))) { await run('resetEmpty', state.settings.language); window.location.hash = 'board'; } }}>{t('Start with an empty organisation')}</button>}
+        <Section id="members" title={t('People and roles')}><MembersAdmin /></Section>
+
+        {admin && <Section id="import" title={t('Import')}><AdoImport /></Section>}
+
+        <Section id="demo" title={dataSource === 'mock' ? t('Demo') : t('Data')}>
+          <div className="flex flex-wrap gap-2">
+            <button className={cls.secondary} onClick={exportJson}>{t('Export JSON')}</button>
+            {admin && dataSource === 'mock' && <button className={cls.secondary} onClick={() => confirm(t('Reset all demo data to the seed?')) && reset()}>{t('Reset demo data')}</button>}
+            {admin && dataSource === 'mock' && <button className={cls.secondary} onClick={async () => { if (confirm(t('Start with an empty organisation? The demo data is removed from this browser.'))) { await run('resetEmpty', state.settings.language); window.location.hash = 'prioriteren'; } }}>{t('Start with an empty organisation')}</button>}
           </div>
-        </Panel>
-      </div>
+        </Section>
 
-      <div id="members"><MembersPanel /></div>
-      <div id="capacity"><BulkCapacity /></div>
-      <div id="import">{admin && <AdoImport />}</div>
+        {admin && (
+          <Section id="modules" title={t('Extended modules (beta)')}>
+            <label className="flex items-center gap-3 text-body cursor-pointer">
+              <input type="checkbox" className="w-4 h-4 accent-[var(--color-accent-500)]" checked={modules} onChange={(e) => act('updateSettings', { modules: e.target.checked })} />
+              <span>{t('Overview, Board, Session, In-quarter, My attention')}</span>
+            </label>
+          </Section>
+        )}
+
+        {modules && (
+          <>
+            <Section id="themes" title={t('Strategic themes')}>
+              <ul className="divide-y divide-border">
+                {state.themes.map((x) => <li key={x.id} className="flex items-center gap-2 py-1.5"><input className={`${cls.input} max-w-sm`} defaultValue={x.name} disabled={!canRank(actor)} aria-label={t('Theme')} onBlur={(e) => e.target.value !== x.name && act('upsertTheme', { id: x.id, name: e.target.value })} />{canRank(actor) && <button className={`${cls.quiet} text-danger-fg`} onClick={() => act('deleteTheme', x.id)}>{t('remove')}</button>}</li>)}
+              </ul>
+              {canRank(actor) && <AddRow placeholder={t('New theme')} onAdd={(name) => act('upsertTheme', { name })} />}
+            </Section>
+            <Section id="capacity" title={t('Capacity')}><BulkCapacity /></Section>
+            <Section id="cadence" title={t('Cadence')}>
+              <label className="block max-w-xs"><span className={cls.label}>{t('Check-in cadence (days before an epic is stale)')}</span><input type="number" min="1" className={`${cls.input} !w-24 tnum`} defaultValue={state.settings.staleDays} disabled={!admin} onBlur={(e) => Number(e.target.value) !== state.settings.staleDays && act('updateSettings', { staleDays: Number(e.target.value) })} /></label>
+            </Section>
+          </>
+        )}
+      </div>
     </div>
+  );
+}
+
+function Section({ id, title, meta, children }) {
+  return (
+    <section id={id} aria-labelledby={`${id}-h`} className="scroll-mt-20">
+      <h2 id={`${id}-h`} className="text-subtitle font-semibold mb-2 flex items-baseline gap-2">{title}{meta != null && <span className="text-caption text-muted tnum font-normal">{meta}</span>}</h2>
+      <div className={`${cls.card} p-4`}>{children}</div>
+    </section>
   );
 }
 
 function AddRow({ placeholder, onAdd }) {
   const t = useT();
   const [v, setV] = useState('');
-  return <div className="flex gap-2 mt-2"><input className={input} placeholder={placeholder} value={v} onChange={(e) => setV(e.target.value)} /><button className={btn.secondary} disabled={!v.trim()} onClick={async () => { const r = await onAdd(v.trim()); if (r.ok) setV(''); }}>{t('Add')}</button></div>;
+  return <form className="flex gap-2 mt-3" onSubmit={async (e) => { e.preventDefault(); const r = await onAdd(v.trim()); if (r.ok) setV(''); }}><input className={`${cls.input} max-w-sm`} placeholder={placeholder} aria-label={placeholder} value={v} onChange={(e) => setV(e.target.value)} /><button type="submit" className={cls.secondary} disabled={!v.trim()}>{t('Add')}</button></form>;
 }
 function NewQuarter({ onAdd }) {
   const t = useT();
   const [year, setYear] = useState(new Date().getFullYear() + 1);
   const [q, setQ] = useState(1);
-  return <div className="flex gap-2 mt-2 items-end"><Field l={t('Year')}><input type="number" className={`${input} !w-24`} value={year} onChange={(e) => setYear(Number(e.target.value))} /></Field><Field l="Q"><select className={`${input} !w-16`} value={q} onChange={(e) => setQ(Number(e.target.value))}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}</select></Field><button className={btn.secondary} onClick={() => onAdd(year, q)}>{t('Add quarter')}</button></div>;
+  return <div className="flex gap-2 mt-3 items-end"><label className="block"><span className={cls.label}>{t('Year')}</span><input type="number" className={`${cls.input} !w-24 tnum`} value={year} onChange={(e) => setYear(Number(e.target.value))} /></label><label className="block"><span className={cls.label}>Q</span><select className={`${cls.input} !w-16`} value={q} onChange={(e) => setQ(Number(e.target.value))}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}</select></label><button className={cls.secondary} onClick={() => onAdd(year, q)}>{t('Add quarter')}</button></div>;
 }
 
-// Read-only ADO import, mock by default (D22, AC G1-G6).
+// Read-only ADO import, mock by default (D22, AC G1-G6). Unchanged behaviour; lives under Instellingen › Import.
 function AdoImport() {
   const { state, run } = usePlan();
   const t = useT();
@@ -120,18 +158,16 @@ function AdoImport() {
   const hints = external ? [...new Set(external.map((e) => e.teamHint))] : [];
 
   return (
-    <Panel title={t('Import from Azure DevOps (read-only)')} right={<span className="text-xs text-gray-500">{t('Not tested against a real organisation in this iteration')}</span>}>
-      <p className="text-xs text-gray-600 mb-3">{t('Imported fields (title, state, link) are mastered by Azure DevOps and become read-only. Planning fields (rank, effort, commitment, asks) stay local and are never overwritten. No credentials are stored in the app; production sync runs server-side (Edge Function + Vault).')}</p>
+    <div>
       <div className="grid grid-cols-2 gap-3 max-w-md">
         <Field l={t('Organization')}><input className={input} value={cfg.organization} onChange={(e) => setCfg({ ...cfg, organization: e.target.value })} /></Field>
         <Field l={t('Project')}><input className={input} value={cfg.project} onChange={(e) => setCfg({ ...cfg, project: e.target.value })} /></Field>
       </div>
       <div className="flex gap-2 mt-3">
-        <button className={btn.primary} onClick={loadMock}>{t('Use demo data')}</button>
-        <button className={btn.secondary} disabled={!envPat || busy} title={envPat ? t('Uses VITE_ADO_PAT from your local .env (dev only)') : t('Set VITE_ADO_PAT in your local .env to enable (dev only)')} onClick={loadLive}>{busy ? t('Fetching…') : t('Fetch live (dev only)')}</button>
+        <button className={cls.primary} onClick={loadMock}>{t('Use demo data')}</button>
+        <button className={cls.secondary} disabled={!envPat || busy} title={envPat ? t('Uses VITE_ADO_PAT from your local .env (dev only)') : t('Set VITE_ADO_PAT in your local .env to enable (dev only)')} onClick={loadLive}>{busy ? t('Fetching…') : t('Fetch live (dev only)')}</button>
       </div>
       <ErrorNote error={err} />
-
       {preview && (
         <div className="mt-4 space-y-3 text-sm">
           <div>
@@ -155,6 +191,6 @@ function AdoImport() {
           )}
         </div>
       )}
-    </Panel>
+    </div>
   );
 }

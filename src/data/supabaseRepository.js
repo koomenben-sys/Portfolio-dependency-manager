@@ -1,4 +1,4 @@
-// Supabase implementation of the repository contract (docs/design.md D12, schema db/migrations/001-006).
+// Supabase implementation of the repository contract (docs/design.md D12, schema db/migrations/001-008).
 // Live-tested against the owner's project on 2026-10-17; differences from the mock adapter are listed in
 // docs/design.md section 16 ("Supabase mode").
 //
@@ -13,8 +13,8 @@
 //   not write (plan_added, dependency_added/edited/acknowledged, vote_cast, ...) are inserted by _event().
 import { supabase } from '../lib/supabase';
 import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
-import { PHASE_INDEX, isLockedPhase } from '../domain/model';
-import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner } from './repository';
+import { PHASE_INDEX, isLockedPhase, REASON_REQUIRED } from '../domain/model';
+import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange } from './repository';
 
 const snake = (s) => s.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
 const camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -30,11 +30,14 @@ const TABLES = {
   dependencies: 'dependencies', votes: 'confidence_votes', discussions: 'discussion_items', checkIns: 'check_ins',
   impediments: 'impediments', events: 'plan_events',
 };
+// Realtime (008): every table load() reads, filtered on org_id; RLS decides which rows reach the subscriber.
+const REALTIME_TABLES = [...Object.values(TABLES), 'memberships', 'org_settings', 'invitations'];
+const REALTIME_DEBOUNCE_MS = 400;
 // Trigger-written delete events (005 log_delete) use the table name; the app uses the mock's names.
 const EVENT_ACTIONS = { epic_plans_removed: 'plan_removed', dependencies_removed: 'dependency_removed' };
 const DEFAULT_SETTINGS = {
   language: 'nl', orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5,
-  voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 },
+  voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false,
 };
 // Postgres error texts that users should not have to decode.
 function friendly(message) {
@@ -42,6 +45,7 @@ function friendly(message) {
   if (/duplicate key.*quarters_org_id_year_q/i.test(message)) return 'Quarter exists';
   if (/duplicate key.*teams_org_id_name/i.test(message)) return 'A team with that name exists';
   if (/duplicate key.*themes_org_id_name/i.test(message)) return 'A theme with that name exists';
+  if (/duplicate key.*invitations_org_id_email/i.test(message)) return 'This e-mail address has already been invited';
   return message;
 }
 
@@ -102,11 +106,19 @@ export class SupabaseRepository {
     return (data || []).map(fromRow).map((m) => ({ id: m.userId, name: m.displayName || m.userId, title: '', role: m.role, teamId: m.teamId, canRank: m.canRank }));
   }
 
+  // Admins only (RLS, 007); others and databases without 007 get an empty list.
+  async _invitations(org) {
+    const { data, error } = await supabase.from('invitations').select('*').eq('org_id', org);
+    if (error) return [];
+    return data.map(fromRow).sort(byCreated('createdAt'));
+  }
+
   async load() {
     const org = await this._org();
-    const [rows, members, osRes, orgRes] = await Promise.all([
+    const [rows, members, invitations, osRes, orgRes] = await Promise.all([
       Promise.all(Object.values(TABLES).map((t) => this._all(t))),
       this._members(org),
+      this._invitations(org),
       supabase.from('org_settings').select('*').eq('org_id', org).maybeSingle(),
       supabase.from('organisations').select('name').eq('id', org).maybeSingle(),
     ]);
@@ -138,9 +150,32 @@ export class SupabaseRepository {
         .map((e) => ({ ...e, id: String(e.id), actorName: e.actorId ? (names.get(e.actorId) || 'former member') : '', action: EVENT_ACTIONS[e.action] || e.action }))
         .sort((a, b) => a.at.localeCompare(b.at)),
       members,
+      invitations,
       settings: { ...this.settings },
     };
     return this.state;
+  }
+
+  // Live updates through Supabase Realtime (008). Events are debounced: one write fires several
+  // (row + plan_events), and a reload reads every table. onStatus('live') once subscribed, ('error') when
+  // the channel fails or closes; PlanContext then polls instead. Returns an unsubscribe function.
+  subscribe(onState, onStatus) {
+    let channel = null; let timer = null; let closed = false;
+    const reload = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { if (!closed) this.load().then(onState).catch(() => {}); }, REALTIME_DEBOUNCE_MS);
+    };
+    this._org().then((org) => {
+      if (closed) return;
+      channel = supabase.channel(`plan-${org}`);
+      for (const table of REALTIME_TABLES) channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `org_id=eq.${org}` }, reload);
+      channel.subscribe((status) => {
+        if (closed) return;
+        if (status === 'SUBSCRIBED') onStatus?.('live');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') onStatus?.('error');
+      });
+    }).catch(() => { if (!closed) onStatus?.('error'); });
+    return () => { closed = true; clearTimeout(timer); if (channel) supabase.removeChannel(channel); };
   }
 
   // ── epics and plans ────────────────────────────────────────────────────────
@@ -231,6 +266,24 @@ export class SupabaseRepository {
     return this.load();
   }
 
+  // Reorder (D28). The 005 trigger logs rank_changed per updated row and insists on a reason, so an empty
+  // reason becomes 'Herprioritering'; only rows whose rank actually changes are written.
+  async reorderPlans(actor, quarterId, orderedPlanIds, reason = '') {
+    if (!canRank(actor)) throw new PermissionError('Changing the strategic rank needs rank permission');
+    const q = await this._quarter(quarterId);
+    if (q.phase === 'closed') throw new ValidationError('Quarter is closed');
+    if (isLockedPhase(q.phase) && !trim(reason)) throw new ValidationError('The quarter is locked: a reason is required to change the strategic rank');
+    const { data, error } = await supabase.from('epic_plans').select('id, strategic_rank').eq('quarter_id', quarterId).in('id', orderedPlanIds);
+    this._throw(error);
+    const current = new Map((data || []).map((r) => [r.id, r.strategic_rank]));
+    if (orderedPlanIds.some((id) => !current.has(id))) throw new ValidationError('Unknown plan in the new order');
+    for (let i = 0; i < orderedPlanIds.length; i += 1) {
+      const id = orderedPlanIds[i];
+      if (current.get(id) !== i + 1) await this._withReason('epic_plans', id, { strategic_rank: i + 1 }, trim(reason) || 'Herprioritering');
+    }
+    return this.load();
+  }
+
   // ── dependencies ───────────────────────────────────────────────────────────
   async addDependency(actor, dep) {
     const org = await this._org();
@@ -238,8 +291,7 @@ export class SupabaseRepository {
     if (!canWriteTeam(actor, epic.teamId)) throw new PermissionError('Only the requesting team can add an ask');
     if (dep.providerTeamId === epic.teamId) throw new ValidationError('A team cannot depend on itself');
     if (!dep.ask?.trim()) throw new ValidationError('Describe the ask');
-    if (!(dep.effortHigh > 0)) throw new ValidationError('Give an effort estimate (high estimate above 0)');
-    if (dep.effortLow > dep.effortHigh) throw new ValidationError('High estimate must be at least the low estimate');
+    if ((dep.effortLow || 0) > (dep.effortHigh || 0)) throw new ValidationError('High estimate must be at least the low estimate');
     await this._guardPhase(dep.quarterId, dep.reason, 'add an ask');
     const { reason, ...depFields } = dep;
     const row = toRow(depFields, org);
@@ -256,7 +308,7 @@ export class SupabaseRepository {
     if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can answer');
     const q = await this._quarter(d.quarterId);
     if (!phaseAllows(q.phase, 'answer')) throw new ValidationError(`Answers are open from the Negotiate phase until the quarter closes (now: ${q.phase})`);
-    if (response !== 'accepted' && response !== 'proposed' && !trim(reason)) throw new ValidationError('A reason is required for this answer');
+    if (REASON_REQUIRED.has(response) && !trim(reason)) throw new ValidationError('A reason is required for this answer');
     if (response === 'deferred' && !deferredToQuarterId) throw new ValidationError('Choose the quarter to defer to');
     if (response === 'partial') {
       if (!(grantedHigh > 0)) throw new ValidationError('Say how much you can do (granted person-weeks)');
@@ -289,7 +341,7 @@ export class SupabaseRepository {
     const { reason, ...rest } = patch;
     await this._guardPhase(d.quarterId, reason, 'edit an ask');
     const next = { ...d, ...rest };
-    if (!(next.effortHigh > 0) || next.effortLow > next.effortHigh) throw new ValidationError('Check the effort estimate');
+    if ((next.effortLow || 0) > (next.effortHigh || 0)) throw new ValidationError('Check the effort estimate');
     const effortChanged = next.effortHigh !== d.effortHigh || next.effortLow !== d.effortLow || next.ask !== d.ask;
     const { org_id, ...row } = toRow(rest, await this._org());
     // An answered ask whose scope changed goes back to the provider for a new answer (the trigger clears responded_at).
@@ -465,6 +517,80 @@ export class SupabaseRepository {
     if (patch.orgName !== undefined) this._throw((await supabase.from('organisations').update({ name: patch.orgName }).eq('id', org)).error);
     this.settings = next;
     return this.load();
+  }
+
+  // ── members and invitations (007, docs/design.md section 18) ────────────────
+  // Same checks and texts as the mock; 007 enforces the guards again in SQL (trigger + RLS).
+  async inviteMember(actor, inv) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can invite people');
+    const org = await this._org();
+    const email = normaliseEmail(inv.email);
+    const teamId = checkRole(inv.role, inv.teamId, await this._all('teams'));
+    const { data: existing, error } = await supabase.from('invitations').select('id, accepted_at').eq('org_id', org).eq('email', email).maybeSingle();
+    this._throw(error);
+    if (existing && !existing.accepted_at) throw new ValidationError('This e-mail address has already been invited');
+    if (existing) this._throw((await supabase.from('invitations').delete().eq('org_id', org).eq('id', existing.id)).error); // re-invite after removal
+    const row = { org_id: org, email, role: inv.role, team_id: teamId, can_rank: !!inv.canRank, display_name: trim(inv.displayName), invited_by: actor.id };
+    const { data, error: insErr } = await supabase.from('invitations').insert(row).select('id').single();
+    this._throw(insErr);
+    await this._event(actor, 'member_invited', 'invitations', data.id, null, '', null, { email, role: inv.role, teamId, canRank: !!inv.canRank });
+    return this.load();
+  }
+  async updateMember(actor, userId, patch) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can change roles');
+    const org = await this._org();
+    const members = await this._members(org);
+    const m = members.find((x) => x.id === userId);
+    const role = patch.role ?? m?.role;
+    checkMemberChange(actor, members, m, role);
+    const teamId = checkRole(role, patch.teamId !== undefined ? patch.teamId : m.teamId, await this._all('teams'));
+    const row = { role, team_id: teamId, can_rank: patch.canRank !== undefined ? !!patch.canRank : m.canRank };
+    if (patch.displayName !== undefined) {
+      if (!trim(patch.displayName)) throw new ValidationError('Name is required');
+      row.display_name = trim(patch.displayName);
+    }
+    // PostgREST reports no error when RLS filters the row away: check that a row came back.
+    const { data, error } = await supabase.from('memberships').update(row).eq('org_id', org).eq('user_id', userId).select('user_id');
+    this._throw(error);
+    if (!data?.length) throw new PermissionError('Not allowed for your role or team');
+    await this._event(actor, 'member_updated', 'memberships', userId, null, '', { role: m.role, teamId: m.teamId, canRank: m.canRank }, { role, teamId, canRank: row.can_rank });
+    return this.load();
+  }
+  async removeMember(actor, userId) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can remove people');
+    const org = await this._org();
+    const members = await this._members(org);
+    const m = members.find((x) => x.id === userId);
+    checkMemberChange(actor, members, m, null);
+    const { data, error } = await supabase.from('memberships').delete().eq('org_id', org).eq('user_id', userId).select('user_id');
+    this._throw(error);
+    if (!data?.length) throw new PermissionError('Not allowed for your role or team');
+    await this._event(actor, 'member_removed', 'memberships', userId, null, '', { role: m.role, teamId: m.teamId, canRank: m.canRank }, null);
+    return this.load();
+  }
+  async revokeInvitation(actor, invitationId) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can revoke invitations');
+    const org = await this._org();
+    const { data, error } = await supabase.from('invitations').delete().eq('org_id', org).eq('id', invitationId).select('id, email');
+    this._throw(error);
+    if (!data?.length) throw new ValidationError('Unknown invitation');
+    await this._event(actor, 'invitation_revoked', 'invitations', invitationId, null, '', { email: data[0].email }, null);
+    return this.load();
+  }
+  // Sends a magic link (creates the auth user if needed). Only on an admin's click, only for invited addresses.
+  // The redirect URL must be listed under Auth > URL configuration in Supabase. Does not touch the admin's session.
+  async sendSignInLink(actor, email) {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin can send sign-in links');
+    const org = await this._org();
+    const e = normaliseEmail(email);
+    const { data: inv, error } = await supabase.from('invitations').select('id').eq('org_id', org).eq('email', e).maybeSingle();
+    this._throw(error);
+    if (!inv) throw new ValidationError('Invite this e-mail address first');
+    const emailRedirectTo = `${window.location.origin}${import.meta.env.BASE_URL || '/'}`;
+    const { error: otpErr } = await supabase.auth.signInWithOtp({ email: e, options: { shouldCreateUser: true, emailRedirectTo } });
+    this._throw(otpErr);
+    await this._event(actor, 'sign_in_link_sent', 'invitations', inv.id, null, '', null, { email: e });
+    return { sent: true, demo: false };
   }
 
   // ── integration import (D19-D22) ───────────────────────────────────────────

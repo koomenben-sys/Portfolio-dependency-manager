@@ -103,7 +103,7 @@ Feature: Quarter board
 **Acceptance criteria**
 - C1. From an epic, a planner can request a dependency: provider team, quarter needed, ask text, effort low/high, optional "what happens if you say no". It starts as `proposed`.
 - C2. The provider team's intake queue lists all asks addressed to the team for the selected quarter, with age, requester, effort, ranked by the requesting epic's strategic rank, plus the team's remaining capacity.
-- C3. The provider planner can answer: Accept, Partial, Defer to quarter X, Decline, Needs priority call. All except Accept require a reason; Defer requires a target quarter. The answer and reason show on the requesting epic's card/panel.
+- C3. The provider planner can answer: Accept, Partial, Defer to quarter X, Decline, Needs priority call. Decline and Defer require a reason, Needs priority call takes an optional one (changed 2026-10-17, D29); Defer requires a target quarter. The answer and reason show on the requesting epic's card/panel. In the core screens only Toezeggen / Bespreken / Kan niet are offered (D31).
 - C4. Accepted and Partial asks count in the provider team's load as "incoming".
 - C5. A proposed ask older than 5 days is flagged "no response".
 - C6. The matrix shows requester team (rows) x provider team (columns) with counts coloured by worst response (with text count and icon); clicking a cell lists the dependencies.
@@ -371,6 +371,171 @@ Feature: Onboarding and language
     When I switch the language to English
     Then the same navigation reads in English
 ```
+
+## J. Less is more reset (2026-10-17, docs/design.md section 19)
+
+Supersedes the navigation parts of A12-A14 and the screen-level criteria of B/C/E for the default product; B, D, E, F remain valid for the extended modules (beta).
+
+**Acceptance criteria**
+- J1. The navigation shows exactly three numbered screens — 1 Prioriteren, 2 Afhankelijkheden, 3 Afstemmen — plus a quarter selector, a settings gear and an account menu (Bekijken als in demo, language, Rondleiding). The default route is `#prioriteren`. No demo banner; a small "Demo" chip.
+- J2. With Instellingen › "Uitgebreide modules (beta)" on (default off), the group "Uitgebreid (beta)" adds Overzicht, Bord, Intake & capaciteit, Sessie, In het kwartaal and Mijn aandacht; off, those routes fall back to Prioriteren.
+- J3. Prioriteren lists the quarter's ranked epics (# · Epic · Team · Afhankelijkheden). The Afhankelijkheden cell reads the worst ask with its team ("✕ Kan niet · Platform & Security", "? Bespreken · Team", "◷ 1 open", "✓ 2 toegezegd", "–"), plus "+n" for further asks; the tooltip lists them all. No epic codes in the row; one neutral rank badge style. A team filter ("Alle teams") sits next to search; while searching or filtering, reordering is paused. A user with rank permission reorders by drag & drop or with the row's arrow buttons (Alt+↑/↓); after a move an inline optional reason appears with Opslaan/Annuleren; saving assigns ranks 1..n and logs one `rank_changed` event with the reason. Users without rank permission see no drag handle or arrows. In a locked quarter the reason is required.
+- J4. Unranked epics sit in a collapsed group "Nog niet geprioriteerd (n)"; "Rang" appends one to the end of the ranked list (through the same save flow).
+- J5. Rows whose asks include Kan niet or Bespreken show a left marker (red / amber). Clicking a row opens the simplified epic panel; Escape closes it and focus returns to the row.
+- J6. Afhankelijkheden: the team selector sits in the title row ("Afhankelijkheden · [team ▾]", default: the actor's team). Each tab opens with one line of count chips (✕ · ? · ◷ · ✓) that filter the list. "Wij vragen" lists the team's epics in rank order with their asks (team · what · status; reason in normal muted text; delete on hover / focus only; no effort text); epics without asks collapse into "n epics zonder verzoeken"; "+ Verzoek" opens an inline row (team · what · optional pw) — no modal. "Aan ons gevraagd" lists asks to the team ordered by the requesting epic's rank with a segmented Toezeggen / Bespreken / Kan niet control (only for planners of that team and admins, from the Negotiate phase); Kan niet requires an inline reason; Bespreken and Toezeggen are one click. When the team has capacity for the quarter the line reads "Gevraagd n pw · beschikbaar n pw" (requested = effortHigh of asks not declined), red when requested exceeds available. Partial / deferred answers are shown read-only.
+- J7. Afstemmen shows four count tiles in the order Kan niet · Bespreken · Open · Toegezegd (the last two quieter) that filter the list, then one line "Top 5: n in gevaar (rang …)" computed from the five highest-ranked epics with a Kan niet / Bespreken ask; each rank number opens that epic's pair. "Te bespreken" lists team pairs with Bespreken / Kan niet asks first, then pairs with only Open asks in a quieter style, each sorted by the highest-ranked epic involved and carrying one worst-status chip; a pair expands to its asks (rank · epic · what · status · reason). The provider's planner or an admin answers inline with the same Toezeggen / Bespreken / Kan niet control (Kan niet asks a reason). Each pair has a "Besproken" check that is stored per browser for the quarter. "Matrix tonen" at the bottom reveals the team × team grid whose cells focus a pair.
+- J8. The wizard has three steps (Organisatie · Teams · Kwartaal + eerste epics) and ends on Prioriteren with the typed epics ranked in order. An optional link leads to the Azure DevOps demo import.
+- J9. Every new string has a Dutch text; Dutch is the default. Helper text is at most six words; empty states are one line plus one button.
+- J10. The "Live" / "30 s" / "Offline" indicator is shown only in Supabase mode; demo mode shows the DEMO chip alone. In the epic panel, rank, effort, description and label are plain text for users without the rights.
+
+```gherkin
+Feature: Prioritise by dragging
+
+  Scenario: Director moves an epic up
+    Given I am Ruud Visser (can rank) on Prioriteren in 2027 Q1
+    When I drag "Instant payouts" from #5 to #1
+    Then the row is at #1 and the other rows read 2..14
+    And an inline field "Waarom? (optioneel)" appears under the row
+    When I click "Opslaan" without a reason
+    Then the order is stored and the history shows "strategic rank 5 → 1" by Ruud Visser
+
+  Scenario: Keyboard alternative
+    Given the row "Pricing data mart" has focus
+    When I press Alt+ArrowUp
+    Then the row moves up one place and the inline reason field appears
+
+  Scenario: Planner cannot reorder
+    Given I am Joris Smit (planner, cannot rank)
+    Then rows have no drag handle and no arrow buttons
+
+Feature: Dependencies per team
+
+  Scenario: Ask inline without effort
+    Given I am Lotte Meijer on "Wij vragen" for Klantportaal
+    When I click "+ Verzoek" on "Self-service policy changes", pick "Data Platform", type "Customer events feed" and send
+    Then a row "Data Platform · Customer events feed · Open" appears under the epic
+
+  Scenario: Can't needs one line
+    Given I am Mark van Dijk on "Aan ons gevraagd" for Platform & Security
+    When I click "Kan niet" on "Fraud rules for instant payouts"
+    Then an inline reason field appears and "Opslaan" is disabled until I type
+    When I type "Security engineers on DORA until March" and save
+    Then the ask shows "Kan niet" with that reason, and Payments sees it on Afstemmen
+
+  Scenario: Commit is one click
+    When I click "Toezeggen" on an open ask
+    Then it shows "Toegezegd" immediately, no dialog
+
+Feature: Align
+
+  Scenario: Agenda ordered by priority
+    Given 2027 Q1 has Bespreken / Kan niet asks between four team pairs
+    When I open Afstemmen
+    Then the tiles read Kan niet 2 · Bespreken 3 · Open 2 · Toegezegd 6
+    And the line reads "Top 5: 2 in gevaar (rang 2, 5)"
+    And "Te bespreken (6)" lists Klantportaal → Polisadministratie first (its top epic is #2) and the two open-only pairs last
+    When I click the tile "Kan niet"
+    Then the list only shows pairs with Kan niet asks
+
+  Scenario: Outcome recorded in the meeting
+    Given I am Anouk de Jong (admin) on Afstemmen with Payments → Platform & Security expanded
+    When I click "Toezeggen" on "Fraud rules for instant payouts"
+    Then the ask shows "Toegezegd" and the tile Bespreken drops to 2
+    When I tick "Besproken" on that pair
+    Then the pair shows the check and keeps it after a reload of this browser
+
+Feature: Prioriteren reads the worst issue
+
+  Scenario: Director sees what and with whom
+    Given I am Ruud Visser on Prioriteren in 2027 Q1
+    Then the row "Policy admin migration to new core (wave 2)" reads "✕ Kan niet · Platform & Security"
+    And the row "Self-service policy changes" reads "? Bespreken · Polisadministratie +1"
+    When I choose "Klantportaal" in the team filter
+    Then only Klantportaal epics are listed and the drag handles are hidden
+
+Feature: Three-step wizard
+
+  Scenario: First ranked list in three steps
+    Given an empty organisation and I am admin
+    When I enter "Gemeente Rivierenland", add teams "Burgerzaken" and "IT Platform", choose 2027 Q1
+    And type "Burgerzaken: Digitaal verhuizen" and "IT Platform: Nieuwe zaakapplicatie"
+    And click "Naar prioriteren"
+    Then Prioriteren shows the two epics ranked #1 and #2
+```
+
+## G5. P1: invites, RLS tests, realtime (docs/design.md section 18)
+
+- A15. An admin invites someone by e-mail with a role (admin / planner / viewer), a team (required for planners) and a rank flag. The invitation shows as a row with an "Invited" chip until it is accepted. A duplicate open invitation is refused; an invalid e-mail address is refused.
+- A16. Signing in with an invited, confirmed e-mail address creates the membership automatically, with the invited role, team and rank flag. This happens once, after sign-in, before the plan loads.
+- A17. An admin changes a member's role, team or rank flag inline, and removes a member after confirming. An admin cannot remove themselves or change their own role. The organisation always keeps one admin. Non-admins see the list read-only; the database refuses member writes from non-admins (RLS).
+- A18. "Send link" e-mails a sign-in link only after an admin's click, only for invited addresses. Demo mode sends nothing and says so.
+- A19. `db/tests/rls_test.sql` runs in the Supabase SQL editor without extensions and shows a PASS/FAIL grid. It leaves no test data behind and can run again. It covers:
+  - team scope, rank permission and viewers;
+  - tenant isolation on every table;
+  - insert-only `plan_events`;
+  - provider-only answers;
+  - admin-only invitations and the member guards.
+
+  `npm run test:rls` runs the same checks locally.
+- A20. In Supabase mode a change by another user appears without reloading (Realtime). If the subscription fails, the screen refreshes every 30 s. The header shows "Live", "30 s" or "Offline". In demo mode two tabs of the same browser stay in sync.
+
+```gherkin
+Feature: Invitations and roles
+
+  Scenario: Admin invites a planner
+    Given I am an admin in Settings, People and roles
+    When I click "Invite", enter "Pieter@Gemeente.nl", role Planner, team "Burgerzaken"
+    Then the table shows "pieter@gemeente.nl" with the chip "Invited", role Planner, team Burgerzaken
+    When I click "Send link" for that row
+    Then a sign-in link is e-mailed to pieter@gemeente.nl
+    And my own session is unchanged
+
+  Scenario: Invitee signs in for the first time
+    Given an open invitation for "pieter@gemeente.nl" as planner of "Burgerzaken"
+    When Pieter opens the sign-in link
+    Then he is a planner of Burgerzaken without anyone running SQL
+    And the invitation is no longer shown as "Invited"
+
+  Scenario: Guards on member changes
+    Given I am the only admin
+    Then I cannot change my own role or remove myself
+    When I change Joris from Planner to Viewer
+    Then Joris can no longer edit the epics of his former team
+
+  Scenario: Demo mode invite
+    Given demo mode as the facilitator
+    When I invite "nieuw.lid@example.nl" as planner of Payments
+    Then "Nieuw Lid" appears in the table and in "Viewing as"
+    And the screen says that no e-mail was sent
+
+Feature: RLS test script
+
+  Scenario: Owner runs the test
+    Given migrations 001-008 have been run
+    When the owner pastes db/tests/rls_test.sql into the SQL editor and runs it
+    Then the first row reads "73 checks: 73 passed, 0 failed" with result PASS
+    And no organisation named "RLS test A" or user "rls-*@example.invalid" remains
+
+  Scenario: A loosened policy is caught
+    Given someone drops the dependencies_guard trigger
+    When the test runs
+    Then the check "requester team cannot answer its own ask" shows FAIL
+
+Feature: Live updates
+
+  Scenario: Two facilitators' screens
+    Given two people have the board open in Supabase mode and the header shows "Live"
+    When one of them moves an epic's rank with a reason
+    Then the other screen shows the new rank within a few seconds without a reload
+
+  Scenario: Realtime unavailable
+    Given the Realtime subscription fails
+    Then the header shows "30 s" and the screen refreshes every 30 seconds
+
+  Scenario: Two demo tabs
+    Given demo mode open in two tabs
+    When I untick "can rank" for a member in the first tab
+    Then the second tab shows the change without a reload
 
 ## H. Out of scope (explicit)
 

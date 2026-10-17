@@ -1,70 +1,38 @@
-// Guided demo scenarios, one per role. Each step switches persona + screen and explains what to look at.
-// Bilingual on purpose (long prose); the rest of the UI goes through i18n keys.
-// persona ids are the demo personas in src/data/seed.js.
+// Three short role tours (docs/design.md section 19, D33): one sentence per step, 3-4 steps each.
+// `view` is the hash route, `target` a [data-tour] element that gets a highlight ring, `ui` nudges view state
+// (tab, matrix) through the `kp-tour` window event. Personas are the demo personas in src/data/seed.js.
 const L = (nl, en) => ({ nl, en });
 
 export const SCENARIOS = [
   {
     id: 'director',
     persona: 'u-dir',
-    title: L('Directeur: strategie en compliance in 2 minuten', 'Director: strategy and compliance in 2 minutes'),
-    intro: L('Ruud Visser, Director Digital. Leest één pagina per kwartaal, zet de strategische volgorde en bewaakt regulatoire deadlines.', 'Ruud Visser, Director Digital. Reads one page a quarter, sets the strategic order and guards regulatory deadlines.'),
+    title: L('Directeur: prioriteren', 'Director: prioritise'),
     steps: [
-      { view: 'overview', title: L('Zes cijfers, geen dashboardwoud', 'Six numbers, no dashboard jungle'), text: L('Bovenaan: hoeveel van de top-10 strategische epics zijn gecommitteerd, welke teams over capaciteit zitten, regulatoire epics in gevaar, onbeantwoorde verzoeken, open impediments en het teamvertrouwen. "Data per" zegt hoe vers het is. Alles is afgeleid van het bord; er is geen aparte rapportagedatabase.', 'Top row: how many of the top-10 strategic epics are committed, which teams are over capacity, regulatory epics at risk, unanswered asks, open impediments and team confidence. "Data as of" tells you how fresh it is. Everything derives from the board; there is no separate reporting store.') },
-      { view: 'overview', title: L('Rode vlaggen: wat jouw besluit nodig heeft', 'Red flags: what needs your decision'), text: L('Eén regel per epic, hoogste ernst eerst, met eigenaar en hoe lang het al open staat. Een regulatoire epic onder de knipgrens of met een deadline vóór het kwartaal staat altijd bovenaan. Klik een regel om het epic-paneel te openen.', 'One row per epic, highest severity first, with owner and how long it has been open. A regulatory epic below the cut line or with a deadline before the quarter always tops the list. Click a row to open the epic panel.') },
-      { view: 'overview', title: L('Regulatoir register', 'Regulatory register'), text: L('Scroll naar beneden: per regeling (DORA, AVG, IFRS 17, WCAG) de deadline, de rang die het van de top kreeg, de commitment van het team en of het in de capaciteit past. Dit is de tabel die je mee kunt nemen naar de toezichthouder.', 'Scroll down: per regulation (DORA, GDPR, IFRS 17, WCAG) the deadline, the rank it got from the top, the team\'s commitment and whether it fits the capacity. This is the table you can take to the regulator.') },
-      { view: 'board', title: L('De volgorde bepalen', 'Setting the order'), text: L('Als rang-houder verander je in het epic-paneel de strategische rang. Dat vraagt altijd een reden en wordt vastgelegd: wie, wanneer, waarom. Teams zien direct wat dat met hun knipgrens doet.', 'As a rank holder you change the strategic rank in the epic panel. It always asks for a reason and is logged: who, when, why. Teams immediately see what it does to their cut line.') },
-      { view: 'session', title: L('Vertrouwen zonder beïnvloeding', 'Confidence without anchoring'), text: L('Teams stemmen 1-5 op het plan. De stemmen blijven verborgen tot de facilitator ze onthult, ook voor jou. Na het vergrendelen zie je de verdeling en de redenen bij lage stemmen.', 'Teams vote 1-5 on the plan. Votes stay hidden until the facilitator reveals them, for you too. After locking you see the distribution and the reasons behind low votes.') },
+      { view: 'prioriteren', target: 'prioritize', text: L('Eén lijst: alle epics van het kwartaal op strategische rang.', 'One list: every epic of the quarter in strategic order.') },
+      { view: 'prioriteren', target: 'prioritize', text: L('Sleep een rij of gebruik de pijltjes; een reden is optioneel.', 'Drag a row or use the arrows; a reason is optional.') },
+      { view: 'prioriteren', target: 'prioritize', text: L('Het streepje links: daar moet een team nog ja of nee zeggen.', 'The marker on the left: a team still has to say yes or no there.') },
+      { view: 'afstemmen', target: 'pairs', text: L('Afstemmen toont welke teams daarover moeten praten, hoogste prioriteit eerst.', 'Align shows which teams need to talk about it, highest priority first.') },
     ],
   },
   {
-    id: 'platform-lead',
+    id: 'teamlead',
     persona: 'u-cld',
-    title: L('Hoofd Platform: schaars team, eerlijke nee', 'Head of Platform: scarce team, honest no'),
-    intro: L('Mark van Dijk leidt Cloud Platform. Iedereen heeft hem nodig; hij moet kunnen laten zien wat past en waarom iets niet kan.', 'Mark van Dijk leads Cloud Platform. Everyone needs him; he must show what fits and why something cannot be done.'),
+    title: L('Teamlead: aan ons gevraagd', 'Team lead: asked of us'),
     steps: [
-      { view: 'board', title: L('Capaciteit als afgeleid getal', 'Capacity as a derived number'), text: L('Filter op "Mijn team + teams die wij vragen / die ons vragen". De balk toont de belasting (laag-hoog schatting) tegenover beschikbare capaciteit: bezetting × weken min afwezigheid, maal focusfactor, min reserve voor beheer. Klik "Capaciteitsaannames" voor de formule en elke bijdragende epic.', 'Filter on "My team + teams we ask / that ask us". The bar shows load (low–high estimate) against available capacity: headcount × weeks minus absence, times focus factor, minus a run reserve. Click "Capacity assumptions" to see the formula and every contributing epic.') },
-      { view: 'board', title: L('De knipgrens', 'The cut line'), text: L('Eigen epics en geaccepteerde verzoeken van anderen staan samen op strategische rang. Waar het cumulatief de capaciteit overschrijdt ligt de knipgrens. Het gesprek wordt "wat valt eronder", niet "wie roept het hardst". Over capaciteit waarschuwt; het blokkeert nooit.', 'Own epics and accepted asks from others are ranked together by strategic rank. Where the cumulative load exceeds capacity sits the cut line. The conversation becomes "what falls below", not "who shouts loudest". Over capacity warns; it never blocks.') },
-      { view: 'dependencies', title: L('Intakewachtrij', 'Intake queue'), text: L('Alle verzoeken aan jouw team, op rang van het vragende epic. Per verzoek: wie, wat, hoeveel weken, hoe lang het open staat, en "past op rang 6 (cum. 20)" of "duwt EP-0018 onder de knipgrens". Open verzoeken tellen apart mee als "als alles geaccepteerd".', 'All asks to your team, by rank of the requesting epic. Per ask: who, what, how many weeks, how long it has been open, and "fits at rank 6 (cum. 20)" or "pushes EP-0018 below the cut line". Open asks count separately as "if all accepted".') },
-      { view: 'dependencies', title: L('Antwoorden met reden', 'Answering with a reason'), text: L('Klik "Beantwoorden": accepteren, gedeeltelijk (met toegekende weken), uitstellen naar een kwartaal, weigeren of "prioriteitsbesluit nodig". Alles behalve accepteren vraagt een reden die de vrager direct ziet. Een prioriteitsbesluit komt automatisch op de discussieagenda van de sessie.', 'Click "Answer": accept, partial (with granted weeks), defer to a quarter, decline or "needs priority call". Everything except accept asks for a reason the requester sees immediately. A priority call lands on the session\'s discussion queue automatically.') },
-      { view: 'attention', title: L('Wat vandaag jouw aandacht vraagt', 'What needs your attention today'), text: L('Geen e-mailstroom: een afgeleide inbox met verzoeken die op antwoord wachten, antwoorden op jouw eigen verzoeken, epics zonder recente check-in en verouderende impediments.', 'No e-mail flood: a derived inbox with asks waiting for an answer, answers to your own asks, epics without a recent check-in and aging impediments.') },
-    ],
-  },
-  {
-    id: 'product-owner',
-    persona: 'u-por',
-    title: L('Product owner: mijn epic op het bord van anderen', 'Product owner: my epic on other teams\' plates'),
-    intro: L('Lotte Meijer, product owner Klantportaal. Haar epics hebben werk van Polisadministratie en Security nodig.', 'Lotte Meijer, product owner Klantportaal. Her epics need work from Polisadministratie and Security.'),
-    steps: [
-      { view: 'board', title: L('Mijn kolom', 'My lane'), text: L('Epics van Klantportaal op strategische rang, met commitment, thema, regulatoire deadline en één label voor de slechtste stand van de verzoeken ("Voorgesteld: 1 van 2 verzoeken"). Klik een kaart om het paneel te openen.', 'Klantportaal\'s epics by strategic rank, with commitment, theme, regulatory deadline and one pill for the worst state of its asks ("Proposed: 1 of 2 asks"). Click a card to open the panel.') },
-      { view: 'board', title: L('Een team om iets vragen', 'Asking a team for something'), text: L('In het paneel: "+ Vraag een team". Kies het team, het kwartaal, een laag-hoog schatting, wat je nodig hebt en wat er gebeurt als ze nee zeggen. Geen vooringevulde schatting: dat voorkomt ondoordachte verzoeken.', 'In the panel: "+ Ask a team". Pick the team, the quarter, a low–high estimate, what you need and what happens if they say no. No prefilled estimate: that prevents thoughtless asks.') },
-      { view: 'attention', title: L('Antwoord zonder achter iemand aan te lopen', 'An answer without chasing anyone'), text: L('"Jouw verzoeken zonder antwoord" toont hoe lang je wacht; "Antwoorden op jouw verzoeken" toont het antwoord met reden. Een weigering of uitstel kun je bevestigen ("Gezien"), waarmee je team weer "gereed" is voor de sessie.', '"Your asks without an answer" shows how long you have been waiting; "Answers on your asks" shows the answer with its reason. You can acknowledge a decline or deferral, which makes your team "ready" for the session again.') },
-      { view: 'dependencies', title: L('Team × team', 'Team × team'), text: L('De matrix toont in één oogopslag wie wat van wie vraagt en de slechtste stand per paar. Geen spaghettidiagram; klik een cel voor de lijst.', 'The matrix shows at a glance who asks what of whom and the worst state per pair. No spaghetti diagram; click a cell for the list.') },
-      { view: 'inquarter', title: L('Tijdens het kwartaal', 'During the quarter'), text: L('Eén klik per epic: vertrouwen laag/midden/hoog plus een optionele regel. Geen verplicht stoplicht. Epics zonder check-in binnen de cadans krijgen een vlag; impediments krijgen een eigenaar en een leeftijd.', 'One click per epic: confidence low/medium/high plus an optional line. No mandatory traffic light. Epics without a check-in within the cadence get a flag; impediments get an owner and an age.') },
+      { view: 'afhankelijkheden', target: 'team-select', ui: { tab: 'incoming' }, text: L('Kies je team; de verzoeken staan op rang van het vragende epic.', 'Pick your team; the asks are ordered by the rank of the requesting epic.') },
+      { view: 'afhankelijkheden', target: 'incoming', ui: { tab: 'incoming' }, text: L('Toezeggen, Bespreken of Kan niet: één klik, bij Kan niet één regel waarom.', 'Commit, Discuss or Can\'t: one click, and one line why for Can\'t.') },
+      { view: 'afhankelijkheden', target: 'outgoing', ui: { tab: 'outgoing' }, text: L('Wij vragen: je eigen epics met hun verzoeken; + Verzoek voegt er een toe.', 'We ask: your own epics with their asks; + Ask adds one.') },
     ],
   },
   {
     id: 'facilitator',
     persona: 'u-admin',
-    title: L('Facilitator: de sessie draaien zonder tweedaagse', 'Facilitator: running the session without the two-day event'),
-    intro: L('Anouk de Jong, agile coach. Zij leidt de kwartaalplanning van acht teams, grotendeels asynchroon.', 'Anouk de Jong, agile coach. She runs the quarterly planning of eight teams, mostly asynchronously.'),
+    title: L('Facilitator: afstemmen', 'Facilitator: align'),
     steps: [
-      { view: 'session', title: L('Fasen', 'Phases'), text: L('Voorbereiding, Concept, Onderhandelen, Review, Stemmen, Vergrendeld, Actief, Afgesloten. De fase bepaalt wat kan: antwoorden vanaf Onderhandelen, stemmen in Stemmen, na Vergrendeld vraagt elke wijziging een reden. Fasen gaan één stap per keer; terug kan altijd, met reden.', 'Prep, Draft, Negotiate, Review, Vote, Locked, Active, Closed. The phase determines what is possible: answers from Negotiate, voting in Vote, after Locked every change needs a reason. Phases advance one step at a time; going back is always possible, with a reason.') },
-      { view: 'session', title: L('Gereedheid per team', 'Readiness per team'), text: L('Per team: epics ingevoerd, capaciteit gezet, verzoeken beantwoord, over capaciteit, geweigerde verzoeken onopgelost, open discussiepunten, stem uitgebracht. Dit is je voorbereidingslijst; niemand hoeft meer rond te bellen.', 'Per team: epics entered, capacity set, asks answered, over capacity, declined asks unresolved, open discussion items, vote cast. This is your preparation list; nobody has to phone around any more.') },
-      { view: 'session', title: L('Discussieagenda', 'Discussion queue'), text: L('Iedereen kan een epic of verzoek op de agenda zetten met een reden, eigenaar en timebox. De wachtrij staat op strategische rang en telt de minuten op. Dit is de enige live tijd die je nodig hebt.', 'Anyone can put an epic or ask on the agenda with a reason, owner and timebox. The queue is ordered by strategic rank and adds up the minutes. This is the only live time you need.') },
-      { view: 'session', title: L('Stemmen, onthullen, vergrendelen', 'Vote, reveal, lock'), text: L('Teams stemmen 1-5 (reden verplicht bij 3 of lager); jij onthult alle stemmen tegelijk. Vergrendelen met open punten vraagt een override-reden. Bij vergrendelen wordt een basislijn opgeslagen; daarna toont het verschil elke wijziging met reden.', 'Teams vote 1-5 (reason required at 3 or lower); you reveal all votes at once. Locking with open items needs an override reason. Locking stores a baseline; afterwards the diff shows every change with its reason.') },
-      { view: 'session', title: L('Plan van record', 'Plan of record'), text: L('Eén printbare pagina: per team de commitments, verzoeken, risico\'s (ROAM), stemmen en wijzigingen sinds de basislijn. Dit is wat het management aftekent.', 'One printable page: per team the commitments, asks, risks (ROAM), votes and changes since the baseline. This is what management signs off.') },
-      { view: 'settings', title: L('Inrichting', 'Set-up'), text: L('De inrichtingschecklist laat zien wat een nieuwe organisatie nodig heeft: profiel, teams, rollen, thema\'s, kwartalen, capaciteit, epics. Bulkcapaciteit, import vanuit Azure DevOps en de demo-reset staan hier ook.', 'The setup checklist shows what a new organisation needs: profile, teams, roles, themes, quarters, capacity, epics. Bulk capacity, Azure DevOps import and the demo reset live here too.') },
-    ],
-  },
-  {
-    id: 'team-member',
-    persona: 'u-view',
-    title: L('Teamlid of stakeholder: alleen kijken', 'Team member or stakeholder: read only'),
-    intro: L('Een kijker ziet alles, verandert niets. Handig voor teamleden, architecten en de OR.', 'A viewer sees everything and changes nothing. Useful for team members, architects and the works council.'),
-    steps: [
-      { view: 'board', title: L('Transparant voor iedereen', 'Transparent for everyone'), text: L('Dezelfde waarheid als de directeur en de teams: rang, capaciteit, knipgrens en verzoeken. Velden zijn uitgeschakeld; er is geen verborgen managementlaag.', 'The same truth as the director and the teams: rank, capacity, cut line and asks. Fields are disabled; there is no hidden management layer.') },
-      { view: 'inquarter', title: L('Hoe gaat het?', 'How is it going?'), text: L('Check-ins en impediments per team, met leeftijd. Geen individuele productiviteitsdata: afwezigheid is een teamtotaal en er wordt niets per persoon vastgelegd.', 'Check-ins and impediments per team, with age. No individual productivity data: absence is a team total and nothing is recorded per person.') },
+      { view: 'afstemmen', target: 'tiles', text: L('Vier tellers: Open, Toegezegd, Bespreken, Kan niet; klik om te filteren.', 'Four counts: Open, Committed, Discuss, Can\'t; click to filter.') },
+      { view: 'afstemmen', target: 'pairs', text: L('Te bespreken is de agenda: teamparen op volgorde van het hoogste epic.', 'To discuss is the agenda: team pairs in order of their highest epic.') },
+      { view: 'afstemmen', target: 'matrix', ui: { matrix: true }, text: L('De matrix toont wie wat van wie vraagt; klik een cel voor de details.', 'The matrix shows who asks what of whom; click a cell for the details.') },
     ],
   },
 ];

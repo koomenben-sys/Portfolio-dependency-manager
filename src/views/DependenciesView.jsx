@@ -1,120 +1,216 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canWriteTeam } from '../data/repository';
-import { teamLoad, rankedLoad, incomingEffort, simulateAsk } from '../domain/capacity';
-import { planFor, timingConflict, noResponseDays, daysSince, worstResponse, phaseAllows } from '../domain/plan';
-import { RESPONSE_META, quarterLabel, PHASES } from '../domain/model';
+import { isLockedPhase, REASON_REQUIRED, ASK_META } from '../domain/model';
+import { availableWeeks } from '../domain/capacity';
+import { planFor, phaseAllows, byId } from '../domain/plan';
 import { useT } from '../i18n';
-import { ResponsePill, Panel, btn, input, Modal, Empty, Pill, RankBadge, fmtDate } from '../components/plan/ui';
+import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, ErrorLine, Disclosure, toneClass, normAsk } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
-import { EpicPanel } from '../components/plan/EpicPanel';
-import { AnswerModal } from '../components/plan/AnswerModal';
+import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
+import { useTourNudge } from '../components/plan/TourPanel';
 
-// Dependencies: provider intake queue + team x team matrix (AC C2-C8).
+// Screen 2 — Afhankelijkheden, per team like the Feb version (docs/design.md section 19, D26/D29/D31; iteration 1).
+// "Wij vragen": our epics in rank order with their asks and an inline "+ Verzoek".
+// "Aan ons gevraagd": asks to this team ordered by the requesting epic's rank, answered with one click.
+const COUNT_ORDER = ['declined', 'needs_priority_call', 'proposed', 'accepted'];
+const fmtPw = (n) => (Math.round(n * 10) / 10).toString().replace('.', ',');
+
 export function DependenciesView() {
-  const { state, actor, quarter } = usePlan();
+  const { state, actor, quarter, run } = usePlan();
   const t = useT();
-  const [teamId, setTeamId] = useState(actor.teamId || state.teams[0]?.id || '');
-  useEffect(() => { setTeamId(actor.teamId || state.teams[0]?.id || ''); }, [actor.id]); // persona / user switch
-  const [sort, setSort] = useState('rank');
-  const [cell, setCell] = useState(null);
+  const firstTeam = actor.teamId || state.teams[0]?.id || '';
+  const [teamId, setTeamId] = useState(firstTeam);
+  useEffect(() => { setTeamId(actor.teamId || state.teams[0]?.id || ''); }, [actor.id]);
+  const [tab, setTab] = useState('outgoing');
+  const [filter, setFilter] = useState(null); // one of COUNT_ORDER, from the count chips
+  useTourNudge(useCallback((d) => { if (d.tab) setTab(d.tab); }, []));
   const [openEpic, setOpenEpic] = useState(null);
-  const [answering, setAnswering] = useState(null);
+  const [err, setErr] = useState(null);
   if (!quarter) return <NoQuarter />;
-  const team = state.teams.find((x) => x.id === teamId);
+  const epics = byId(state.epics); const teams = byId(state.teams);
   const deps = state.dependencies.filter((d) => d.quarterId === quarter.id);
-  const queue = deps.filter((d) => d.providerTeamId === teamId).map((d) => ({ d, plan: planFor(state, d.epicId, quarter.id), epic: state.epics.find((e) => e.id === d.epicId) }))
-    .sort((a, b) => sort === 'age' ? a.d.createdAt.localeCompare(b.d.createdAt) : (a.plan?.rank ?? 1e9) - (b.plan?.rank ?? 1e9));
-  const load = teamLoad(state, teamId, quarter.id);
-  const ranked = rankedLoad(state, teamId, quarter.id);
-  const fitsById = new Map(ranked.items.map((i) => [i.id, i]));
-  const mayAnswer = canWriteTeam(actor, teamId) && phaseAllows(quarter.phase, 'answer');
-  const cellDeps = cell ? deps.filter((d) => d.requesterTeamId === cell.requester && d.providerTeamId === cell.provider) : [];
-  const openCount = queue.filter((q) => q.d.response === 'proposed').length;
-  const phaseLabel = t(PHASES.find((p) => p.id === quarter.phase)?.label || quarter.phase);
+  const outgoing = deps.filter((d) => d.requesterTeamId === teamId);
+  const incoming = deps.filter((d) => d.providerTeamId === teamId);
+  const inFilter = (d) => !filter || normAsk(d.response) === filter;
+  const rankOf = (d) => planFor(state, d.epicId, quarter.id)?.rank ?? 1e9;
+  const incomingSorted = [...incoming].filter(inFilter).sort((a, b) => rankOf(a) - rankOf(b) || a.createdAt.localeCompare(b.createdAt));
+  const ourPlans = state.plans.filter((p) => p.quarterId === quarter.id && epics.get(p.epicId)?.teamId === teamId).sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
+  const asksOf = (p) => outgoing.filter((d) => d.epicId === p.epicId);
+  const withAsks = ourPlans.filter((p) => asksOf(p).some(inFilter));
+  const withoutAsks = ourPlans.filter((p) => asksOf(p).length === 0);
+  const mayWrite = canWriteTeam(actor, teamId) && quarter.phase !== 'closed';
+  const answersOpen = phaseAllows(quarter.phase, 'answer');
+  const mayAnswer = mayWrite && answersOpen;
+  const locked = isLockedPhase(quarter.phase);
+  const act = async (m, ...a) => { const r = await run(m, ...a); setErr(r.ok ? null : r.error); return r; };
+  // Load on the provider (item 6): everything not declined counts as requested; available from the capacity module.
+  const available = availableWeeks(state.capacity.find((c) => c.teamId === teamId && c.quarterId === quarter.id));
+  const requested = incoming.filter((d) => normAsk(d.response) !== 'declined').reduce((s, d) => s + (d.effortHigh || 0), 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-xl font-bold">{t('Dependencies')} · {quarterLabel(quarter)}</h2>
-        {!phaseAllows(quarter.phase, 'answer') && <span className="text-xs bg-gray-100 border rounded px-2 py-0.5">{t('Answers open from the Negotiate phase (now: {phase})', { phase: phaseLabel })}</span>}
+    <div data-tour="dependencies">
+      <ViewHeader title={t('Dependencies')} meta={
+        <span className="inline-flex items-center gap-2 text-title text-muted"><span aria-hidden="true">·</span>
+          <label><span className="sr-only">{t('Team')}</span>
+            <select className="h-8 pl-1 pr-6 rounded-control bg-transparent text-title font-semibold text-ink hover:bg-surface-2 focus-ring cursor-pointer" value={teamId} onChange={(e) => { setTeamId(e.target.value); setFilter(null); }} data-tour="team-select">{state.teams.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+          </label>
+        </span>
+      } />
+      <Tabs ariaLabel={t('Direction')} value={tab} onChange={(v) => { setTab(v); setFilter(null); }} items={[{ id: 'outgoing', label: t('We ask'), count: outgoing.length }, { id: 'incoming', label: t('Asked of us'), count: incoming.length }]} />
+      <ErrorLine error={err} />
+
+      <div className="mt-4 flex items-center gap-3 flex-wrap min-h-7">
+        <CountChips deps={tab === 'outgoing' ? outgoing : incoming} value={filter} onChange={setFilter} />
+        {tab === 'incoming' && available > 0 && (
+          <span className={`text-label tnum ${requested > available ? 'text-danger-fg font-medium' : 'text-muted'}`}>
+            {t('Requested {n} pw', { n: fmtPw(requested) })} <span aria-hidden="true">·</span> {t('available {n} pw', { n: fmtPw(available) })}
+          </span>
+        )}
       </div>
 
-      <Panel title={<span className="flex items-center gap-2 flex-wrap">{t('Asks of')} <select aria-label={t('Provider team')} className={`${input} !w-auto`} value={teamId} onChange={(e) => setTeamId(e.target.value)}>{state.teams.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
-        <span className="text-gray-600 font-normal">{t('{n} waiting for an answer', { n: openCount })}</span></span>}
-        right={<span className="text-xs text-gray-700 flex items-center gap-3">
-          <span>{t('Remaining after accepted asks:')} <b className={load.remaining < 0 ? 'text-red-700' : ''}>{load.remaining} pw</b> {t('of {available} · load {pct}%', { available: load.available, pct: load.pct })}{load.pendingCount > 0 && <> · {t('{pct}% if all accepted', { pct: load.pctIfAllAccepted })}</>}</span>
-          <label className="flex items-center gap-1">{t('Sort')} <select aria-label={t('Sort queue')} className={`${input} !w-auto !py-0`} value={sort} onChange={(e) => setSort(e.target.value)}><option value="rank">{t('by strategic rank')}</option><option value="age">{t('by age')}</option></select></label>
-        </span>}>
-        {queue.length === 0 ? <Empty>{t('No asks for {team} in this quarter.', { team: team?.name })}</Empty> : (
-          <table className="w-full text-sm">
-            <thead className="text-xs text-gray-600 text-left"><tr><th className="py-1">{t('Rank')}</th><th>{t('Ask')}</th><th>{t('From')}</th><th>{t('Effort')}</th><th>{t('Fits?')}</th><th>{t('Open for')}</th><th>{t('Answer')}</th><th></th></tr></thead>
-            <tbody>
-              {queue.map(({ d, plan, epic }) => {
-                const nr = noResponseDays(d, Date.now(), state.settings.noResponseDays ?? 5);
-                const fit = fitsById.get(d.id);
-                const eff = incomingEffort(d);
-                return (
-                  <tr key={d.id} className="border-t align-top">
-                    <td className="py-2 pr-2"><RankBadge rank={plan?.rank} size="sm" /></td>
-                    <td className="py-2 pr-2">
-                      <div>{d.ask}</div>
-                      <div className="text-xs text-gray-600">{d.refCode} · {t('for')} <button className="text-indigo-700 hover:underline" onClick={() => setOpenEpic(epic.id)}>{epic?.refCode} {epic?.title}</button>{d.neededBy && <> · {t('needed by {date}', { date: fmtDate(d.neededBy) })}</>}</div>
-                      {d.ifDeclined && <div className="text-xs text-gray-600">{t('If declined:')} {d.ifDeclined}</div>}
-                      {timingConflict(state, d) && <div className="text-xs text-red-700">▲ {t("Timing conflict: delivery after the epic's planned quarter")}</div>}
-                    </td>
-                    <td className="py-2 pr-2">{state.teams.find((x) => x.id === d.requesterTeamId)?.name}<div className="text-xs text-gray-600">{d.requesterName || epic?.ownerName}</div></td>
-                    <td className="py-2 pr-2 whitespace-nowrap">{d.effortLow}–{d.effortHigh} pw{d.response === 'partial' && <div className="text-xs text-lime-800">{t('granted {low}–{high}', { low: eff.low, high: eff.high })}</div>}</td>
-                    <td className="py-2 pr-2 text-xs">{fit ? (fit.fits ? <span className="text-emerald-700">✓ {t('fits at rank {rank} (cum. {cum})', { rank: fit.rank ?? '–', cum: fit.cum })}</span> : <span className="text-red-700">▲ {t('below cut line (cum. {cum})', { cum: fit.cum })}</span>) : ['proposed', 'needs_priority_call'].includes(d.response) ? (() => { const sim = simulateAsk(state, d); return sim.fits
-                      ? <span className={sim.pushed.length ? 'text-amber-900' : 'text-emerald-700'}>{sim.pushed.length ? '!' : '✓'} {t('would fit at rank {rank} (cum. {cum})', { rank: plan?.rank ?? '–', cum: sim.cum })}{sim.pushed.length > 0 && <>; {t('pushes {refs} below the cut line', { refs: sim.pushed.map((id) => state.epics.find((e) => e.id === id)?.refCode).join(', ') })}</>}</span>
-                      : <span className="text-red-700">▲ {t('would land below the cut line (cum. {cum} of {available})', { cum: sim.cum, available: sim.available })}</span>; })() : '–'}</td>
-                    <td className="py-2 pr-2 whitespace-nowrap text-xs">{t('{n} days', { n: daysSince(d.createdAt) })}{nr && <div className="text-red-700 font-semibold">{t('No response – {n} days', { n: nr })}</div>}</td>
-                    <td className="py-2 pr-2"><ResponsePill value={d.response} />{d.responseReason && <div className="text-xs text-gray-700 mt-1 max-w-[220px]">{d.responseReason}</div>}</td>
-                    <td className="py-2">{mayAnswer && <button className={d.response === 'proposed' ? btn.primary : btn.secondary} aria-label={`${d.response === 'proposed' ? t('Answer') : t('Change answer')} ${d.refCode}`} onClick={() => setAnswering(d)}>{d.response === 'proposed' ? t('Answer') : t('Change answer')}</button>}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Panel>
-
-      <Panel title={t('Team × team matrix (rows ask, columns provide)')} right={<span className="text-xs text-gray-600 flex gap-2 flex-wrap">{Object.entries(RESPONSE_META).map(([k, m]) => <span key={k}><span aria-hidden="true">{m.icon}</span> {t(m.label)}</span>)}</span>}>
-        <div className="overflow-x-auto">
-          <table className="text-xs">
-            <thead><tr><th className="p-1 text-left text-gray-600">{t('asks ↓ / provides →')}</th>{state.teams.map((x) => <th key={x.id} className="p-1 font-medium" scope="col">{x.name}</th>)}</tr></thead>
-            <tbody>
-              {state.teams.map((r) => (
-                <tr key={r.id}>
-                  <th className="p-1 text-left font-medium" scope="row">{r.name}</th>
-                  {state.teams.map((c) => {
-                    const ds = deps.filter((d) => d.requesterTeamId === r.id && d.providerTeamId === c.id);
-                    if (r.id === c.id) return <td key={c.id} className="p-1 bg-gray-100" />;
-                    if (!ds.length) return <td key={c.id} className="p-1 text-center text-gray-300" aria-label={t('{requester} asks nothing of {provider}', { requester: r.name, provider: c.name })}>·</td>;
-                    const w = worstResponse(ds);
-                    return <td key={c.id} className="p-1 text-center"><button onClick={() => setCell({ requester: r.id, provider: c.id })} className="w-full" aria-label={t('{requester} asks {provider}: {n}, worst answer {answer}', { requester: r.name, provider: c.name, n: ds.length, answer: t(RESPONSE_META[w].label) })}><Pill meta={RESPONSE_META[w]} size="xs">{ds.length}</Pill></button></td>;
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {tab === 'outgoing' && (
+        <div className="mt-4 space-y-3" data-tour="outgoing">
+          {ourPlans.length === 0 && <div className={cls.card}><EmptyLine>{t('No epics for this team in this quarter.')}</EmptyLine></div>}
+          {withAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={asksOf(p).filter(inFilter)} teams={teams} mayWrite={mayWrite} locked={locked} act={act} onOpen={() => setOpenEpic(p.epicId)} />)}
+          {withoutAsks.length > 0 && !filter && (
+            <Disclosure className="px-1" summary={withoutAsks.length === 1 ? t('1 epic without asks') : t('{n} epics without asks', { n: withoutAsks.length })}>
+              <div className="space-y-3">{withoutAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={[]} teams={teams} mayWrite={mayWrite} locked={locked} act={act} onOpen={() => setOpenEpic(p.epicId)} />)}</div>
+            </Disclosure>
+          )}
         </div>
-        <p className="text-xs text-gray-600 mt-2">{t('Cell shows the number of asks and the worst answer in that pair. Click a cell for the list.')}</p>
-      </Panel>
-
-      {cell && (
-        <Modal title={t('{requester} asks {provider}', { requester: state.teams.find((x) => x.id === cell.requester)?.name, provider: state.teams.find((x) => x.id === cell.provider)?.name })} onClose={() => setCell(null)} wide>
-          <ul className="space-y-2 text-sm">
-            {cellDeps.map((d) => { const e = state.epics.find((x) => x.id === d.epicId); return (
-              <li key={d.id} className="border rounded p-2 flex justify-between gap-3">
-                <div><div className="text-xs text-gray-600">{d.refCode} · <button className="text-indigo-700 hover:underline" onClick={() => { setCell(null); setOpenEpic(e.id); }}>{e?.title}</button></div>{d.ask}{d.responseReason && <div className="text-xs text-gray-700">{d.responseReason}</div>}</div>
-                <ResponsePill value={d.response} />
-              </li>); })}
-          </ul>
-        </Modal>
       )}
-      {answering && <AnswerModal dep={answering} onClose={() => setAnswering(null)} />}
-      {openEpic && <EpicPanel epicId={openEpic} onClose={() => setOpenEpic(null)} />}
+
+      {tab === 'incoming' && (
+        <div className="mt-4" data-tour="incoming">
+          {!answersOpen && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
+          {incoming.length === 0 ? <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div> : (
+            <ul className={`${cls.card} divide-y divide-border`}>
+              {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} act={act} onOpen={() => setOpenEpic(d.epicId)} />)}
+              {incomingSorted.length === 0 && <li><EmptyLine>{t('Nothing here.')}</EmptyLine></li>}
+            </ul>
+          )}
+        </div>
+      )}
+      {openEpic && <SimpleEpicPanel epicId={openEpic} onClose={() => setOpenEpic(null)} />}
     </div>
+  );
+}
+
+// Count chips "✕ 1 · ? 1 · ◷ 1 · ✓ 3" (item 6); each toggles a filter on the list below.
+function CountChips({ deps, value, onChange }) {
+  const t = useT();
+  return (
+    <div className="inline-flex items-center gap-1" role="group" aria-label={t('Filter by answer')}>
+      {COUNT_ORDER.map((s) => {
+        const n = deps.filter((d) => normAsk(d.response) === s).length;
+        const active = value === s;
+        return (
+          <button key={s} type="button" aria-pressed={active} onClick={() => onChange(active ? null : s)} aria-label={`${n} ${t(ASK_META[s].label)}`}
+            className={`inline-flex items-center gap-1 h-7 px-2 rounded-full text-caption font-semibold tnum transition-base focus-ring ${n === 0 && !active ? 'bg-surface-2 text-muted' : `${toneClass(ASK_META[s].tone)} hover:opacity-80`} ${active ? 'ring-2 ring-accent' : ''}`}>
+            <AskIcon response={s} size={12} />{n}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// One of our epics with its asks and the inline "+ Verzoek" row.
+function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, onOpen }) {
+  const { state, quarter } = usePlan();
+  const t = useT();
+  const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState(null); // dep id
+  if (!epic) return null;
+  const others = state.teams.filter((x) => x.id !== epic.teamId);
+  return (
+    <section className={cls.card} aria-label={epic.title}>
+      <header className="flex items-center gap-3 px-3 h-11 border-b border-border">
+        <RankNo rank={plan.rank} size="sm" />
+        <button className="min-w-0 flex-1 text-left text-body font-medium truncate hover:underline focus-ring rounded-control" onClick={onOpen}>{epic.title}</button>
+        {mayWrite && !adding && <button className={cls.ghost} onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" />{t('Ask')}</button>}
+      </header>
+      <ul className="divide-y divide-border">
+        {asks.map((d) => (
+          <li key={d.id} className="group px-3 py-2">
+            <div className="flex items-center gap-3 min-h-8">
+              <span className="w-40 shrink-0 text-label text-muted truncate">{teams.get(d.providerTeamId)?.name}</span>
+              <span className="flex-1 min-w-0 text-body truncate">{d.ask}</span>
+              <StatusChip response={d.response} />
+              {mayWrite && removing !== d.id && <button className={`${cls.icon} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} aria-label={`${t('Remove ask')} ${d.refCode}`} onClick={() => setRemoving(d.id)}><Trash2 size={14} /></button>}
+            </div>
+            {d.responseReason && <p className="pl-[172px] text-label text-muted">{d.responseReason}</p>}
+            {removing === d.id && (
+              <div className="pl-[172px] pt-1">
+                {locked ? <InlineReason required saveLabel={t('Remove')} onSave={async (reason) => { const r = await act('deleteDependency', d.id, reason); if (r.ok) setRemoving(null); }} onCancel={() => setRemoving(null)} />
+                  : <div className="flex items-center gap-2 text-label"><span className="text-muted">{t('Remove?')}</span><button className={cls.secondary} onClick={async () => { const r = await act('deleteDependency', d.id, ''); if (r.ok) setRemoving(null); }}>{t('Yes')}</button><button className={cls.secondary} onClick={() => setRemoving(null)}>{t('No')}</button></div>}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      {adding && <NewAskRow epic={epic} quarter={quarter} others={others} locked={locked} act={act} onDone={() => setAdding(false)} />}
+    </section>
+  );
+}
+
+function NewAskRow({ epic, quarter, others, locked, act, onDone }) {
+  const t = useT();
+  const [providerTeamId, setProviderTeamId] = useState(others[0]?.id || '');
+  const [ask, setAsk] = useState('');
+  const [effort, setEffort] = useState('');
+  const [reason, setReason] = useState('');
+  const submit = async (e) => {
+    e.preventDefault();
+    const pw = Number(effort || 0);
+    const r = await act('addDependency', { epicId: epic.id, providerTeamId, quarterId: quarter.id, ask: ask.trim(), effortLow: pw, effortHigh: pw, reason });
+    if (r.ok) onDone();
+  };
+  return (
+    <form onSubmit={submit} className="px-3 py-2 border-t border-border bg-canvas flex items-center gap-2 flex-wrap anim-fade-in">
+      <select className={`${cls.input} !w-40`} value={providerTeamId} onChange={(e) => setProviderTeamId(e.target.value)} aria-label={t('Team we need')}>{others.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+      <input autoFocus className={`${cls.input} flex-1 min-w-[200px]`} placeholder={t('What do we need?')} aria-label={t('What do we need?')} value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') onDone(); }} />
+      <input type="number" min="0" step="0.5" className={`${cls.input} !w-20 tnum`} placeholder="pw" aria-label={t('Effort (pw)')} value={effort} onChange={(e) => setEffort(e.target.value)} />
+      {locked && <input className={`${cls.input} !w-48`} placeholder={t('Why? (quarter is locked)')} aria-label={t('Why? (quarter is locked)')} value={reason} onChange={(e) => setReason(e.target.value)} />}
+      <button type="submit" className={cls.primary} disabled={!ask.trim()}>{t('Send')}</button>
+      <button type="button" className={cls.secondary} onClick={onDone}>{t('Cancel')}</button>
+    </form>
+  );
+}
+
+// An ask to our team: rank · requesting team · what · for epic · Toezeggen / Bespreken / Kan niet.
+// Only "Kan niet" opens an inline reason (item 10); the other two answer in one click.
+function IncomingRow({ dep, epic, rank, team, mayAnswer, act, onOpen }) {
+  const t = useT();
+  const [reasonFor, setReasonFor] = useState(null); // response awaiting an inline reason
+  const pick = async (response) => {
+    if (response === dep.response) return;
+    if (REASON_REQUIRED.has(response)) { setReasonFor(response); return; }
+    setReasonFor(null);
+    await act('answerDependency', dep.id, { response, reason: '' });
+  };
+  const labelId = `ask-${dep.id}`;
+  return (
+    <li className="px-3 py-2">
+      <div className="flex items-center gap-3 min-h-9 flex-wrap md:flex-nowrap">
+        <RankNo rank={rank} size="sm" />
+        <span className="w-40 shrink-0 text-label text-muted truncate">{team?.name}</span>
+        <div className="flex-1 min-w-[200px]">
+          <div id={labelId} className="text-body">{dep.ask}{dep.effortHigh > 0 && <span className="text-caption text-faint tnum"> · {dep.effortHigh} pw</span>}</div>
+          <div className="text-caption text-muted truncate">{t('for')} <button className="hover:underline text-accent focus-ring rounded-control" onClick={onOpen}>{epic?.title}</button></div>
+        </div>
+        {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <StatusChip response={dep.response} />}
+        {mayAnswer && (dep.response === 'partial' || dep.response === 'deferred') && <StatusChip response={dep.response} />}
+      </div>
+      {dep.responseReason && reasonFor == null && <p className="pl-[172px] text-label text-muted mt-0.5">{dep.responseReason}</p>}
+      {reasonFor && (
+        <div className="pl-[172px] pt-1">
+          <InlineReason required defaultValue={dep.responseReason || ''} placeholder={t('What stands in the way?')}
+            onSave={async (reason) => { const r = await act('answerDependency', dep.id, { response: reasonFor, reason }); if (r.ok) setReasonFor(null); }} onCancel={() => setReasonFor(null)} />
+        </div>
+      )}
+    </li>
   );
 }
