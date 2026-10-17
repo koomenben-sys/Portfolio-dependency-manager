@@ -710,4 +710,13 @@ export const nl = {
   'You can only edit epics of your own team': 'Je kunt alleen epics van je eigen team bewerken',
   'You can only plan epics of your own team': 'Je kunt alleen epics van je eigen team plannen',
   'You can only vote for your own team': 'Je kunt alleen voor je eigen team stemmen',
+  // Supabase adapter messages (live test 2026-10-17)
+  'Not allowed for your role or team': 'Niet toegestaan voor je rol of team',
+  'A team with that name exists': 'Er bestaat al een team met die naam',
+  'A theme with that name exists': 'Er bestaat al een thema met die naam',
+  'Name is required': 'Naam is verplicht',
+  'Unknown phase': 'Onbekende fase',
+  'Unknown discussion item': 'Onbekend discussiepunt',
+  'Unknown impediment': 'Onbekende belemmering',
+  'No organisation membership for this user. Run db/migrations/004_bootstrap.sql.': 'Deze gebruiker is geen lid van een organisatie. Draai db/migrations/004_bootstrap.sql.',
 };
