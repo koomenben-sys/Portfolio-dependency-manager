@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GripVertical, ArrowUp, ArrowDown, Plus, Search, ListOrdered } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canRank, isPlanner, isAdmin } from '../data/repository';
@@ -32,6 +32,22 @@ export function PrioritizeView() {
 
   const epics = useMemo(() => byId(state.epics), [state.epics]);
   const teams = useMemo(() => byId(state.teams), [state.teams]);
+  const tbodyRef = useRef(null);
+  const rectsRef = useRef(new Map());
+  // FLIP: rows that changed vertical position since the last paint glide there instead of snapping.
+  useLayoutEffect(() => {
+    const rows = [...(tbodyRef.current?.querySelectorAll('tr[data-plan]') || [])];
+    const prev = rectsRef.current; const next = new Map();
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    for (const el of rows) {
+      const top = el.getBoundingClientRect().top; next.set(el.dataset.plan, top);
+      const was = prev.get(el.dataset.plan);
+      if (reduce || was == null || Math.abs(was - top) < 1) continue;
+      el.style.transition = 'none'; el.style.transform = `translateY(${was - top}px)`;
+      requestAnimationFrame(() => { el.style.transition = 'transform 260ms var(--ease-out)'; el.style.transform = ''; });
+    }
+    rectsRef.current = next;
+  });
   if (!quarter) return <NoQuarter />;
 
   const plansQ = state.plans.filter((p) => p.quarterId === quarter.id);
@@ -79,7 +95,7 @@ export function PrioritizeView() {
     const dragging = dragId === p.id;
     return (
       <React.Fragment key={p.id}>
-        <tr id={`row-${p.id}`} tabIndex={0} draggable={canDrag && inList} aria-selected={openEpic === e.id || undefined}
+        <tr id={`row-${p.id}`} data-plan={p.id} tabIndex={0} draggable={canDrag && inList} aria-selected={openEpic === e.id || undefined}
           onDragStart={(ev) => { setDragId(p.id); ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', p.id); }}
           onDragOver={(ev) => { if (canDrag && inList && dragId) { ev.preventDefault(); if (overId !== p.id) setOverId(p.id); } }}
           onDragLeave={() => { if (overId === p.id) setOverId(null); }}
@@ -92,14 +108,14 @@ export function PrioritizeView() {
           }}
           className={`group relative h-row cursor-pointer transition-base focus-ring-inset ${dragging ? 'opacity-40' : ''} ${overId === p.id && dragId !== p.id ? 'shadow-[inset_0_2px_0_0_var(--color-accent-500)]' : ''} ${flashId === p.id ? 'anim-flash' : isMoved ? 'bg-accent-50' : 'hover:bg-surface-2'}`}>
           <td className="w-7 pl-2 relative">
-            {worst && <span className={`absolute left-0 top-2 bottom-2 w-0.5 rounded-full ${worst}`} aria-hidden="true" />}
+            {worst && <span className={`absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full ${worst}`} aria-hidden="true" />}
             {canDrag && inList ? <span title={t('Drag, or Alt+↑/↓')}><GripVertical size={14} className="text-faint group-hover:text-muted" aria-hidden="true" /></span> : null}
           </td>
           <td className="w-10 pr-2"><RankNo rank={inList ? index + 1 : null} size="sm" /></td>
           <td className="pr-3 min-w-0">
-            <div className="text-body font-medium text-ink truncate">{e.title}</div>
+            <div className="text-body text-ink truncate">{e.title}</div>
           </td>
-          <td className="w-44 pr-3 text-label text-ink-2 truncate">{teams.get(e.teamId)?.name}</td>
+          <td className="w-44 pr-3 text-label text-muted truncate">{teams.get(e.teamId)?.name}</td>
           <td className="w-64 pr-3"><WorstIssue deps={deps} teams={teams} /></td>
           <td className="w-20 pr-2">
             {mayRank && (inList ? (
@@ -111,7 +127,7 @@ export function PrioritizeView() {
           </td>
         </tr>
         {isMoved && (
-          <tr className="bg-accent-50"><td colSpan={6} className="px-10 pb-3 pt-1">
+          <tr className="bg-accent-50"><td colSpan={6} className="pl-[76px] pr-4 pb-3 pt-1">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-label text-accent-700 whitespace-nowrap tnum">{t('Moved to #{n}', { n: index + 1 })}</span>
               <InlineReason required={isLockedPhase(quarter.phase)} onSave={commit} onCancel={cancel} error={err} />
@@ -144,14 +160,14 @@ export function PrioritizeView() {
             <thead>
               <tr className="text-caption text-muted text-left border-b border-border">
                 <th className="h-9 w-7" scope="col"><span className="sr-only">{t('Drag')}</span></th>
-                <th className="w-10 font-medium" scope="col">#</th>
+                <th className="w-10 pr-2 font-medium" scope="col"><span className="inline-flex w-6 justify-center">#</span></th>
                 <th className="font-medium" scope="col">{t('Epic')}</th>
                 <th className="w-44 font-medium" scope="col">{t('Team')}</th>
                 <th className="w-64 font-medium" scope="col">{t('Dependencies')}</th>
                 <th className="w-20" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody ref={tbodyRef} className="divide-y divide-border">
               {visible.map((p) => renderRow(p, order.indexOf(p), true))}
               {visible.length === 0 && <tr><td colSpan={6}><EmptyLine>{searching ? t('No match.') : t('Nothing ranked yet.')}</EmptyLine></td></tr>}
             </tbody>

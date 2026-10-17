@@ -61,7 +61,7 @@ export function DependenciesView() {
       <Tabs ariaLabel={t('Direction')} value={tab} onChange={(v) => { setTab(v); setFilter(null); }} items={[{ id: 'outgoing', label: t('We ask'), count: outgoing.length }, { id: 'incoming', label: t('Asked of us'), count: incoming.length }]} />
       <ErrorLine error={err} />
 
-      <div className="mt-3 flex items-center gap-3 flex-wrap min-h-7">
+      <div className="mt-4 flex items-center gap-3 flex-wrap min-h-7">
         <CountChips deps={tab === 'outgoing' ? outgoing : incoming} value={filter} onChange={setFilter} />
         {tab === 'incoming' && available > 0 && (
           <span className={`text-label tnum ${requested > available ? 'text-danger-fg font-medium' : 'text-muted'}`}>
@@ -71,7 +71,7 @@ export function DependenciesView() {
       </div>
 
       {tab === 'outgoing' && (
-        <div className="mt-3 space-y-3" data-tour="outgoing">
+        <div className="mt-4 space-y-3" data-tour="outgoing">
           {ourPlans.length === 0 && <div className={cls.card}><EmptyLine>{t('No epics for this team in this quarter.')}</EmptyLine></div>}
           {withAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={asksOf(p).filter(inFilter)} teams={teams} mayWrite={mayWrite} locked={locked} act={act} onOpen={() => setOpenEpic(p.epicId)} />)}
           {withoutAsks.length > 0 && !filter && (
@@ -83,7 +83,7 @@ export function DependenciesView() {
       )}
 
       {tab === 'incoming' && (
-        <div className="mt-3" data-tour="incoming">
+        <div className="mt-4" data-tour="incoming">
           {!answersOpen && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
           {incoming.length === 0 ? <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div> : (
             <ul className={`${cls.card} divide-y divide-border`}>
@@ -108,7 +108,7 @@ function CountChips({ deps, value, onChange }) {
         const active = value === s;
         return (
           <button key={s} type="button" aria-pressed={active} onClick={() => onChange(active ? null : s)} aria-label={`${n} ${t(ASK_META[s].label)}`}
-            className={`inline-flex items-center gap-1 h-7 px-2 rounded-full border text-caption font-semibold tnum transition-base focus-ring ${n === 0 && !active ? 'opacity-50' : ''} ${toneClass(ASK_META[s].tone)} ${active ? 'ring-2 ring-accent' : 'hover:brightness-95'}`}>
+            className={`inline-flex items-center gap-1 h-7 px-2 rounded-full text-caption font-semibold tnum transition-base focus-ring ${n === 0 && !active ? 'bg-surface-2 text-muted' : `${toneClass(ASK_META[s].tone)} hover:opacity-80`} ${active ? 'ring-2 ring-accent' : ''}`}>
             <AskIcon response={s} size={12} />{n}
           </button>
         );
@@ -136,7 +136,7 @@ function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, onOpen }) {
         {asks.map((d) => (
           <li key={d.id} className="group px-3 py-2">
             <div className="flex items-center gap-3 min-h-8">
-              <span className="w-40 shrink-0 text-label text-ink-2 truncate">{teams.get(d.providerTeamId)?.name}</span>
+              <span className="w-40 shrink-0 text-label text-muted truncate">{teams.get(d.providerTeamId)?.name}</span>
               <span className="flex-1 min-w-0 text-body truncate">{d.ask}</span>
               <StatusChip response={d.response} />
               {mayWrite && removing !== d.id && <button className={`${cls.icon} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} aria-label={`${t('Remove ask')} ${d.refCode}`} onClick={() => setRemoving(d.id)}><Trash2 size={14} /></button>}
@@ -196,7 +196,7 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, act, onOpen }) {
     <li className="px-3 py-2">
       <div className="flex items-center gap-3 min-h-9 flex-wrap md:flex-nowrap">
         <RankNo rank={rank} size="sm" />
-        <span className="w-40 shrink-0 text-label text-ink-2 truncate">{team?.name}</span>
+        <span className="w-40 shrink-0 text-label text-muted truncate">{team?.name}</span>
         <div className="flex-1 min-w-[200px]">
           <div id={labelId} className="text-body">{dep.ask}{dep.effortHigh > 0 && <span className="text-caption text-faint tnum"> · {dep.effortHigh} pw</span>}</div>
           <div className="text-caption text-muted truncate">{t('for')} <button className="hover:underline text-accent focus-ring rounded-control" onClick={onOpen}>{epic?.title}</button></div>

@@ -96,8 +96,8 @@ function ShellInner({ ctx, onSignOut }) {
               const active = view === v.id;
               return (
                 <button key={v.id} aria-current={active ? 'page' : undefined} onClick={() => setView(v.id)} data-tour={`nav-${v.id}`}
-                  className={`inline-flex items-center gap-2 h-8 px-2.5 rounded-control text-label font-medium transition-base focus-ring ${active ? 'bg-accent-50 text-accent-700' : 'text-ink-2 hover:bg-surface-2'}`}>
-                  <span className={`tnum w-5 h-5 rounded-full text-micro font-semibold inline-flex items-center justify-center ${active ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted'}`} aria-hidden="true">{i + 1}</span>{t(v.label)}
+                  className={`inline-flex items-center gap-2 h-8 px-2.5 rounded-control text-label transition-base focus-ring ${active ? 'text-ink font-medium' : 'text-muted hover:text-ink hover:bg-surface-2'}`}>
+                  <span className={`tnum w-5 h-5 rounded-full text-micro font-semibold inline-flex items-center justify-center transition-base ${active ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted'}`} aria-hidden="true">{i + 1}</span>{t(v.label)}
                 </button>
               );
             })}
@@ -163,7 +163,7 @@ function ShellInner({ ctx, onSignOut }) {
           </div>
         </div>
       </header>
-      <main id="main" className="px-6 py-5 max-w-[1200px] mx-auto">
+      <main id="main" className="px-6 py-6 max-w-[1200px] mx-auto">
         {needsSetup ? <OnboardingWizard onDone={(target) => { setSkipWizard(true); setView(target || 'prioriteren'); }} /> : <Current key={view} />}
       </main>
       {tour && <TourPanel scenarioId={tour} onClose={() => setTour(null)} setView={setView} />}

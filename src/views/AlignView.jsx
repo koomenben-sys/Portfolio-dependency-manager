@@ -5,7 +5,7 @@ import { canWriteTeam } from '../data/repository';
 import { ASK_META, REASON_REQUIRED, needsTalk } from '../domain/model';
 import { planFor, phaseAllows, byId } from '../domain/plan';
 import { useT } from '../i18n';
-import { cls, StatusChip, AskIcon, RankNo, AnswerControl, InlineReason, toneClass, EmptyLine, ViewHeader, ErrorLine, normAsk, ASK_SEVERITY, worstAsk } from '../components/plan/core';
+import { cls, StatusChip, AskIcon, RankNo, AnswerControl, InlineReason, toneClass, toneBorder, EmptyLine, ViewHeader, ErrorLine, normAsk, ASK_SEVERITY, worstAsk } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 import { useTourNudge } from '../components/plan/TourPanel';
@@ -15,6 +15,7 @@ import { useTourNudge } from '../components/plan/TourPanel';
 // open-only pairs after), inline answers for those allowed, a session-local "Besproken" check, matrix at the end.
 const STATES = ['declined', 'needs_priority_call', 'proposed', 'accepted'];
 const LOUD = new Set(['declined', 'needs_priority_call']);
+const LOUD_ICON = { declined: 'text-danger', needs_priority_call: 'text-warn' };
 const TOP_N = 5;
 const discussedKey = (quarterId) => `kp.discussed.${quarterId}`;
 const readDiscussed = (quarterId) => { try { return new Set(JSON.parse(localStorage.getItem(discussedKey(quarterId)) || '[]')); } catch { return new Set(); } };
@@ -76,21 +77,21 @@ export function AlignView() {
     <div data-tour="align">
       <ViewHeader title={t('Align')} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" data-tour="tiles">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5" data-tour="tiles">
         {STATES.map((s) => {
-          const m = ASK_META[s]; const active = filter === s && !pairFocus; const loud = LOUD.has(s);
+          const m = ASK_META[s]; const active = filter === s && !pairFocus; const loud = LOUD.has(s) && counts[s] > 0;
           return (
             <button key={s} aria-pressed={active} onClick={() => { setPairFocus(null); setFilter(active ? null : s); }}
-              className={`${cls.card} text-left px-4 py-3 transition-base hover:border-border-strong focus-ring ${active ? 'border-accent ring-1 ring-accent' : ''}`}>
-              <div className="flex items-center justify-between"><span className={`text-label ${loud ? 'text-ink-2' : 'text-muted'}`}>{t(m.label)}</span><span className={`inline-flex items-center justify-center w-6 h-6 rounded-full border ${loud ? toneClass(m.tone) : 'border-border text-muted'}`}><AskIcon response={s} size={12} /></span></div>
-              <div className={`tnum mt-1 ${loud ? 'text-hero font-semibold text-ink' : 'text-title font-medium text-muted'}`}>{counts[s]}</div>
+              className={`${cls.card} text-left p-4 transition-base hover:border-border-strong focus-ring ${active ? 'border-accent ring-1 ring-accent' : ''}`}>
+              <div className={`flex items-center gap-1.5 text-label ${loud ? 'text-ink-2' : 'text-muted'}`}><AskIcon response={s} size={14} className={loud ? LOUD_ICON[s] : 'text-faint'} />{t(m.label)}</div>
+              <div className={`tnum mt-2 leading-none ${loud ? 'text-display font-semibold text-ink' : 'text-hero font-medium text-muted'}`}>{counts[s]}</div>
             </button>
           );
         })}
       </div>
 
       {topPlans.length > 0 && (
-        <p className={`mb-3 text-label tnum ${atRisk.length ? 'text-ink' : 'text-muted'}`}>
+        <p className={`mb-4 text-label tnum ${atRisk.length ? 'text-ink' : 'text-muted'}`}>
           <span className="font-medium">{t('Top {n}', { n: topPlans.length })}:</span> {t('{n} at risk', { n: atRisk.length })}
           {atRisk.length > 0 && <> (<span className="text-muted">{t('rank')}</span> {atRisk.map((p, i) => <React.Fragment key={p.id}>{i > 0 && ', '}<button className="text-accent font-medium hover:underline focus-ring rounded-control px-0.5 min-h-6" onClick={() => revealEpic(p.epicId)} aria-label={t('Show rank {rank} in the list', { rank: p.rank })}>{p.rank}</button></React.Fragment>)})</>}
         </p>
@@ -103,20 +104,20 @@ export function AlignView() {
           {(filter || pairFocus) && <button className={cls.quiet} onClick={() => { setFilter(null); setPairFocus(null); }}>{t('Show all to discuss')}</button>}
         </div>
         {pairs.length === 0 ? <div className={cls.card}><EmptyLine>{filter || pairFocus ? t('Nothing here.') : t('Nothing to discuss. Nice.')}</EmptyLine></div> : (
-          <ul className="space-y-2">
+          <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
             {pairs.map((p, i) => {
               const done = discussed.has(p.key);
               const quiet = !p.problem || done;
               const worstN = p.deps.filter((d) => normAsk(d.response) === p.worst).length;
               return (
                 <li key={p.key}>
-                  <details ref={(el) => { if (el) detailRefs.current.set(p.key, el); else detailRefs.current.delete(p.key); }} className={`group ${cls.card} overflow-hidden ${quiet ? 'border-border' : 'border-border-strong'}`} open={(i === 0 && p.problem) || !!pairFocus}>
+                  <details ref={(el) => { if (el) detailRefs.current.set(p.key, el); else detailRefs.current.delete(p.key); }} className="group" open={(i === 0 && p.problem) || !!pairFocus}>
                     <summary className="list-none cursor-pointer select-none flex items-center gap-3 px-3 h-11 hover:bg-surface-2 focus-ring-inset">
                       <ChevronDown size={14} className="text-muted transition-transform group-open:rotate-180 shrink-0" aria-hidden="true" />
                       <RankNo rank={p.top === 1e9 ? null : p.top} size="sm" />
                       <span className={`text-body flex items-center gap-1.5 min-w-0 ${quiet ? 'text-ink-2' : 'font-medium text-ink'}`}><span className="truncate">{teams.get(p.req)?.name}</span><ArrowRight size={13} className="text-muted shrink-0" aria-hidden="true" /><span className="truncate">{teams.get(p.prov)?.name}</span></span>
                       <span className="ml-auto flex items-center gap-2">
-                        <span className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 h-5 text-micro font-semibold tnum ${quiet && !LOUD.has(p.worst) ? 'border-border text-muted' : toneClass(ASK_META[p.worst].tone)}`} aria-label={`${worstN} ${t(ASK_META[p.worst].label)}`}>{worstN}<AskIcon response={p.worst} size={10} /></span>
+                        <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 h-5 text-micro font-semibold tnum ${quiet && !LOUD.has(p.worst) ? 'bg-surface-2 text-muted' : toneClass(ASK_META[p.worst].tone)}`} aria-label={`${worstN} ${t(ASK_META[p.worst].label)}`}>{worstN}<AskIcon response={p.worst} size={10} /></span>
                         <button type="button" role="checkbox" aria-checked={done} aria-label={`${t('Discussed')}: ${teams.get(p.req)?.name} → ${teams.get(p.prov)?.name}`}
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleDiscussed(p.key); }}
                           className={`inline-flex items-center gap-1 h-7 px-1.5 rounded-control text-caption font-medium transition-base focus-ring ${done ? 'text-ok-fg bg-ok-bg' : 'text-muted hover:text-ink hover:bg-surface-2'}`}>
@@ -124,7 +125,7 @@ export function AlignView() {
                         </button>
                       </span>
                     </summary>
-                    <ul className="border-t border-border divide-y divide-border">
+                    <ul className="border-t border-border divide-y divide-border bg-canvas anim-fade-in">
                       {p.deps.map((d) => <PairAsk key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} mayAnswer={mayAnswerDep(d)} act={act} onOpen={() => setOpenEpic(d.epicId)} />)}
                     </ul>
                   </details>
@@ -135,7 +136,7 @@ export function AlignView() {
         )}
       </section>
 
-      <div className="mt-6 flex items-center gap-3">
+      <div className="mt-8 flex items-center gap-3">
         <button className="inline-flex items-center h-7 px-1.5 rounded-control text-caption font-medium text-accent hover:underline focus-ring" aria-expanded={showMatrix} aria-controls="align-matrix" onClick={() => setShowMatrix((v) => !v)}>{showMatrix ? t('Hide matrix') : t('Show matrix')}</button>
       </div>
       {showMatrix && (
@@ -156,7 +157,7 @@ export function AlignView() {
                       <td key={c.id} className="p-1.5 text-center">
                         <button onClick={() => { setPairFocus(focused ? null : { req: r.id, prov: c.id }); setFilter(null); document.querySelector('[data-tour="pairs"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} aria-pressed={focused}
                           aria-label={t('{requester} asks {provider}: {n}, worst answer {answer}', { requester: r.name, provider: c.name, n: ds.length, answer: t(ASK_META[worst].label) })}
-                          className={`inline-flex items-center justify-center gap-1 w-10 h-7 rounded-control border font-semibold transition-base focus-ring ${toneClass(ASK_META[worst].tone)} ${focused ? 'ring-2 ring-accent' : ''}`}>
+                          className={`inline-flex items-center justify-center gap-1 w-10 h-7 rounded-control border font-semibold transition-base focus-ring ${toneClass(ASK_META[worst].tone)} ${toneBorder(ASK_META[worst].tone)} ${focused ? 'ring-2 ring-accent' : ''}`}>
                           {ds.length}<AskIcon response={worst} size={11} />
                         </button>
                       </td>
@@ -186,7 +187,7 @@ function PairAsk({ dep, epic, rank, mayAnswer, act, onOpen }) {
   };
   const labelId = `pair-ask-${dep.id}`;
   return (
-    <li className="px-3 py-2">
+    <li className="px-3 py-2.5">
       <div className="flex items-center gap-3 flex-wrap md:flex-nowrap">
         <RankNo rank={rank} size="sm" />
         <div className="flex-1 min-w-[200px]">

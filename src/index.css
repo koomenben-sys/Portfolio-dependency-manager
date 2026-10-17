@@ -11,7 +11,7 @@
   --color-border-strong: #cbd5e1;
   --color-ink: #0f172a;
   --color-ink-2: #334155;
-  --color-muted: #64748b;
+  --color-muted: #5f6b80;   /* 4.9:1 on surface-2, 5.1:1 on canvas */
   --color-faint: #94a3b8;
 
   --color-accent-50: #ecfeff;
@@ -46,7 +46,7 @@
   --sidebar-w: 240px;
   --sidebar-rail-w: 64px;
   --view-header-h: 56px;
-  --row-h: 48px;
+  --row-h: 44px;
 }
 
 /* Alternative accent for municipalities: neutral blue (Rijksoverheid's #154273 is reserved). */
@@ -60,7 +60,7 @@
   --color-accent-700: #1e3a8a;
 }
 
-:root[data-density='compact'] { --row-h: 40px; }
+:root[data-density='compact'] { --row-h: 36px; }
 
 /* ── Base typography ──────────────────────────────────────────────────────────────────── */
 html { scroll-padding-top: calc(var(--view-header-h) + 16px); }
@@ -75,7 +75,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.01em; }
+h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.015em; }
 .tnum { font-variant-numeric: tabular-nums; }
 code, kbd, .mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
 

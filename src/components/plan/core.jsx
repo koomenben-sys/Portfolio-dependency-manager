@@ -19,14 +19,18 @@ export const cls = {
   label: 'block text-caption font-medium text-muted mb-1',
 };
 
+// Tint only: chips carry icon + text + colour, no 1px border (visual polish). Buttons that use a tone
+// (matrix cells, segmented control) add their own border via toneBorder.
 const TONE = {
-  neutral: 'bg-neutral-bg text-neutral-fg border-neutral-border',
-  ok: 'bg-ok-bg text-ok-fg border-ok-border',
-  warn: 'bg-warn-bg text-warn-fg border-warn-border',
-  danger: 'bg-danger-bg text-danger-fg border-danger-border',
-  info: 'bg-info-bg text-info-fg border-info-border',
+  neutral: 'bg-neutral-bg text-neutral-fg',
+  ok: 'bg-ok-bg text-ok-fg',
+  warn: 'bg-warn-bg text-warn-fg',
+  danger: 'bg-danger-bg text-danger-fg',
+  info: 'bg-info-bg text-info-fg',
 };
+const TONE_BORDER = { neutral: 'border-neutral-border', ok: 'border-ok-border', warn: 'border-warn-border', danger: 'border-danger-border', info: 'border-info-border' };
 export const toneClass = (tone) => TONE[tone] || TONE.neutral;
+export const toneBorder = (tone) => TONE_BORDER[tone] || TONE_BORDER.neutral;
 
 const ASK_ICON = { proposed: Clock, accepted: Check, partial: CircleDot, deferred: ArrowRight, needs_priority_call: CircleHelp, declined: X };
 export const AskIcon = ({ response, size = 14, className = '' }) => { const I = ASK_ICON[response] || Clock; return <I size={size} strokeWidth={2.25} className={className} aria-hidden="true" />; };
@@ -36,7 +40,7 @@ export function StatusChip({ response, compact = false, className = '' }) {
   const t = useT();
   const m = ASK_META[response] || ASK_META.proposed;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(m.tone)} ${className}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(m.tone)} ${className}`}>
       <AskIcon response={response} size={12} />{!compact && <span>{t(m.label)}</span>}
     </span>
   );
@@ -46,7 +50,7 @@ const COMMIT_TONE = { draft: 'neutral', discuss: 'warn', committed: 'ok', at_ris
 export function CommitmentChip({ value }) {
   const t = useT();
   const m = COMMITMENT_META[value]; if (!m) return null;
-  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(COMMIT_TONE[value])}`}><span aria-hidden="true">{m.icon}</span>{t(m.label)}</span>;
+  return <span className={`inline-flex items-center gap-1 rounded-full px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(COMMIT_TONE[value])}`}><span aria-hidden="true">{m.icon}</span>{t(m.label)}</span>;
 }
 
 // Strategic rank as a quiet tabular number; one neutral style for every rank (iteration 1, item 4).
@@ -54,7 +58,7 @@ export function RankNo({ rank, size = 'md' }) {
   const t = useT();
   const dim = size === 'sm' ? 'w-6 h-6 text-caption' : 'w-7 h-7 text-label';
   const look = rank == null ? 'bg-surface-2 text-faint' : 'bg-surface-2 text-ink-2';
-  return <span className={`shrink-0 rounded-control font-semibold tnum inline-flex items-center justify-center ${dim} ${look}`} aria-label={rank == null ? t('Unranked') : t('Strategic rank {rank}', { rank })}>{rank ?? '–'}</span>;
+  return <span className={`shrink-0 rounded-control font-medium tnum inline-flex items-center justify-center ${dim} ${look}`} aria-label={rank == null ? t('Unranked') : t('Strategic rank {rank}', { rank })}>{rank ?? '–'}</span>;
 }
 
 // Four core states; older partial/deferred data folds into the nearest one (D31).
@@ -109,7 +113,7 @@ export function Tabs({ items, value, onChange, ariaLabel }) {
 
 // One line + one action, nothing more.
 export function EmptyLine({ children, action }) {
-  return <div className="flex items-center justify-between gap-3 px-4 py-6 text-body text-muted">{children}{action}</div>;
+  return <div className="flex items-center justify-between gap-3 px-4 py-8 text-body text-muted">{children}{action}</div>;
 }
 
 export function ErrorLine({ error }) { const t = useT(); return error ? <p role="alert" className="text-caption text-danger-fg mt-1">{t(error)}</p> : null; }
@@ -159,7 +163,7 @@ export function AnswerControl({ value, onPick, disabled = false, labelledBy }) {
 // Section header inside a view: title left, actions right. Titles stay short; no paragraphs below.
 export function ViewHeader({ title, meta, right }) {
   return (
-    <div className="flex items-center justify-between gap-4 mb-4 min-h-8">
+    <div className="flex items-center justify-between gap-4 mb-5 min-h-8">
       <div className="flex items-baseline gap-3 min-w-0"><h1 className="text-title text-ink truncate">{title}</h1>{meta && <span className="text-label text-muted whitespace-nowrap">{meta}</span>}</div>
       {right && <div className="flex items-center gap-2 shrink-0">{right}</div>}
     </div>
