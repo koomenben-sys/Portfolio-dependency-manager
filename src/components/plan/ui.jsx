@@ -100,7 +100,7 @@ export const label = 'block text-xs font-medium text-gray-700 mb-1';
 
 export function Field({ l, children }) { return <label className="block"><span className={label}>{l}</span>{children}</label>; }
 
-export function ErrorNote({ error }) { return error ? <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1 mt-2">{error}</p> : null; }
+export function ErrorNote({ error }) { const t = useT(); return error ? <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1 mt-2">{t(error)}</p> : null; }
 
 // Accessible modal: role=dialog, Escape closes, focus moves in and returns, simple focus trap.
 export function Modal({ title, onClose, children, wide = false }) {

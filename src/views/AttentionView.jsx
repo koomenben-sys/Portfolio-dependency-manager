@@ -13,7 +13,7 @@ export function AttentionView() {
   const [openEpic, setOpenEpic] = useState(null);
   useEffect(() => () => markAttentionSeen(), [markAttentionSeen]);
   const [answering, setAnswering] = useState(null);
-  const items = attention(state, actor, quarter?.id);
+  const items = attention(state, actor, quarter?.id, Date.now(), t);
   const groups = [...new Set(items.map((i) => i.group))];
   const decisions = items.filter((i) => i.action === 'answer').length;
   const others = items.length - decisions;

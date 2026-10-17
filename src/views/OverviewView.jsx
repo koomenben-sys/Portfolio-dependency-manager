@@ -13,7 +13,7 @@ export function OverviewView() {
   const t = useT();
   const [openEpic, setOpenEpic] = useState(null);
   if (!quarter) return <NoQuarter />;
-  const o = overview(state, quarter.id);
+  const o = overview(state, quarter.id, Date.now(), t);
   const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
   const phaseLabel = t(PHASES.find((p) => p.id === quarter.phase)?.label || quarter.phase);
   return (

@@ -22,7 +22,7 @@ _Updated by Claude at the end of each session._
 - **Read first:** `docs/design.md` (decisions D1-D22, build log in section 16), `docs/acceptance.md`.
 - **Data layer:** `src/data/repository.js` contract; `MockRepository` (default, localStorage) and `SupabaseRepository` (untested against a live DB). Views never call Supabase directly.
 - **Open follow-ups:** migration `005_rpc_reason.sql` (RPC so rank changes pass the reason to the trigger), `org_settings` table, pgTAP tenant-isolation tests, Edge Function for the real ADO sync, Dutch UI strings.
-- **Owner decisions 2026-10-17:** English terminology in UI; Feb tables may be dropped; name "Kwartaalplan"; old views replaced.
+- **Owner decisions 2026-10-17:** Feb tables may be dropped; name "Kwartaalplan"; old views replaced. Later that day: Dutch UI by default (`src/i18n/`, English strings are the keys, `nl.js` holds Dutch), onboarding wizard, demo tour per role (`docs/demo-script.md`). Second branch `claude/kwartaalplan-onboarding-tour-nl` stacked on PR #15.
 
 ## Project Overview
 An enterprise planning tool for scarce team capacity and cross-team dependencies, used in Agile quarterly planning sessions. One organisation in the MVP; schema is tenant-ready. Deployed to **GitHub Pages** via GitHub Actions.

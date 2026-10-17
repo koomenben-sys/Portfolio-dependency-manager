@@ -23,14 +23,14 @@ export function SessionView() {
   if (!quarter) return <NoQuarter />;
   const admin = isAdmin(actor);
   const idx = PHASE_INDEX[quarter.phase];
-  const ready = readiness(state, quarter.id);
+  const ready = readiness(state, quarter.id, t);
   const epicsById = new Map(state.epics.map((e) => [e.id, e]));
   const queue = state.discussions.filter((d) => d.quarterId === quarter.id && d.status === 'open')
     .map((d) => ({ d, plan: d.epicId ? planFor(state, d.epicId, quarter.id) : null }))
     .sort((a, b) => (a.plan?.rank ?? 1e9) - (b.plan?.rank ?? 1e9) || (b.plan?.effortHigh ?? 0) - (a.plan?.effortHigh ?? 0));
   const votes = state.votes.filter((v) => v.quarterId === quarter.id);
   const dist = [1, 2, 3, 4, 5].map((n) => votes.filter((v) => v.vote === n).length);
-  const diff = diffAgainstBaseline(state, quarter.id);
+  const diff = diffAgainstBaseline(state, quarter.id, t);
 
   const notReady = ready.filter((r) => !r.ready);
   const setPhase = async (phase, reason = '') => {
@@ -192,7 +192,7 @@ function PlanOfRecord({ onClose }) {
   const { state, quarter } = usePlan();
   const t = useT();
   const votes = state.votes.filter((v) => v.quarterId === quarter.id);
-  const diff = diffAgainstBaseline(state, quarter.id);
+  const diff = diffAgainstBaseline(state, quarter.id, t);
   const risks = state.impediments.filter((i) => i.kind === 'risk' && i.status === 'open');
   const phaseLabel = t(PHASES.find((p) => p.id === quarter.phase)?.label || quarter.phase);
   return (
