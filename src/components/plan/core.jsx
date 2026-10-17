@@ -229,7 +229,7 @@ export function Dialog({ title, onClose, children, width = 'w-[440px]' }) {
     return () => { document.removeEventListener('keydown', onKey); prev?.focus?.(); };
   }, []);
   return createPortal(
-    <div className="fixed inset-0 z-modal flex items-start justify-center pt-[12vh] bg-ink/20 anim-fade-in" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="fixed inset-0 z-modal flex items-start justify-center pt-[12vh] bg-black/20 anim-fade-in" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={`${width} max-w-[95vw] bg-surface rounded-modal shadow-lg border border-border anim-pop`}>
         <header className="flex items-center justify-between px-4 h-12 border-b border-border"><h2 className="text-subtitle font-semibold">{title}</h2><button className={cls.icon} onClick={onClose} aria-label={t('Close')}><X size={16} /></button></header>
         <div className="p-4">{children}</div>

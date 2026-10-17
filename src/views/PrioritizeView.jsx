@@ -155,7 +155,7 @@ export function PrioritizeView() {
             </tbody>
           </table>
           {unranked.length > 0 && (
-            <div className="border-t border-border px-3 py-2 bg-canvas/60">
+            <div className="border-t border-border px-3 py-2 bg-canvas">
               <Disclosure summary={<>{t('Not prioritised yet')} <span className="tnum">({unranked.length})</span></>}>
                 <table className="w-full text-body" aria-label={t('Not prioritised yet')}>
                   <tbody className="divide-y divide-border">{visibleUnranked.map((p, i) => renderRow(p, i, false))}</tbody>

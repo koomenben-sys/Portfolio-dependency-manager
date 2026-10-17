@@ -54,7 +54,7 @@ export function SimpleEpicPanel({ epicId, onClose }) {
 
   return (
     <aside ref={ref} role="dialog" aria-modal="false" aria-label={`${epic.refCode} ${epic.title}`} className="fixed right-0 top-14 bottom-0 w-[420px] max-w-[95vw] bg-surface border-l border-border z-panel overflow-y-auto scrollbar-thin anim-slide-in-right shadow-md">
-      <header className="sticky top-0 bg-surface/95 backdrop-blur border-b border-border px-4 py-3 flex items-start gap-3">
+      <header className="sticky top-0 bg-surface border-b border-border px-4 py-3 flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="text-caption text-muted mono flex items-center gap-2">{epic.refCode} · {team?.name}{epic.externalUrl && <a className="inline-flex items-center gap-0.5 text-accent hover:underline" href={epic.externalUrl} target="_blank" rel="noreferrer">Azure DevOps<ExternalLink size={11} aria-hidden="true" /></a>}</div>
           {mayEdit && !epic.externalSource
