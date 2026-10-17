@@ -1,10 +1,10 @@
 // In-memory + localStorage implementation of the repository contract (docs/design.md D12, AC A1-A5).
 import { seedState } from './seed';
 import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
-import { PHASES, isLockedPhase } from '../domain/model';
+import { PHASES, isLockedPhase, REASON_REQUIRED } from '../domain/model';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner } from './repository';
 
-const KEY = 'kwartaalplan.mock.v1';
+const KEY = 'kwartaalplan.mock.v2'; // v2: calmer seed of the 2026-10-17 reset
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const now = () => new Date().toISOString();
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -145,14 +145,31 @@ export class MockRepository {
     return this._persist();
   }
 
+  // Drag-and-drop / keyboard reorder of the strategic list (D28): ranks 1..n in the given order, one
+  // rank_changed event for the plan that moved furthest (the dragged one), reason optional unless locked.
+  async reorderPlans(actor, quarterId, orderedPlanIds, reason = '') {
+    if (!canRank(actor)) throw new PermissionError('Changing the strategic rank needs rank permission');
+    const q = this._quarter(quarterId);
+    if (q.phase === 'closed') throw new ValidationError('Quarter is closed');
+    if (isLockedPhase(q.phase) && !reason.trim()) throw new ValidationError('The quarter is locked: a reason is required to change the strategic rank');
+    const plans = orderedPlanIds.map((id) => this.state.plans.find((p) => p.id === id && p.quarterId === quarterId));
+    if (plans.some((p) => !p)) throw new ValidationError('Unknown plan in the new order');
+    let moved = null; let maxShift = 0;
+    plans.forEach((p, i) => { const shift = Math.abs((p.rank ?? plans.length + 1) - (i + 1)); if (shift > maxShift) { moved = p; maxShift = shift; } });
+    if (!moved) return this._persist();
+    const before = moved.rank; const after = plans.indexOf(moved) + 1;
+    plans.forEach((p, i) => { if (p.rank !== i + 1) { p.rank = i + 1; p.updatedAt = now(); } });
+    this._event(actor, 'rank_changed', 'plans', moved.id, quarterId, reason, { rank: before }, { rank: after });
+    return this._persist();
+  }
+
   // ── dependencies ───────────────────────────────────────────────────────────
   async addDependency(actor, dep) {
     const epic = this._epic(dep.epicId);
     if (!canWriteTeam(actor, epic.teamId)) throw new PermissionError('Only the requesting team can add an ask');
     if (dep.providerTeamId === epic.teamId) throw new ValidationError('A team cannot depend on itself');
     if (!dep.ask?.trim()) throw new ValidationError('Describe the ask');
-    if (!(dep.effortHigh > 0)) throw new ValidationError('Give an effort estimate (high estimate above 0)');
-    if (dep.effortLow > dep.effortHigh) throw new ValidationError('High estimate must be at least the low estimate');
+    if ((dep.effortLow || 0) > (dep.effortHigh || 0)) throw new ValidationError('High estimate must be at least the low estimate');
     this._guardPhase(dep.quarterId, dep.reason, 'add an ask');
     const created = { id: uid(), refCode: this._ref('dependency'), requesterTeamId: epic.teamId, requesterName: epic.ownerName || actor.name, ifDeclined: '', neededBy: null, effortLow: 0, effortHigh: 0, grantedLow: null, grantedHigh: null, response: 'proposed', responseReason: '', deferredToQuarterId: null, respondedAt: null, createdAt: now(), ...dep };
     delete created.reason;
@@ -166,7 +183,7 @@ export class MockRepository {
     if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can answer');
     const q = this._quarter(d.quarterId);
     if (!phaseAllows(q.phase, 'answer')) throw new ValidationError(`Answers are open from the Negotiate phase until the quarter closes (now: ${q.phase})`);
-    if (response !== 'accepted' && response !== 'proposed' && !reason.trim()) throw new ValidationError('A reason is required for this answer');
+    if (REASON_REQUIRED.has(response) && !reason.trim()) throw new ValidationError('A reason is required for this answer');
     if (response === 'deferred' && !deferredToQuarterId) throw new ValidationError('Choose the quarter to defer to');
     if (response === 'partial') {
       if (!(grantedHigh > 0)) throw new ValidationError('Say how much you can do (granted person-weeks)');
@@ -198,7 +215,7 @@ export class MockRepository {
     const { reason, ...rest } = patch;
     this._guardPhase(d.quarterId, reason, 'edit an ask');
     const next = { ...d, ...rest };
-    if (!(next.effortHigh > 0) || next.effortLow > next.effortHigh) throw new ValidationError('Check the effort estimate');
+    if ((next.effortLow || 0) > (next.effortHigh || 0)) throw new ValidationError('Check the effort estimate');
     const effortChanged = next.effortHigh !== d.effortHigh || next.effortLow !== d.effortLow || next.ask !== d.ask;
     this._event(actor, 'dependency_edited', 'dependencies', d.id, d.quarterId, reason, { ask: d.ask, effortLow: d.effortLow, effortHigh: d.effortHigh }, { ask: next.ask, effortLow: next.effortLow, effortHigh: next.effortHigh });
     Object.assign(d, rest);

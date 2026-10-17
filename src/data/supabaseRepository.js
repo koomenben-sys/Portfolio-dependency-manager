@@ -13,7 +13,7 @@
 //   not write (plan_added, dependency_added/edited/acknowledged, vote_cast, ...) are inserted by _event().
 import { supabase } from '../lib/supabase';
 import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
-import { PHASE_INDEX, isLockedPhase } from '../domain/model';
+import { PHASE_INDEX, isLockedPhase, REASON_REQUIRED } from '../domain/model';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner } from './repository';
 
 const snake = (s) => s.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
@@ -34,7 +34,7 @@ const TABLES = {
 const EVENT_ACTIONS = { epic_plans_removed: 'plan_removed', dependencies_removed: 'dependency_removed' };
 const DEFAULT_SETTINGS = {
   language: 'nl', orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5,
-  voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 },
+  voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false,
 };
 // Postgres error texts that users should not have to decode.
 function friendly(message) {
@@ -231,6 +231,24 @@ export class SupabaseRepository {
     return this.load();
   }
 
+  // Reorder (D28). The 005 trigger logs rank_changed per updated row and insists on a reason, so an empty
+  // reason becomes 'Herprioritering'; only rows whose rank actually changes are written.
+  async reorderPlans(actor, quarterId, orderedPlanIds, reason = '') {
+    if (!canRank(actor)) throw new PermissionError('Changing the strategic rank needs rank permission');
+    const q = await this._quarter(quarterId);
+    if (q.phase === 'closed') throw new ValidationError('Quarter is closed');
+    if (isLockedPhase(q.phase) && !trim(reason)) throw new ValidationError('The quarter is locked: a reason is required to change the strategic rank');
+    const { data, error } = await supabase.from('epic_plans').select('id, strategic_rank').eq('quarter_id', quarterId).in('id', orderedPlanIds);
+    this._throw(error);
+    const current = new Map((data || []).map((r) => [r.id, r.strategic_rank]));
+    if (orderedPlanIds.some((id) => !current.has(id))) throw new ValidationError('Unknown plan in the new order');
+    for (let i = 0; i < orderedPlanIds.length; i += 1) {
+      const id = orderedPlanIds[i];
+      if (current.get(id) !== i + 1) await this._withReason('epic_plans', id, { strategic_rank: i + 1 }, trim(reason) || 'Herprioritering');
+    }
+    return this.load();
+  }
+
   // ── dependencies ───────────────────────────────────────────────────────────
   async addDependency(actor, dep) {
     const org = await this._org();
@@ -238,8 +256,7 @@ export class SupabaseRepository {
     if (!canWriteTeam(actor, epic.teamId)) throw new PermissionError('Only the requesting team can add an ask');
     if (dep.providerTeamId === epic.teamId) throw new ValidationError('A team cannot depend on itself');
     if (!dep.ask?.trim()) throw new ValidationError('Describe the ask');
-    if (!(dep.effortHigh > 0)) throw new ValidationError('Give an effort estimate (high estimate above 0)');
-    if (dep.effortLow > dep.effortHigh) throw new ValidationError('High estimate must be at least the low estimate');
+    if ((dep.effortLow || 0) > (dep.effortHigh || 0)) throw new ValidationError('High estimate must be at least the low estimate');
     await this._guardPhase(dep.quarterId, dep.reason, 'add an ask');
     const { reason, ...depFields } = dep;
     const row = toRow(depFields, org);
@@ -256,7 +273,7 @@ export class SupabaseRepository {
     if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can answer');
     const q = await this._quarter(d.quarterId);
     if (!phaseAllows(q.phase, 'answer')) throw new ValidationError(`Answers are open from the Negotiate phase until the quarter closes (now: ${q.phase})`);
-    if (response !== 'accepted' && response !== 'proposed' && !trim(reason)) throw new ValidationError('A reason is required for this answer');
+    if (REASON_REQUIRED.has(response) && !trim(reason)) throw new ValidationError('A reason is required for this answer');
     if (response === 'deferred' && !deferredToQuarterId) throw new ValidationError('Choose the quarter to defer to');
     if (response === 'partial') {
       if (!(grantedHigh > 0)) throw new ValidationError('Say how much you can do (granted person-weeks)');
@@ -289,7 +306,7 @@ export class SupabaseRepository {
     const { reason, ...rest } = patch;
     await this._guardPhase(d.quarterId, reason, 'edit an ask');
     const next = { ...d, ...rest };
-    if (!(next.effortHigh > 0) || next.effortLow > next.effortHigh) throw new ValidationError('Check the effort estimate');
+    if ((next.effortLow || 0) > (next.effortHigh || 0)) throw new ValidationError('Check the effort estimate');
     const effortChanged = next.effortHigh !== d.effortHigh || next.effortLow !== d.effortLow || next.ask !== d.ask;
     const { org_id, ...row } = toRow(rest, await this._org());
     // An answered ask whose scope changed goes back to the provider for a new answer (the trigger clears responded_at).

@@ -53,4 +53,19 @@ export const CONFIDENCE_META = {
   high:   { label: 'High',   icon: '▲', cls: 'text-emerald-700' },
 };
 
+// Core vocabulary (docs/design.md section 19, D31): the product shows four answer states. Older data with
+// `partial` / `deferred` is displayed read-only; those answers are no longer offered in the core screens.
+export const ASK_STATES = ['proposed', 'accepted', 'needs_priority_call', 'declined'];
+export const ASK_META = {
+  proposed:            { label: 'Open',                tone: 'neutral', glyph: '○', order: 0 },
+  accepted:            { label: 'Committed',           tone: 'ok',      glyph: '✓', order: 1 },
+  partial:             { label: 'Committed (partial)', tone: 'info',    glyph: '◐', order: 1 },
+  deferred:            { label: 'Deferred',            tone: 'warn',    glyph: '→', order: 2 },
+  needs_priority_call: { label: 'Discuss',             tone: 'warn',    glyph: '?', order: 2 },
+  declined:            { label: "Can't",               tone: 'danger',  glyph: '✕', order: 3 },
+};
+// Answers that need a reason (D29): a "no" and a postponement; "discuss" may carry one.
+export const REASON_REQUIRED = new Set(['declined', 'deferred']);
+export const needsTalk = (response) => response === 'declined' || response === 'needs_priority_call';
+
 export const quarterLabel = (q) => (q ? `${q.year} Q${q.q}` : '');
