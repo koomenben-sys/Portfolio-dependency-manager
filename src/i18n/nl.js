@@ -142,7 +142,7 @@ export const nl = {
   'One line (optional)': 'Eén regel (optioneel)',
   'Strategic themes (top-down)': 'Strategische thema\'s (top-down)',
   'Quarters': 'Kwartalen',
-  'People and roles': 'Mensen en rollen',
+  'People and roles': 'Mensen & rollen',
   'Plan of record': 'Plan van record',
   'Absence weeks (team total)': 'Afwezigheidsweken (teamtotaal)',
   'Absence weeks': 'Afwezigheidsweken',
@@ -809,4 +809,14 @@ export const nl = {
   'Unknown team in "{line}". Use "Team: title".': 'Onbekend team in "{line}". Gebruik "Team: titel".',
   'Which teams plan here?': 'Welke teams plannen hier?',
   'Your organisation': 'Jouw organisatie',
+  // ── reset: Instellingen ──
+  'Cadence': 'Cadans',
+  'Data': 'Gegevens',
+  'Demo': 'Demo',
+  'Extended modules (beta)': 'Uitgebreide modules (beta)',
+  'Import': 'Import',
+  'Overview, Board, Session, In-quarter, My attention': 'Overzicht, Bord, Sessie, In het kwartaal, Mijn aandacht',
+  'Setup': 'Inrichting',
+  'Strategic themes': "Strategische thema's",
+  'Theme': 'Thema',
 };
