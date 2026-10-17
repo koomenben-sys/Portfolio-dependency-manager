@@ -205,7 +205,7 @@ Tables: `organisations`, `memberships(user_id, org_id, role, team_id, can_rank)`
 - Entra ID SSO: Supabase SSO (SAML) on a paid plan; required for real enterprise use (director critique). Not in MVP.
 - Audit log retention vs erasure: `plan_event.actor_id` can be pseudonymised, rows are not deleted.
 - Absences are aggregated weeks only. Works-council (OR) concerns: no individual productivity data is collected.
-- Multi-tenant signup, billing, per-org settings UI, tenant isolation tests (pgTAP) are the next phase; the schema already carries org_id.
+- Multi-tenant signup, billing, per-org settings UI, tenant isolation tests: `db/tests/rls_test.sql` (section 18.2); the schema already carries org_id.
 - Pages hosting is static; anything with secrets goes through Edge Functions.
 
 ## 12. Role-play validation: conflicts and resolutions
@@ -319,7 +319,7 @@ Differences that remain between mock mode and Supabase mode (by design or accept
 - When an answered ask is edited with a reason, the dependency trigger also logs `dependency_answered` (accepted → proposed) next to `dependency_edited`; the mock logs only the edit.
 - Deleting an epic cascades in SQL and leaves `epic_plans_removed` / `dependencies_removed` events with an empty reason; the mock deletes silently.
 - `plan_events` carry `strategic_rank` (trigger) or `rank` (adapter / mock) in before/after; the UI reads both.
-- Each command re-reads the whole state after the write (one request per table); mock mode is in-memory. Screens refresh every 30 s in Supabase mode; there is no realtime (follow-up).
+- Each command re-reads the whole state after the write (one request per table); mock mode is in-memory. Screens update through Supabase Realtime (008, section 18.3), with a fallback to refreshing every 30 s.
 - Settings: `staleDays` and `voteBlocksLock` are columns, the rest of the profile is a jsonb document; the mock keeps one object.
 - `members` comes from `member_directory` (006); without 006 a non-admin sees only their own row and history falls back to "former member" for other actors.
 - Reload keeps the session (the Feb-era sign-out-on-reload was removed with the auth-lock fix).
@@ -340,6 +340,8 @@ Live walk-through (2026-10-17, owner's project, migrations 001-006 run by the ow
 | UI forms (after merging `main` with the Dutch UI and onboarding wizard, PR #15 and #16) | wizard in Dutch with the profile from Supabase; team added through the form, duplicate name shows the Dutch message; capacity saved through the form with the profile defaults; "Open het bord" stores `setupComplete` (wizard does not return after reload); check-in through the dialog; admin language switch to English and back persists across reloads: ok. |
 | Not tested live | planner / viewer accounts (only the owner's admin account exists): RLS for non-admins is desk-checked and mirrored in JS but not exercised against the database — invite a second user to verify (follow-up, section 17.4). |
 
+**RLS test (added in section 18).** `db/tests/rls_test.sql` checks the policies and triggers for non-admin roles and tenant isolation without real accounts. To run it: open the Supabase SQL editor, paste the whole file, click Run. The grid shows a TOTAL row and one PASS/FAIL row per check. The script makes its own test users (`rls-*@example.invalid`, no password) and two test organisations, runs every check as one of those users inside a rolled-back sub-transaction, and deletes everything again. Locally, `npm run test:rls` runs migrations 001-008 and the same script in PGlite (Postgres in WASM with a minimal Supabase stand-in).
+
 
 ### Owner questions during the build
 - "Which agent is the coordinator?" - this session; the role agents are one-shot reviewers.
@@ -354,7 +356,7 @@ The owner asked how an arbitrary organisation is mapped correctly. The answer is
 |---|---|---|---|
 | 1. Organisation profile | name; what a planning unit is called (team / squad / product team / department / tribe); capacity unit (person-weeks, or person-days shown as weeks); fiscal-year start month; default weeks per quarter, focus factor, reserve %; check-in cadence; "no response" threshold | Settings > Organisation setup | admin |
 | 2. Planning units | the teams that own epics and answer asks; optional ADO area path / Jira project key per team (import mapping) | Settings > Planning units; mapping in the import panel | admin |
-| 3. People and roles | admin (facilitator), planner (bound to one planning unit), viewer; `can_rank` flag for whoever sets strategic priority | mock: personas; Supabase: `memberships` rows (*follow-up: invite UI*) | admin |
+| 3. People and roles | admin (facilitator), planner (bound to one planning unit), viewer; `can_rank` flag for whoever sets strategic priority | Settings > People and roles (invite by e-mail, edit role / team / rank, remove; section 18) | admin |
 | 4. Strategic themes | the ordered list the top steers on; "unaligned" is always available | Settings > Strategic themes | can_rank |
 | 5. Quarters | the quarter being planned (+ optionally the active one); phases are driven from Session | Settings > Quarters | admin |
 | 6. Capacity | headcount + absence per team for the planning quarter, defaults from the profile; teams refine focus/reserve on the board | Settings > Capacity for all teams at once; Board > Capacity assumptions | admin / planner |
@@ -395,7 +397,69 @@ The owner asked how an arbitrary organisation is mapped correctly. The answer is
 - **Language** (`src/i18n/`): English strings are keys, `nl.js` holds Dutch; default `nl` (semi-government is the first target market); switch in the header; stored in `settings.language`. Decision D24: a minimal in-house `t()` instead of i18next. Reason: ~400 strings, no plural/ICU needs yet, zero dependencies; rejected: i18next (weight), separate Dutch build (two deployments).
 
 ### 17.4 Follow-ups for configuration
-- Invite / membership UI (Supabase: insert into `memberships`, send magic link); today SQL.
+- ~~Invite / membership UI~~ — built, section 18.
 - Multiple concurrent sessions (per tribe/ART) = quarter scoped to a label; schema already allows several quarters, a `scope_label` column is the small addition.
 - Terminology overrides beyond the unit label (e.g. "epic" -> "feature", "ask" -> "dependency request") as an i18n table; Dutch UI strings.
 - Import mapping persistence (`integration_connections.config.teamMapping`) and Jira/Trello adapters behind the same `ExternalEpic` contract.
+
+## 18. P1: invites, RLS tests, realtime (built 2026-10-17, branch `claude/p1-invites-rls-realtime`)
+
+Migrations `007_invitations.sql` and `008_realtime.sql` (both additive and re-runnable), test `db/tests/rls_test.sql`.
+
+### 18.1 Invitations and member admin
+**D25 - An invitation is a row, not an account.** `invitations(org_id, email, role, team_id, can_rank, display_name, invited_by, created_at, accepted_at)`, e-mail lower case and unique per organisation. After sign-in the app calls `accept_invitations()` once (SECURITY DEFINER). The function turns open invitations for the user's **confirmed** e-mail address into `memberships` rows and marks them accepted. An existing membership is left alone. The call runs in an effect after the user is set, never inside `onAuthStateChange` (see section 16). The plan only loads once that call is done, so a new invitee does not see "no membership".
+Rejected: creating `auth.users` from the browser (needs the service key); a trigger on `auth.users` insert (the trigger would sit in the auth schema and fire for every sign-up, including people with no invite); `supabase.auth.admin.inviteUserByEmail` (service key, so it would need an Edge Function — a good later option for branded invitation e-mails).
+
+**D26 - The sign-in link only goes out when an admin clicks it.** "Send link" calls `signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: <app url> } })`. This works only for invited addresses and does not touch the admin's own session. With the implicit flow (the supabase-js default here), the link works in the invitee's own browser. In demo mode the invitation is accepted at once, the person shows up in "Viewing as", and the screen says that no e-mail was sent.
+
+**D27 - Invitations are visible to admins only.** The brief also mentioned "member read own org". It was not built: invitees' e-mail addresses are personal data, and acceptance does not need to read the table.
+
+**Guards (same texts in JS and SQL):** an admin cannot remove themselves or change their own role, and an organisation keeps at least one admin (trigger `memberships_guard`, applies only to app users; the SQL editor is not restricted). A planner needs a team, and other roles have no team.
+
+UI: `src/components/plan/MembersAdmin.jsx`, one compact table. It lists members with inline role / team / rank controls, then open invitations as rows with an "Invited" chip, "Send link" and "revoke". An "Invite" button opens a small form. Following owner feedback ("lightweight tool"), the screen has no explanatory text.
+
+### 18.2 RLS and tenant-isolation test
+**D28 - Plain SQL, no pgTAP.** The script runs as-is in the Supabase SQL editor. It creates seven throw-away users directly in `auth.users` plus two organisations. Each check switches to role `authenticated` with `request.jwt.claims` (as PostgREST does), inside a sub-transaction that is always rolled back. It compares the count returned, or the error raised, with the expected result. The 73 checks cover:
+- team scope;
+- strategic rank without `can_rank`;
+- viewer read-only;
+- a `can_rank` viewer changing the rank only;
+- tenant isolation over every table and view in both directions;
+- `plan_events` insert-only;
+- requester / provider split on asks;
+- invitations admin-only, plus acceptance;
+- membership guards.
+
+The script cleans up after itself and is re-runnable. Rejected: pgTAP (an extension to enable, and less readable for the owner); a Node test against the live project (needs real accounts or the service key).
+
+**Gaps found while writing the test (fixed in 007).** The 002 policies were wider than the app's rules; the JS adapters hid this, but a direct API call would not have been stopped:
+- the requesting team could answer its own ask (`deps_write` covers both teams);
+- the provider team could create, edit or delete an ask in the requester's name;
+- a `can_rank` user could add or remove plans (`epic_plans_write ... or can_rank`).
+
+Triggers `dependencies_guard` and `epic_plans_guard` now enforce these rules in SQL, with the adapters' error texts.
+
+**Local run:** `npm run test:rls` (PGlite, devDependency `@electric-sql/pglite`). It approximates Supabase (simplified `auth.users`, non-superuser owner) and is not a substitute for running the script on the real project. A negative control was checked: with the 007 guards dropped, the script reports FAIL.
+
+### 18.3 Realtime
+**D29 - Supabase Realtime `postgres_changes`, one channel per organisation, debounced reload.** 008 adds the 15 tables `load()` reads to the `supabase_realtime` publication; it checks `pg_publication_tables` first, so it is safe to re-run. `SupabaseRepository.subscribe(onState, onStatus)` listens on every table, filtered on `org_id=eq.<org>` (RLS still decides what each subscriber receives). Events are debounced for 400 ms, because one write fires several (row plus `plan_events`); then the whole state is reloaded once. `MockRepository.subscribe` listens to the browser `storage` event, so two demo tabs stay in sync.
+
+`PlanContext` exposes `liveStatus`:
+- `live` (subscribed): a safety refresh runs every 2 minutes, in case events are missed (for example when 008 was not run — Realtime then still reports SUBSCRIBED);
+- `polling` (subscription failed or not yet up): refresh every 30 s;
+- `offline` (browser offline): the state reloads when the network returns.
+
+`LiveIndicator.jsx` shows a dot plus "Live" / "30 s" / "Offline" in the header.
+
+Rejected: applying the change payload to local state (two code paths, and delete events carry only primary keys under RLS); Broadcast from the client (it would skip RLS and miss writes from triggers or SQL); Presence (not needed yet).
+
+### 18.4 Owner actions and open points
+1. Run `007_invitations.sql`, then `008_realtime.sql`, in the SQL editor. Then run `db/tests/rls_test.sql` and check that the TOTAL row says PASS.
+2. Supabase Auth > URL configuration: add the app URL (`https://koomenben-sys.github.io/Portfolio-dependency-manager/` and the local dev URL) to the Redirect URLs, otherwise sign-in links fall back to the Site URL.
+3. Keep "Confirm email" switched on. Otherwise someone could sign up by password with an invited address and claim the invitation (`accept_invitations` only accepts confirmed e-mail addresses).
+4. The built-in Supabase e-mail sender is rate-limited to a few e-mails per hour; for a pilot, set up custom SMTP.
+
+Not tested against the live project: sending sign-in links, accepting an invitation, the Realtime subscription, `rls_test.sql` in the Supabase SQL editor. Possible follow-ups:
+- a "send me a sign-in link" option on the login screen (invitees have no password; the session persists, but after sign-out they need a new link from an admin);
+- branded invitation e-mails via an Edge Function.
+
