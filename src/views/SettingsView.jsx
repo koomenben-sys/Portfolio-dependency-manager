@@ -3,8 +3,9 @@ import { Check, Circle } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { isAdmin, canRank } from '../data/repository';
 import { PHASES, quarterLabel } from '../domain/model';
+import { VALUE_MODELS, VALUE_MODEL_LABEL, THEME_TYPES, THEME_TYPE_LABEL, monthToDate, dateToMonth } from '../domain/value';
 import { useT, LANGUAGES } from '../i18n';
-import { cls, ViewHeader, ErrorLine } from '../components/plan/core';
+import { cls, ViewHeader, ErrorLine, Disclosure, MustChip } from '../components/plan/core';
 import { Field, input, btn, ErrorNote } from '../components/plan/ui';
 import { mapWorkItems, previewImport } from '../integrations/azureDevOps/mapper';
 import { MOCK_ADO_RESPONSE } from '../integrations/azureDevOps/mock';
@@ -12,9 +13,10 @@ import { fetchEpics } from '../integrations/azureDevOps/client';
 import { BulkCapacity } from '../components/plan/SetupPanel';
 import { MembersAdmin } from '../components/plan/MembersAdmin';
 
-// Instellingen (docs/design.md section 19): plain sections — Organisatie · Teams · Kwartalen · Mensen & rollen ·
-// Import · Demo · Uitgebreide modules (beta). The setup checklist shows only the three essentials, only while
-// incomplete. Themes, capacity and cadence appear only when the extended modules are on.
+// Instellingen (docs/design.md section 19; Release A section 21): plain sections — Organisatie (name, language,
+// value model) · Teams · Doelen & programma's · Kwartalen · Mensen & rollen · Import · Demo · Uitgebreide modules
+// (beta). The setup checklist shows only the three essentials, only while incomplete. Capacity and cadence appear
+// only when the extended modules are on.
 export function SettingsView() {
   const { state, actor, run, reset, dataSource } = usePlan();
   const t = useT();
@@ -49,6 +51,7 @@ export function SettingsView() {
           <div className="grid grid-cols-2 gap-3">
             <label className="block"><span className={cls.label}>{t('Name')}</span><input className={cls.input} defaultValue={state.settings.orgName || ''} disabled={!admin} onBlur={(e) => e.target.value !== (state.settings.orgName || '') && act('updateSettings', { orgName: e.target.value })} /></label>
             <label className="block"><span className={cls.label}>{t('Language')}</span><select className={cls.input} value={state.settings.language || 'nl'} onChange={(e) => act('updateSettings', { language: e.target.value })}>{LANGUAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+            <label className="block"><span className={cls.label}>{t('Value model')}</span><select className={cls.input} value={state.settings.valueModel || 'none'} disabled={!admin} onChange={(e) => act('updateSettings', { valueModel: e.target.value })}>{VALUE_MODELS.map((m) => <option key={m} value={m}>{t(VALUE_MODEL_LABEL[m])}</option>)}</select></label>
           </div>
         </Section>
 
@@ -63,6 +66,8 @@ export function SettingsView() {
           </ul>
           {admin && <AddRow placeholder={t('New team')} onAdd={(name) => act('upsertTeam', { name })} />}
         </Section>
+
+        <Section id="goals" title={t('Goals and programmes')} meta={state.themes.filter((x) => !x.archived).length}><Goals act={act} /></Section>
 
         <Section id="quarters" title={t('Quarters')}>
           <ul className="divide-y divide-border">{state.quarters.map((q) => <li key={q.id} className="flex justify-between py-1.5 text-body"><span className="tnum">{quarterLabel(q)}</span>{modules && <span className="text-caption text-muted">{t(PHASES.find((p) => p.id === q.phase)?.label || q.phase)}{q.baseline ? ` · ${t('baseline')}` : ''}</span>}</li>)}</ul>
@@ -92,12 +97,6 @@ export function SettingsView() {
 
         {modules && (
           <>
-            <Section id="themes" title={t('Strategic themes')}>
-              <ul className="divide-y divide-border">
-                {state.themes.map((x) => <li key={x.id} className="flex items-center gap-2 py-1.5"><input className={`${cls.input} max-w-sm`} defaultValue={x.name} disabled={!canRank(actor)} aria-label={t('Theme')} onBlur={(e) => e.target.value !== x.name && act('upsertTheme', { id: x.id, name: e.target.value })} />{canRank(actor) && <button className={`${cls.quiet} text-danger-fg`} onClick={() => act('deleteTheme', x.id)}>{t('remove')}</button>}</li>)}
-              </ul>
-              {canRank(actor) && <AddRow placeholder={t('New theme')} onAdd={(name) => act('upsertTheme', { name })} />}
-            </Section>
             <Section id="capacity" title={t('Capacity')}><BulkCapacity /></Section>
             <Section id="cadence" title={t('Cadence')}>
               <label className="block max-w-xs"><span className={cls.label}>{t('Check-in cadence (days before an epic is stale)')}</span><input type="number" min="1" className={`${cls.input} !w-24 tnum`} defaultValue={state.settings.staleDays} disabled={!admin} onBlur={(e) => Number(e.target.value) !== state.settings.staleDays && act('updateSettings', { staleDays: Number(e.target.value) })} /></label>
@@ -105,6 +104,48 @@ export function SettingsView() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// Doelen & programma's (Release A, D40): name · type · Moet + month · archiveren. Admin or rank permission edits.
+function Goals({ act }) {
+  const { state, actor } = usePlan();
+  const t = useT();
+  const may = canRank(actor);
+  const [name, setName] = useState('');
+  const [type, setType] = useState('goal');
+  const active = state.themes.filter((x) => !x.archived);
+  const archived = state.themes.filter((x) => x.archived);
+  const row = (x) => (
+    <li key={x.id} className="flex items-center gap-2 py-1.5 flex-wrap">
+      {may && !x.archived ? <input className={`${cls.input} !w-auto flex-1 min-w-[160px] max-w-xs`} defaultValue={x.name} aria-label={t('Name')} onBlur={(e) => e.target.value.trim() && e.target.value !== x.name && act('upsertTheme', { id: x.id, name: e.target.value.trim() })} />
+        : <span className={`flex-1 min-w-[160px] text-body ${x.archived ? 'text-muted' : ''}`}>{x.name}</span>}
+      {may && !x.archived ? <select className={`${cls.input} !w-auto`} value={x.type || 'goal'} aria-label={t('Type')} onChange={(e) => act('upsertTheme', { id: x.id, type: e.target.value })}>{THEME_TYPES.map((k) => <option key={k} value={k}>{t(THEME_TYPE_LABEL[k])}</option>)}</select>
+        : <span className="text-caption text-muted w-28">{t(THEME_TYPE_LABEL[x.type] || THEME_TYPE_LABEL.goal)}</span>}
+      {may && !x.archived ? (
+        <>
+          <label className="inline-flex items-center gap-1.5 text-label cursor-pointer h-8"><input type="checkbox" className="w-4 h-4 accent-[var(--color-accent-500)]" checked={!!x.must} onChange={(e) => act('upsertTheme', { id: x.id, must: e.target.checked })} />{t('Must')}</label>
+          {x.must && <input type="month" className={`${cls.input} !w-auto tnum`} aria-label={t('Deadline')} defaultValue={dateToMonth(x.mustDeadline)} onBlur={(e) => monthToDate(e.target.value) !== (x.mustDeadline || null) && act('upsertTheme', { id: x.id, must: true, mustDeadline: monthToDate(e.target.value) })} />}
+        </>
+      ) : <MustChip must={x.must ? { deadline: x.mustDeadline } : null} />}
+      {may && (x.archived
+        ? <button className={cls.quiet} onClick={() => act('upsertTheme', { id: x.id, archived: false })}>{t('restore')}</button>
+        : <button className={`${cls.quiet} ml-auto`} onClick={() => act('upsertTheme', { id: x.id, archived: true })}>{t('archive')}</button>)}
+    </li>
+  );
+  return (
+    <div>
+      {active.length === 0 && <p className="text-body text-muted">{t('No goals yet.')}</p>}
+      <ul className="divide-y divide-border">{active.map(row)}</ul>
+      {may && (
+        <form className="flex gap-2 mt-3 flex-wrap" onSubmit={async (e) => { e.preventDefault(); const r = await act('upsertTheme', { name: name.trim(), type }); if (r.ok) setName(''); }}>
+          <input className={`${cls.input} !w-auto flex-1 min-w-[160px] max-w-xs`} placeholder={t('New goal')} aria-label={t('New goal')} value={name} onChange={(e) => setName(e.target.value)} />
+          <select className={`${cls.input} !w-auto`} value={type} aria-label={t('Type')} onChange={(e) => setType(e.target.value)}>{THEME_TYPES.map((k) => <option key={k} value={k}>{t(THEME_TYPE_LABEL[k])}</option>)}</select>
+          <button type="submit" className={cls.secondary} disabled={!name.trim()}>{t('Add')}</button>
+        </form>
+      )}
+      {archived.length > 0 && <Disclosure className="mt-3" summary={<>{t('Archived')} <span className="tnum">({archived.length})</span></>}><ul className="divide-y divide-border">{archived.map(row)}</ul></Disclosure>}
     </div>
   );
 }

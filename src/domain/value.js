@@ -31,9 +31,9 @@ export function effectiveMust(epic, theme) {
 
 // ── Value (D43) ──────────────────────────────────────────────────────────────
 export const VALUE_MODELS = ['none', 'simple', 'wsjf', 'rice'];
-export const VALUE_MODEL_LABEL = { none: 'None', simple: 'Simple (High / Medium / Low)', wsjf: 'WSJF', rice: 'RICE' };
+export const VALUE_MODEL_LABEL = { none: 'None', simple: 'Simple (High / Middle / Low)', wsjf: 'WSJF', rice: 'RICE' };
 export const SIMPLE_LEVELS = ['high', 'medium', 'low'];
-export const SIMPLE_META = { high: { letter: 'H', label: 'High' }, medium: { letter: 'M', label: 'Medium' }, low: { letter: 'L', label: 'Low' } };
+export const SIMPLE_META = { high: { letter: 'H', label: 'High' }, medium: { letter: 'M', label: 'Middle' }, low: { letter: 'L', label: 'Low' } };
 export const FIB = [1, 2, 3, 5, 8, 13, 20];
 export const RICE_IMPACT = [0.25, 0.5, 1, 2, 3];
 export const WSJF_FIELDS = [['bv', 'Business value'], ['tc', 'Time criticality'], ['rr', 'Risk reduction / opportunity']];

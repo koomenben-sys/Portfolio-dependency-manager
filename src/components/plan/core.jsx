@@ -1,7 +1,8 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown } from 'lucide-react';
+import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown, Flag } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { ASK_META, COMMITMENT_META } from '../../domain/model';
+import { SIMPLE_META, fmtMonth } from '../../domain/value';
 import { useT } from '../../i18n';
 
 // Calm primitives for the three core screens (docs/design.md section 19). Tokens come from src/index.css;
@@ -51,6 +52,29 @@ export function CommitmentChip({ value }) {
   const t = useT();
   const m = COMMITMENT_META[value]; if (!m) return null;
   return <span className={`inline-flex items-center gap-1 rounded-full px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(COMMIT_TONE[value])}`}><span aria-hidden="true">{m.icon}</span>{t(m.label)}</span>;
+}
+
+// Release A (D41): "Moet · mrt 2027" — a must-do epic (own regulatory deadline or inherited from a Moet programme).
+export function MustChip({ must, className = '' }) {
+  const t = useT();
+  if (!must) return null;
+  const when = must.deadline ? fmtMonth(must.deadline, t.lang) : '';
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-1.5 h-5 text-micro font-semibold whitespace-nowrap ${toneClass('warn')} ${className}`} title={must.inherited ? t('Must (from programme)') : t('Must')}>
+      <Flag size={10} strokeWidth={2.5} aria-hidden="true" />{t('Must')}{when && <span className="font-medium tnum"> · {when}</span>}
+    </span>
+  );
+}
+
+// Release A (D43): the value cell — H / M / L letter for the simple model, the number for WSJF / RICE, "–" when empty.
+export function ValueChip({ model, score }) {
+  const t = useT();
+  if (score == null) return <span className="text-faint text-caption">–</span>;
+  if (model === 'simple') {
+    const m = SIMPLE_META[score];
+    return <span className="inline-flex items-center justify-center w-6 h-6 rounded-control bg-surface-2 text-caption font-semibold text-ink-2" aria-label={t(m.label)} title={t(m.label)}>{m.letter}</span>;
+  }
+  return <span className="tnum text-label font-medium text-ink-2">{String(score).replace('.', t.lang === 'nl' ? ',' : '.')}</span>;
 }
 
 // Strategic rank as a quiet tabular number; one neutral style for every rank (iteration 1, item 4).
