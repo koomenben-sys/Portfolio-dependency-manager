@@ -25,10 +25,14 @@ const TEAMS = [
   ['t-dat', 'Data Platform'], ['t-cld', 'Platform & Security'],
 ].map(([id, name]) => ({ id, name }));
 
+// Goals and programmes (Release A, D40): three strategic goals, two programmes, one of them "Moet" with a deadline.
 const THEMES = [
-  ['th-cx', 'Customer experience'], ['th-eff', 'Operational efficiency'], ['th-reg', 'Regulatory compliance (DORA / AVG)'],
-  ['th-claim', 'Digital claims'], ['th-cloud', 'Cloud migration'], ['th-price', 'Data-driven pricing'],
-].map(([id, name], position) => ({ id, name, position, description: '' }));
+  ['th-cx', 'Klantcontact digitaal', 'goal', false, null],
+  ['th-eff', 'Efficiënte operatie', 'goal', false, null],
+  ['th-price', 'Datagedreven sturen', 'goal', false, null],
+  ['th-reg', 'DORA', 'program', true, '2027-03-01'],
+  ['th-cloud', 'Kernmigratie', 'program', false, null],
+].map(([id, name, type, must, mustDeadline], position) => ({ id, name, type, must, mustDeadline, archived: false, position, description: '' }));
 
 const QUARTERS = [
   { id: 'q-26-3', year: 2026, q: 3, phase: 'closed', baseline: null },
@@ -51,34 +55,44 @@ const E = [
   [4, 't-por', 'Self-service policy changes', 'th-cx', 'Digital self-service', 'Lotte Meijer', null],
   [5, 't-por', 'Portal accessibility (WCAG 2.2)', 'th-reg', '', 'Lotte Meijer', 200],
   [6, 't-por', 'Single sign-on with DigiD / eHerkenning', 'th-cx', 'Digital self-service', 'Lotte Meijer', null],
-  [7, 't-clm', 'Digital claims intake (photo + AI triage)', 'th-claim', 'Digital self-service', 'Sanne Bakker', null],
-  [8, 't-clm', 'Claims straight-through processing', 'th-claim', '', 'Sanne Bakker', null],
-  [9, 't-clm', 'Fraud scoring model integration', 'th-claim', '', 'Sanne Bakker', null],
+  [7, 't-clm', 'Digital claims intake (photo + AI triage)', 'th-cx', 'Digital self-service', 'Sanne Bakker', null],
+  [8, 't-clm', 'Claims straight-through processing', 'th-cx', '', 'Sanne Bakker', null],
+  [9, 't-clm', 'Fraud scoring model integration', 'th-price', '', 'Sanne Bakker', null],
   [10, 't-clm', 'Legacy claims screens retirement', 'th-eff', '', 'Sanne Bakker', null],
   [11, 't-pol', 'Policy admin migration to new core (wave 2)', 'th-cloud', 'Core migration', 'Pieter Mulder', null],
   [12, 't-pol', 'IFRS 17 reporting data feeds', 'th-reg', '', 'Pieter Mulder', 90],
-  [13, 't-pol', 'Product catalogue single source', 'th-eff', '', 'Pieter Mulder', null],
+  [13, 't-pol', 'Product catalogue single source', '', '', 'Pieter Mulder', null],
   [14, 't-dat', 'Pricing data mart', 'th-price', 'Pricing 2027', 'Fatima El Amrani', null],
-  [15, 't-dat', 'Customer 360 dataset', 'th-cx', '', 'Fatima El Amrani', null],
+  [15, 't-dat', 'Customer 360 dataset', '', '', 'Fatima El Amrani', null],
   [16, 't-dat', 'AVG retention and erasure automation', 'th-reg', '', 'Fatima El Amrani', 75],
   [17, 't-cld', 'Landing zone and network (wave 2)', 'th-cloud', 'Core migration', 'Mark van Dijk', null],
-  [18, 't-cld', 'Kubernetes platform upgrade', 'th-eff', '', 'Mark van Dijk', null],
+  [18, 't-cld', 'Kubernetes platform upgrade', '', '', 'Mark van Dijk', null],
   [19, 't-cld', 'DORA ICT register and resilience testing', 'th-reg', '', 'Mark van Dijk', 60],
   [20, 't-cld', 'Self-service environments for teams', '', '', 'Mark van Dijk', null],
   [21, 't-cld', 'DORA incident reporting to DNB', 'th-reg', '', 'Mark van Dijk', 60],
   [22, 't-cld', 'Secrets management rollout', '', '', 'Mark van Dijk', null],
   [23, 't-cld', 'Pen-test remediation backlog', '', '', 'Mark van Dijk', null],
   [24, 't-cld', 'Zero-trust access for admins', 'th-cloud', '', 'Mark van Dijk', null],
-  [25, 't-por', 'Mobile claims flow', 'th-claim', 'Digital self-service', 'Lotte Meijer', null],
+  [25, 't-por', 'Mobile claims flow', 'th-cx', 'Digital self-service', 'Lotte Meijer', null],
   [26, 't-por', 'Biometric login', 'th-cx', 'Digital self-service', 'Lotte Meijer', null],
   [27, 't-por', 'Push notifications for policy events', '', '', 'Lotte Meijer', null],
   [28, 't-por', 'App store compliance updates', '', '', 'Lotte Meijer', null],
-  [29, 't-clm', 'Storm-season claims surge tooling', 'th-claim', '', 'Sanne Bakker', null],
+  [29, 't-clm', 'Storm-season claims surge tooling', 'th-eff', '', 'Sanne Bakker', null],
   [30, 't-pay', 'Payment provider (PSP) migration', 'th-eff', 'Payments 2027', 'Joris Smit', null],
   [31, 't-pol', 'Year-end tax statements', 'th-eff', '', 'Pieter Mulder', null],
   [32, 't-dat', 'Regulatory reporting DNB (quarterly)', 'th-reg', '', 'Fatima El Amrani', 30],
 ];
 const eid = (n) => `e-${String(n).padStart(2, '0')}`;
+// Value (model Eenvoudig, D43) for the 2027 Q1 epics: epic -> H/M/L.
+const VALUE = { 7: 'high', 4: 'high', 21: 'high', 12: 'medium', 1: 'high', 11: 'medium', 16: 'medium', 25: 'medium', 14: 'high', 8: 'medium', 3: 'low', 17: 'medium', 2: 'low', 15: 'medium', 13: 'low', 18: 'low' };
+const VALUE_NOTE = { 7: 'Grootste klantirritatie: schade melden duurt 4 dagen', 21: 'Toezichthouder; boete bij te laat', 3: 'Alleen verkenning dit kwartaal' };
+// OnePagers (D44): template, link, or both.
+const ONE_PAGER = {
+  7: { problem: 'Schademelding kost klanten gemiddeld 4 dagen en 3 telefoontjes; 30% belt na 1 week opnieuw. Zonder digitale intake blijft de NPS op schade negatief.', outcome: '60% van de particuliere schades komt digitaal binnen met foto; triage binnen 1 uur; eerste reactie binnen 1 werkdag.', outOfScope: 'Zakelijke schades en letselschade blijven buiten scope. Risico: nauwkeurigheid van het triagemodel (nu 82%, doel 90%).' },
+  4: { problem: 'Polisveranderingen lopen via het klantcontactcentrum; 40% van de telefoontjes gaat over adres, auto of dekking. Klanten wachten gemiddeld 2 dagen.', outcome: 'De vijf meest gevraagde wijzigingen kunnen klanten zelf doen in het portaal, direct verwerkt in de polisadministratie.', outOfScope: 'Geen nieuwe producten of premieberekening in het portaal. Risico: de polis-API van Polisadministratie concurreert met IFRS 17.' },
+  11: { problem: 'Het oude kernsysteem gaat per eind 2027 uit onderhoud; elke maand uitstel vergroot de kans op een niet-ondersteunde situatie.', outcome: 'Golf 2 (autoproducten) draait in het nieuwe kernsysteem; de oude schermen voor auto zijn uit.', outOfScope: 'Woon- en reisproducten volgen in golf 3. Risico: leverancierrelease schuift; netwerkconnectiviteit nog niet toegezegd.' },
+};
+const ONE_PAGER_URL = { 4: 'https://intranet.oranje.example/onepagers/self-service-polis', 19: 'https://intranet.oranje.example/onepagers/dora-ict-register' };
 const epics = E.map(([n, teamId, title, themeId, label, ownerName, reg]) => ({
   id: eid(n), refCode: `EP-${String(n).padStart(4, '0')}`, teamId, themeId: themeId || null, title, description: '',
   ownerName, label, regulatory: reg != null, regulatoryDeadline: reg != null ? inDays(reg) : null,
@@ -86,6 +100,7 @@ const epics = E.map(([n, teamId, title, themeId, label, ownerName, reg]) => ({
   externalSource: n % 3 === 0 || n === 7 || n === 17 ? 'azure_devops' : null,
   externalId: n % 3 === 0 || n === 7 || n === 17 ? String(48000 + n * 7) : null,
   externalUrl: n % 3 === 0 || n === 7 || n === 17 ? `https://dev.azure.com/oranje/Digital/_workitems/edit/${48000 + n * 7}` : null,
+  value: VALUE[n] ? { level: VALUE[n] } : {}, valueNote: VALUE_NOTE[n] || '', onePager: ONE_PAGER[n] || {}, onePagerUrl: ONE_PAGER_URL[n] || null,
 }));
 
 // Plans for 2027 Q1 (the planning quarter): [epic, rank, low, high, commitment, confidence]. 14 ranked, 2 unranked.
@@ -181,7 +196,7 @@ const state = {
   votes, discussions, checkIns, impediments, events,
   members: PERSONAS,
   settings: { language: 'nl', setupComplete: true, orgName: 'Oranje Verzekeringen', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5, voteBlocksLock: false,
-    capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false },
+    capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false, valueModel: 'simple' },
 };
 
 // Q4 was locked earlier: store a baseline, then make two post-lock changes so the diff is not empty.

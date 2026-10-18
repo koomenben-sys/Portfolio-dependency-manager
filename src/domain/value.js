@@ -16,7 +16,8 @@ export function checkTheme(theme, existing, Err = Error) {
   const t = { ...existing, ...theme };
   if ((!existing || theme.name !== undefined) && !String(t.name || '').trim()) throw new Err('Name is required');
   if (t.type != null && !THEME_TYPES.includes(t.type)) throw new Err('Unknown goal type');
-  if (t.mustDeadline && !t.must) throw new Err('A deadline needs Moet');
+  if (theme.mustDeadline && !t.must) throw new Err('A deadline needs Moet');
+  if (!t.must) t.mustDeadline = null;   // switching Moet off drops the deadline
   return t;
 }
 

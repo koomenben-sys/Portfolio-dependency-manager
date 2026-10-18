@@ -14,6 +14,7 @@
 import { supabase } from '../lib/supabase';
 import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
 import { PHASE_INDEX, isLockedPhase, REASON_REQUIRED } from '../domain/model';
+import { checkTheme, isHttpUrl } from '../domain/value';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange } from './repository';
 
 const snake = (s) => s.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
@@ -37,7 +38,7 @@ const REALTIME_DEBOUNCE_MS = 400;
 const EVENT_ACTIONS = { epic_plans_removed: 'plan_removed', dependencies_removed: 'dependency_removed' };
 const DEFAULT_SETTINGS = {
   language: 'nl', orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5,
-  voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false,
+  voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false, valueModel: 'none',
 };
 // Postgres error texts that users should not have to decode.
 function friendly(message) {
@@ -185,13 +186,21 @@ export class SupabaseRepository {
     const teamId = epic.teamId ?? existing?.teamId;
     if (!canWriteTeam(actor, teamId) || (existing && !canWriteTeam(actor, existing.teamId))) throw new PermissionError('You can only edit epics of your own team');
     if ((!existing || epic.title !== undefined) && !epic.title?.trim()) throw new ValidationError('Title is required');
+    if (epic.onePagerUrl && !isHttpUrl(epic.onePagerUrl)) throw new ValidationError('Enter a link that starts with http(s)://');
+    if (epic.externalUrl && !isHttpUrl(epic.externalUrl)) throw new ValidationError('Enter a link that starts with http(s)://');
+    if (epic.themeId && !(await this._all('themes')).some((t) => t.id === epic.themeId)) throw new ValidationError('Unknown goal');
     const { id, ...rest } = epic;
     if (existing?.externalSource) { for (const k of ['title', 'externalSource', 'externalId', 'externalUrl']) delete rest[k]; } // mastered by the source (D20)
     const row = toRow(rest, org);
     if (existing) {
       delete row.org_id;
       // The 005 trigger re-routes the epic's asks on a team change and refuses a self-dependency.
-      if (Object.keys(row).length) this._throw((await supabase.from('epics').update(row).eq('id', id)).error);
+      // PostgREST reports no error when RLS filters the row away: check that a row came back.
+      if (Object.keys(row).length) {
+        const { data, error } = await supabase.from('epics').update(row).eq('id', id).select('id');
+        this._throw(error);
+        if (!data?.length) throw new PermissionError('Not allowed for your role or team');
+      }
     } else {
       row.ref_code = await this._ref('epic');
       const { data, error } = await supabase.from('epics').insert(row).select('id').single();
@@ -483,12 +492,19 @@ export class SupabaseRepository {
     this._throw((await supabase.from('teams').delete().eq('id', id)).error);
     return this.load();
   }
+  // Goals and programmes (D40). 009 checks type and "deadline needs Moet" again in SQL.
   async upsertTheme(actor, t) {
     if (!canRank(actor)) throw new PermissionError('Themes need rank permission');
-    if (!t.name?.trim()) throw new ValidationError('Name is required');
-    const row = toRow(t, await this._org());
+    const existing = t.id ? await this._row('themes', t.id, 'goal') : null;
+    const next = checkTheme(t, existing || undefined, ValidationError);
+    const patch = { ...t };
+    if (patch.name !== undefined) patch.name = String(patch.name).trim();
+    if (next.must === false || !next.must) patch.mustDeadline = null;
+    const row = toRow(patch, await this._org());
     if (!t.id) row.position = (this.state?.themes.length) ?? 0;
-    this._throw((await supabase.from('themes').upsert(row, { onConflict: 'org_id,id' })).error);
+    const { data, error } = await supabase.from('themes').upsert(row, { onConflict: 'org_id,id' }).select('id');
+    this._throw(error);
+    if (!data?.length) throw new PermissionError('Not allowed for your role or team');
     return this.load();
   }
   async deleteTheme(actor, id) {
