@@ -5,6 +5,20 @@ Achtergrond en beslissingen: `docs/design.md` (§16 build- en validatielog, §17
 
 Prioriteit: **P1** = nodig voor een pilot met 3–5 teams bij een echte klant, **P2** = maakt de pilot sterk / verkoopbaar, **P3** = later.
 
+## Productkoers na de persona-interviews (18 oktober 2026)
+Bron: `docs/research/persona-interviews-2026-10-18.md`. Kern blijft: drie schermen. Uitbreidingen moeten werk weghalen of één kolom/knop zijn, geen nieuw scherm.
+
+**Volgende features (voorstel, in volgorde):**
+1. Uitvoeringssignaal per epic/toezegging: op koers · in gevaar · gaat niet + één regel (5/5 persona's).
+2. Eén capaciteitsgetal per team (beschikbaar pw, optioneel reserve); gevraagd/beschikbaar ook bij Prioriteren.
+3. Wettelijk/deadline-vlag als chip in de lijst, met waarschuwing bij Kan niet.
+4. Plan vastzetten + "wat is er veranderd" (met reden).
+5. Print/export van de geordende lijst als boardrapport.
+6. Meldingen (Teams/mail) in plaats van een inbox-scherm.
+7. Twee-weg-koppeling Azure DevOps/Jira (grootste adoptiedrempel; groot werk, P2).
+
+**Voorstel om te schrappen (vraagt akkoord eigenaar):** Overzicht-scherm, capaciteitsbord met formule, sessie met fasen/gereedheid/stemming, check-ins met laag/midden/hoog, impediments/ROAM, Mijn-aandacht-scherm, thema's, inspanningsbandbreedtes. De bruikbare kern ervan gaat op in de features hierboven.
+
 ## P1 — pilotklaar maken
 | Item | Waarom | Bron |
 |---|---|---|
