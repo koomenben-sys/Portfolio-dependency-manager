@@ -115,6 +115,7 @@ function ShellInner({ ctx, onSignOut }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            {quarter && <span className="hidden md:inline text-caption text-muted whitespace-nowrap" title={t('Cycle phase')} data-tour="cycle">{t(cyclePhase(quarter.phase))}</span>}
             {dataSource === 'mock' && <span className="hidden md:inline-flex items-center h-6 px-2 rounded-full bg-surface-2 text-micro font-semibold uppercase tracking-wide text-muted" title={t('Fictional data, stored in this browser')}>Demo</span>}
             {dataSource !== 'mock' && <LiveIndicator />}
             <label className="flex items-center gap-1.5 text-label text-muted">

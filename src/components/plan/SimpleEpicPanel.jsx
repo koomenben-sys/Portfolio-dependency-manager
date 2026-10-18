@@ -218,7 +218,7 @@ function ValueField({ model, epic, plan, score, mayEdit, saveEpic }) {
           {fields.map(([k, label, opts]) => (
             <label key={k} className="block"><span className={cls.label}>{t(label)}</span>
               {mayEdit ? (opts
-                ? <select className={cls.input} value={v[k] ?? ''} onChange={(e) => set({ [k]: e.target.value === '' ? undefined : Number(e.target.value) })}><option value="">–</option>{opts.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+                ? <select className={cls.input} value={v[k] ?? ''} onChange={(e) => set({ [k]: e.target.value === '' ? undefined : Number(e.target.value) })}><option value="">{k === 'jobSize' && fallback ? `– (${fallback} pw)` : '–'}</option>{opts.map((o) => <option key={o} value={o}>{o}</option>)}</select>
                 : <input type="number" min="0" step="any" className={`${cls.input} tnum`} defaultValue={v[k] ?? ''} placeholder={k === 'effort' || k === 'jobSize' ? String(fallback) : ''} onBlur={(e) => Number(e.target.value || NaN) !== v[k] && set({ [k]: e.target.value === '' ? undefined : Number(e.target.value) })} />)
                 : <span className="text-body tnum">{v[k] ?? ((k === 'effort' || k === 'jobSize') && fallback ? `${fallback} (pw)` : '–')}</span>}
             </label>

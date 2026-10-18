@@ -633,8 +633,8 @@ Feature: Kwartaalresultaat
   Scenario: Open from Afstemmen
     Given I am Ruud Visser on Afstemmen in 2027 Q1
     When I click "Kwartaalresultaat"
-    Then the view reads "Top 10: 6 toegezegd · 4 in gevaar"
-    And the first row is "DORA · Programma · Moet" with 3 / 3 toegezegd
+    Then the view reads "Top 10: 4 toegezegd · 5 in gevaar"
+    And the first row is "DORA · Programma · Moet mrt 2027" with 2 / 4 toegezegd (two open asks)
     And "Zonder doel" is the last row
     And the row "Klantcontact digitaal" lists "Self-service policy changes — Polisadministratie" under niet toegezegd
 
