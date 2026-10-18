@@ -68,4 +68,8 @@ export const ASK_META = {
 export const REASON_REQUIRED = new Set(['declined', 'deferred']);
 export const needsTalk = (response) => response === 'declined' || response === 'needs_priority_call';
 
+// Release A (D46): the four-step cycle shown next to the quarter selector, mapped onto the eight phases.
+export const CYCLE = { prep: 'Prepare', draft: 'Prepare', negotiate: 'Prepare', review: 'Prepare', vote: 'Event', locked: 'Execute', active: 'Execute', closed: 'Close' };
+export const cyclePhase = (phase) => CYCLE[phase] || 'Prepare';
+
 export const quarterLabel = (q) => (q ? `${q.year} Q${q.q}` : '');
