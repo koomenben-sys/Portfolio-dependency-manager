@@ -657,3 +657,104 @@ Multi-tenant signup/billing, SSO, Jira/Trello, e-mail notifications, real-time p
 2. OK that `001_core.sql` drops the Feb tables (data loss; repopulate from JSON export)?
 3. Name: "Kwartaalplan" or keep "Portfolio Dependency Manager" for now?
 4. The old Feb views (Portfolios, Prioritization, Alignment, Portfolio Overview) are removed in build step 8 because the new model replaces them. OK?
+
+## L. Release B — Capaciteit & ritme (2026-10-19, docs/design.md section 22)
+
+Same rule as K: no new main-nav item. New things are one field, one chip, one line or one dialog inside the three core screens; the only new view, Afsluiten (`#afsluiten`), is reached from the cycle-phase word in the header. Capacity is team-level only: no per-person or per-slot data anywhere (AVG / OR).
+
+**Acceptance criteria**
+- L1. Jobsize. Instellingen › Organisatie has "Jobgroottes" with the person-week range per T-shirt size (defaults S 1–2, M 2–4, L 4–8, XL 8–13; admin; `org_settings.profile.sizeMap`). Epic plans (epic panel) and asks (ask form) get a size picker S / M / L / XL instead of typing pw; picking a size stores the size and writes the mapped range into effort low / high, so every capacity sum keeps working. Records without a size keep their numbers and show "6–8 pw"; WSJF job size and RICE effort default to the high end of the size range.
+- L2. Team capacity. Per team per quarter four numbers: "FTE ingevuld", "FTE vacant", "Verlofweken" (team total) and "Run %" (org default 20). Entered in one small dialog opened from the team's capacity line on Afhankelijkheden by the team's planner or an admin; everyone else reads. Working days come from the quarter's calendar minus Dutch public holidays on weekdays (Nieuwjaar, Pasen 1+2, Koningsdag 27/4 — 26/4 when 27/4 is a Sunday, Hemelvaart, Pinksteren 1+2, Kerst 1+2; fixed set, no toggles). Beschikbaar = max(0, FTE ingevuld × werkdagen / 5 − verlofweken) × (1 − run%), one decimal. Vacancies add "+Y pw als gevuld" with the same formula for FTE vacant (no leave).
+- L3. The capacity line reads "Beschikbaar 31 pw · run 20% · 1,5 vacant (+8 pw als gevuld)" followed by the load band "Gevraagd 26 pw · 84% · krap" (ruimte ≤ 80%, krap 80–100%, overvraagd > 100%, never colour alone). It shows on Afhankelijkheden for the selected team and, when Prioriteren is filtered to one team, as one compact line above the table. A team without capacity shows "Capaciteit invullen" (planner/admin) or "–".
+- L4. Certainty on the ask only: Laag / Midden / Hoog (default Midden), set by the requesting team in the ask form next to the size. Not on epics.
+- L5. Bottlenecks on Afstemmen are automatic: an ask that is accepted or open gets at most one reason chip, first match wins — "Boven capaciteit" (provider load > 100%), "Grote job" (size L / XL, or high estimate ≥ 8 pw without a size), "Lage zekerheid". A pair with an open, Kan niet or Bespreken ask shows its chip in "Te bespreken" (sorted after the Kan niet / Bespreken pairs); pairs whose asks are all committed but carry a bottleneck sit in one collapsed group "Knelpunten (n)" under the list. No new screen, no manual flag.
+- L6. Plan vastzetten. Admins see "Plan vastzetten" on Afstemmen while the cycle phase is Voorbereiden or Event. A confirm dialog takes an optional reason; confirming stores the baseline and sets the quarter to locked in one step (one `plan_events` row) and the cycle word becomes "Uitvoeren". After that, Prioriteren rows whose rank, commitment, size or asks differ from the baseline show a small muted "gewijzigd" marker; its tooltip says what changed and the last reason.
+- L7. Commitment signal. On every accepted ask the providing team (planner or admin) can set — through a quiet "Signaal" button that appears on hover / focus while the ask is Op koers —: Op koers (default, shows nothing) · In gevaar · Gaat niet halen, with an optional one-line note, from "Aan ons gevraagd". Each change leaves a `plan_events` row. Only the provider team may change it (both adapters and the database guard).
+- L8. The requesting team sees the signal in "Wij vragen" next to the answer. Prioriteren's dependency cell shows the worst signal when it is worse than Op koers ("In gevaar · Platform & Security"), taking precedence over Toegezegd. During Uitvoeren Afstemmen shows one top line "Top 5: n in gevaar" (asks of the five highest-ranked epics with In gevaar or Gaat niet halen).
+- L9. Sturen setting (Instellingen › Organisatie, admin): "Op uitzondering" (default) | "Sprintkadans" with N weeks (1–4, default 2). In Sprintkadans, during Uitvoeren, an accepted ask whose signal or last confirmation is older than the start of the current sprint (counted from the quarter start) shows a quiet "Bevestigen" link for the provider team; one click records "Nog op koers" (confirmed_at) without a form. In Op uitzondering nothing prompts.
+- L10. Afsluiten view (`#afsluiten`). The cycle-phase word in the header is a button for admins (menu: "Plan vastzetten" when Voorbereiden / Event, "Kwartaal afsluiten" when Uitvoeren, "Afsluiten openen" when Afsluiten) and a link to Afsluiten for everyone once the quarter is closed. "Kwartaal afsluiten" asks for confirmation and sets the phase to closed. The view lists per team the epics committed at the baseline (or now when there is none) with a "Geleverd" checkbox (team planner or admin; others read) and per team "Voorspelbaarheid 75% (3 van 4)". "Doorschuiven" on each undelivered epic adds it unranked to the next quarter (creates the next quarter's plan when missing, never duplicates) with one `plan_events` row. A link opens Kwartaalresultaat.
+- L11. Data: migration `010_capacity_rhythm.sql`, additive and re-runnable: `team_capacity.fte_vacant`, `epic_plans.size`, `epic_plans.delivered`, `dependencies.size`, `dependencies.certainty`, `dependencies.signal`, `dependencies.signal_note`, `dependencies.signal_at`, `dependencies.confirmed_at`, with checks; the dependency guard gives size / certainty to the requester and the signal fields to the provider. `db/tests/rls_test.sql` covers them and `npm run test:rls` passes. Mock and Supabase adapters behave the same (same error texts).
+- L12. Every new string has Dutch in `nl.js`; helper text ≤ 6 words; controls ≥ 24 px; keyboard operable; WCAG 2.2 AA; the calm visual language of the core screens is unchanged.
+
+```gherkin
+Feature: Job size
+
+  Scenario: Planner sizes an ask
+    Given I am Sanne Bakker (Klantportaal planner) adding an ask to Platform & Security
+    When I pick size "L" and certainty "Laag"
+    Then the ask stores L and 4–8 pw
+    And Platform & Security's "Gevraagd" grows by 8 pw once the ask is accepted
+
+  Scenario: Organisation mapping
+    Given I am the admin in Instellingen › Organisatie
+    When I set M to 3–5 pw
+    Then a newly sized M epic stores 3–5 pw and existing records keep their numbers
+
+Feature: Team capacity
+
+  Scenario: Team lead enters capacity
+    Given I am the Payments planner on Afhankelijkheden for 2027 Q1
+    When I click "Capaciteit invullen" and enter FTE ingevuld 6, FTE vacant 1, verlofweken 4, run 20
+    Then the line reads "Beschikbaar" with the pw from 6 × (werkdagen − feestdagen) / 5 − 4, × 0,8
+    And "1 vacant (+… pw als gevuld)" follows
+    And no names or per-person fields exist anywhere
+
+  Scenario: Holidays are automatic
+    Given 2027 Q2 (Koningsdag 27/4 is a Tuesday, Hemelvaart 6/5, Pinkstermaandag 17/5)
+    Then three weekdays are subtracted from the quarter's working days
+
+  Scenario: Read-only for others
+    Given I am the Claims planner looking at Payments
+    Then I see the capacity line but no edit action
+
+Feature: Bottlenecks
+
+  Scenario: Over capacity
+    Given Platform & Security is at 112% after accepting asks
+    When I open Afstemmen
+    Then each pair asking Platform & Security shows the chip "Boven capaciteit"
+    And those pairs are listed after the pairs with Kan niet or Bespreken
+
+Feature: Plan vastzetten
+
+  Scenario: Admin locks the plan
+    Given I am Anouk de Jong (admin) on Afstemmen in 2027 Q1 (Voorbereiden)
+    When I click "Plan vastzetten", type "Uitkomst kwartaalsessie" and confirm
+    Then the header shows "Uitvoeren"
+    When a planner later moves "Pricing data mart" from 9 to 4 with reason "DNB vraag"
+    Then the row shows "gewijzigd" with the tooltip "Rang 9 → 4 · DNB vraag"
+
+Feature: Commitment signals
+
+  Scenario: Provider flags risk
+    Given 2026 Q4 is in Uitvoeren and Platform & Security accepted an ask of Claims
+    When the Platform & Security planner sets "In gevaar" with "Pentest schuift"
+    Then Claims sees "In gevaar · Pentest schuift" in Wij vragen
+    And Prioriteren shows "In gevaar · Platform & Security" for that epic
+    And Afstemmen shows "Top 5: 1 in gevaar" when the epic is in the top 5
+
+  Scenario: Requester cannot change a signal
+    Given I am the Claims planner
+    Then the signal is text, not a control
+
+  Scenario: Sprint cadence prompt
+    Given the setting is Sprintkadans 2 weeks and week 3 of the quarter has started
+    And an accepted Payments ask has no signal or confirmation since week 3
+    Then the Payments planner sees "Bevestigen" on it
+    When they click it
+    Then the prompt disappears until the next sprint
+
+Feature: Afsluiten
+
+  Scenario: Close and measure
+    Given I am the admin and 2026 Q4 is in Uitvoeren
+    When I choose "Kwartaal afsluiten" from the phase word and confirm
+    Then the header shows "Afsluiten" and Afsluiten opens
+    When the Claims planner ticks "Geleverd" on 3 of 4 committed epics
+    Then Claims shows "Voorspelbaarheid 75% (3 van 4)"
+
+  Scenario: Doorschuiven
+    When I click "Doorschuiven" on the undelivered Claims epic
+    Then it appears under "Nog niet geprioriteerd" in 2027 Q1
+    And clicking it again does nothing new
+```

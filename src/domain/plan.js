@@ -99,7 +99,7 @@ export function buildBaseline(state, quarterId) {
   return {
     takenAt: new Date().toISOString(),
     plans: state.plans.filter((p) => p.quarterId === quarterId).map((p) => ({
-      epicId: p.epicId, rank: p.rank, commitment: p.commitment, effortLow: p.effortLow, effortHigh: p.effortHigh,
+      epicId: p.epicId, rank: p.rank, commitment: p.commitment, effortLow: p.effortLow, effortHigh: p.effortHigh, size: p.size ?? null,
     })),
     dependencies: state.dependencies.filter((d) => d.quarterId === quarterId).map((d) => ({
       id: d.id, response: d.response, providerTeamId: d.providerTeamId, epicId: d.epicId,

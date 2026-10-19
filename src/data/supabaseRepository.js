@@ -15,7 +15,8 @@ import { supabase } from '../lib/supabase';
 import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
 import { PHASE_INDEX, isLockedPhase, REASON_REQUIRED } from '../domain/model';
 import { checkTheme, isHttpUrl } from '../domain/value';
-import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange } from './repository';
+import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, nextQuarter } from '../domain/rhythm';
+import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange, checkCapacity } from './repository';
 
 const snake = (s) => s.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
 const camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -39,6 +40,7 @@ const EVENT_ACTIONS = { epic_plans_removed: 'plan_removed', dependencies_removed
 const DEFAULT_SETTINGS = {
   language: 'nl', orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5,
   voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false, valueModel: 'none',
+  sizeMap: { ...DEFAULT_SIZE_MAP }, cadence: { ...DEFAULT_CADENCE },
 };
 // Postgres error texts that users should not have to decode.
 function friendly(message) {
@@ -47,6 +49,9 @@ function friendly(message) {
   if (/duplicate key.*teams_org_id_name/i.test(message)) return 'A team with that name exists';
   if (/duplicate key.*themes_org_id_name/i.test(message)) return 'A theme with that name exists';
   if (/duplicate key.*invitations_org_id_email/i.test(message)) return 'This e-mail address has already been invited';
+  if (/_size_chk/i.test(message)) return 'Unknown size';
+  if (/dependencies_certainty_chk/i.test(message)) return 'Unknown certainty';
+  if (/dependencies_signal_chk/i.test(message)) return 'Unknown signal';
   return message;
 }
 
@@ -139,10 +144,11 @@ export class SupabaseRepository {
       teams: teams.sort(byCreated('createdAt')),
       themes: themes.sort((a, b) => a.position - b.position),
       quarters: quarters.sort((a, b) => a.year * 4 + a.q - (b.year * 4 + b.q)),
-      capacity: capacity.map((c) => ({ id: `${c.teamId}:${c.quarterId}`, ...c })),   // no surrogate key in SQL (PK = org, team, quarter)
+      // no surrogate key in SQL (PK = org, team, quarter); numeric columns arrive as strings, Release B fields may be absent before 010
+      capacity: capacity.map((c) => ({ id: `${c.teamId}:${c.quarterId}`, ...c, headcount: Number(c.headcount) || 0, fteVacant: Number(c.fteVacant) || 0, absenceWeeks: Number(c.absenceWeeks) || 0, reservePct: Number(c.reservePct) || 0, weeks: Number(c.weeks) || 13, focusFactor: Number(c.focusFactor) || 1 })),
       epics: epics.sort(byCreated('createdAt')),
-      plans: plans.map((p) => ({ ...p, rank: p.strategicRank })),
-      dependencies: dependencies.sort(byCreated('createdAt')),
+      plans: plans.map((p) => ({ ...p, rank: p.strategicRank, effortLow: Number(p.effortLow) || 0, effortHigh: Number(p.effortHigh) || 0, size: p.size ?? null, delivered: !!p.delivered })),
+      dependencies: dependencies.map((d) => ({ ...d, effortLow: Number(d.effortLow) || 0, effortHigh: Number(d.effortHigh) || 0, size: d.size ?? null, certainty: d.certainty || 'medium', signal: d.signal || 'on_track', signalNote: d.signalNote || '', signalAt: d.signalAt ?? null, confirmedAt: d.confirmedAt ?? null })).sort(byCreated('createdAt')),
       votes: votes.map((v) => ({ id: `${v.teamId}:${v.quarterId}`, ...v })),
       discussions: discussions.map((d) => ({ ...d, depId: d.dependencyId })).sort(byCreated('createdAt')),
       checkIns: checkIns.map((c) => ({ ...c, authorName: names.get(c.authorId) || '' })).sort(byCreated('createdAt')),
@@ -240,10 +246,12 @@ export class SupabaseRepository {
       const other = Object.keys(plan).filter((k) => !['id', 'epicId', 'quarterId', 'rank'].includes(k) && plan[k] !== existing[k]);
       if (other.length) throw new PermissionError('Rank permission lets you change the strategic rank only');
     }
+    // Release B (D50): a size writes the organisation's range into the effort fields; clearing it keeps the numbers.
+    if (plan.size !== undefined) plan = { ...plan, ...sizePatch(this.settings, plan.size, ValidationError) };
     const low = plan.effortLow ?? existing?.effortLow ?? 0; const high = plan.effortHigh ?? existing?.effortHigh ?? 0;
     if (high < low) throw new ValidationError('High estimate must be at least the low estimate');
     if (existing && isLockedPhase(q.phase) && !trim(reason)) {
-      const changed = ['commitment', 'rank', 'effortLow', 'effortHigh'].some((k) => plan[k] !== undefined && plan[k] !== existing[k]);
+      const changed = ['commitment', 'rank', 'effortLow', 'effortHigh', 'size'].some((k) => plan[k] !== undefined && plan[k] !== existing[k]);
       if (changed) throw new ValidationError('The quarter is locked: a reason is required for changes');
     }
     if (!existing && isLockedPhase(q.phase) && !trim(reason)) throw new ValidationError('The quarter is locked: a reason is required to add an epic');
@@ -300,6 +308,8 @@ export class SupabaseRepository {
     if (!canWriteTeam(actor, epic.teamId)) throw new PermissionError('Only the requesting team can add an ask');
     if (dep.providerTeamId === epic.teamId) throw new ValidationError('A team cannot depend on itself');
     if (!dep.ask?.trim()) throw new ValidationError('Describe the ask');
+    if (dep.size !== undefined) dep = { ...dep, ...sizePatch(this.settings, dep.size, ValidationError) };
+    if (dep.certainty !== undefined) checkCertainty(dep.certainty, ValidationError);
     if ((dep.effortLow || 0) > (dep.effortHigh || 0)) throw new ValidationError('High estimate must be at least the low estimate');
     await this._guardPhase(dep.quarterId, dep.reason, 'add an ask');
     const { reason, ...depFields } = dep;
@@ -347,8 +357,10 @@ export class SupabaseRepository {
   async updateDependency(actor, depId, patch) {
     const d = await this._dep(depId);
     if (!canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can edit the ask');
-    const { reason, ...rest } = patch;
+    let { reason, ...rest } = patch;
     await this._guardPhase(d.quarterId, reason, 'edit an ask');
+    if (rest.size !== undefined) rest = { ...rest, ...sizePatch(this.settings, rest.size, ValidationError) };
+    if (rest.certainty !== undefined) checkCertainty(rest.certainty, ValidationError);
     const next = { ...d, ...rest };
     if ((next.effortLow || 0) > (next.effortHigh || 0)) throw new ValidationError('Check the effort estimate');
     const effortChanged = next.effortHigh !== d.effortHigh || next.effortLow !== d.effortLow || next.ask !== d.ask;
@@ -398,6 +410,78 @@ export class SupabaseRepository {
     if (to < from && to <= PHASE_INDEX.vote) patch.votes_revealed = false;
     // The 003 trigger logs phase_changed with the reason from app.reason.
     await this._withReason('quarters', quarterId, patch, reason);
+    return this.load();
+  }
+  // Release B (D54): baseline + phase 'locked' in one step; the 003 trigger writes the single phase_changed row.
+  async lockPlan(actor, quarterId, reason = '') {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin (facilitator) can change the phase');
+    const s = await this.load();
+    const q = s.quarters.find((x) => x.id === quarterId);
+    if (!q) throw new ValidationError('Unknown quarter');
+    if (isLockedPhase(q.phase)) throw new ValidationError('The plan is already locked');
+    await this._withReason('quarters', quarterId, { phase: 'locked', baseline: buildBaseline(s, quarterId), locked_at: now() }, reason);
+    return this.load();
+  }
+  // Release B (L10): "Kwartaal afsluiten" from Uitvoeren (locked or active) to closed in one step.
+  async closeQuarter(actor, quarterId, reason = '') {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin (facilitator) can change the phase');
+    const q = await this._quarter(quarterId);
+    if (!['locked', 'active'].includes(q.phase)) throw new ValidationError('Only a running quarter can be closed');
+    await this._withReason('quarters', quarterId, { phase: 'closed' }, reason);
+    return this.load();
+  }
+  // Release B (D55): provider-only signal on a committed ask; 010 dependency_guard enforces both again in SQL.
+  async setSignal(actor, depId, signal, note = '') {
+    const d = await this._dep(depId);
+    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can set a signal');
+    if (!['accepted', 'partial'].includes(d.response)) throw new ValidationError('Signals apply to committed asks only');
+    if (!SIGNALS.includes(signal)) throw new ValidationError('Unknown signal');
+    const signalNote = trim(note).slice(0, 200);
+    const { data, error } = await supabase.from('dependencies').update({ signal, signal_note: signalNote, signal_at: now() }).eq('id', depId).select('id');
+    this._throw(error);
+    if (!data?.length) throw new PermissionError('Not allowed for your role or team');
+    await this._event(actor, 'signal_set', 'dependencies', depId, d.quarterId, signalNote, { signal: d.signal || 'on_track' }, { signal, note: signalNote });
+    return this.load();
+  }
+  async confirmSignal(actor, depId) {
+    const d = await this._dep(depId);
+    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can set a signal');
+    if (!['accepted', 'partial'].includes(d.response)) throw new ValidationError('Signals apply to committed asks only');
+    const { data, error } = await supabase.from('dependencies').update({ confirmed_at: now() }).eq('id', depId).select('id');
+    this._throw(error);
+    if (!data?.length) throw new PermissionError('Not allowed for your role or team');
+    await this._event(actor, 'signal_confirmed', 'dependencies', depId, d.quarterId, '', null, { signal: d.signal || 'on_track' });
+    return this.load();
+  }
+  // Release B (D56): "Geleverd"; works on a closed quarter too (the 005 trigger only logs rank / commitment / effort).
+  async setDelivered(actor, planId, delivered) {
+    const { data: row } = await supabase.from('epic_plans').select('*').eq('id', planId).maybeSingle();
+    if (!row) throw new ValidationError('Unknown plan');
+    const p = fromRow(row);
+    const e = await this._epic(p.epicId);
+    if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Only the epic team can mark delivery');
+    if (!!p.delivered === !!delivered) return this.load();
+    const { data, error } = await supabase.from('epic_plans').update({ delivered: !!delivered }).eq('id', planId).select('id');
+    this._throw(error);
+    if (!data?.length) throw new PermissionError('Not allowed for your role or team');
+    await this._event(actor, 'delivered_changed', 'epic_plans', planId, p.quarterId, '', { delivered: !!p.delivered }, { delivered: !!delivered });
+    return this.load();
+  }
+  // Release B (D56): "Doorschuiven" adds the epic unranked to the next quarter; idempotent.
+  async carryOver(actor, planId) {
+    const s = await this.load();
+    const p = s.plans.find((x) => x.id === planId);
+    if (!p) throw new ValidationError('Unknown plan');
+    const e = s.epics.find((x) => x.id === p.epicId);
+    if (!e) throw new ValidationError('Unknown epic');
+    if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Only the epic team can carry over');
+    const next = nextQuarter(s, p.quarterId);
+    if (!next) throw new ValidationError('Add the next quarter first');
+    if (next.phase === 'closed') throw new ValidationError('Quarter is closed');
+    if (s.plans.some((x) => x.epicId === p.epicId && x.quarterId === next.id)) return s;
+    const { data, error } = await supabase.from('epic_plans').insert({ org_id: await this._org(), epic_id: p.epicId, quarter_id: next.id, effort_low: p.effortLow, effort_high: p.effortHigh, size: p.size ?? null }).select('id').single();
+    this._throw(error);
+    await this._event(actor, 'carried_over', 'epic_plans', data.id, next.id, '', { quarterId: p.quarterId }, { epicId: p.epicId, quarterId: next.id });
     return this.load();
   }
   async castVote(actor, teamId, quarterId, vote, reason = '') {
@@ -471,6 +555,7 @@ export class SupabaseRepository {
     if (!canWriteTeam(actor, cap.teamId)) throw new PermissionError('Not your team');
     const { id, reason, orgId, ...rest } = cap;
     await this._guardPhase(cap.quarterId, reason, 'change capacity');
+    checkCapacity(rest);
     const org = await this._org();
     const { data: before } = await supabase.from('team_capacity').select('*').eq('team_id', cap.teamId).eq('quarter_id', cap.quarterId).maybeSingle();
     this._throw((await supabase.from('team_capacity').upsert(toRow(rest, org), { onConflict: 'org_id,team_id,quarter_id' })).error);
@@ -525,6 +610,8 @@ export class SupabaseRepository {
       return this.state;
     }
     if (!isAdmin(actor)) throw new PermissionError('Admin only');
+    if (patch.sizeMap !== undefined) patch = { ...patch, sizeMap: checkSizeMap(patch.sizeMap, ValidationError) };
+    if (patch.cadence !== undefined) patch = { ...patch, cadence: checkCadence(patch.cadence, ValidationError) };
     const org = await this._org();
     const next = { ...this.settings, ...patch };
     const { staleDays, voteBlocksLock, personalLanguage, ...profile } = next;

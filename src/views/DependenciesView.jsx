@@ -3,10 +3,11 @@ import { Plus, Trash2 } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canWriteTeam } from '../data/repository';
 import { isLockedPhase, REASON_REQUIRED, ASK_META } from '../domain/model';
-import { availableWeeks } from '../domain/capacity';
+import { teamCapacity } from '../domain/capacity';
 import { planFor, phaseAllows, byId } from '../domain/plan';
+import { CERTAINTIES, CERTAINTY_META, sizeRange, signalOf, needsConfirmation } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, ErrorLine, Disclosure, toneClass, normAsk } from '../components/plan/core';
+import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, ErrorLine, Disclosure, Dialog, toneClass, normAsk, SizePicker, SizeText, SignalChip, SignalControl, SignalIcon, CapacityLine } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 import { useTourNudge } from '../components/plan/TourPanel';
@@ -14,8 +15,9 @@ import { useTourNudge } from '../components/plan/TourPanel';
 // Screen 2 — Afhankelijkheden, per team like the Feb version (docs/design.md section 19, D26/D29/D31; iteration 1).
 // "Wij vragen": our epics in rank order with their asks and an inline "+ Verzoek".
 // "Aan ons gevraagd": asks to this team ordered by the requesting epic's rank, answered with one click.
+// Release B (section 22): the team's capacity line + a four-field dialog (L2/L3), size and certainty on the ask
+// form (L1/L4), the provider's signal on committed asks in "Aan ons gevraagd" and the read-only signal in "Wij vragen" (L7/L8).
 const COUNT_ORDER = ['declined', 'needs_priority_call', 'proposed', 'accepted'];
-const fmtPw = (n) => (Math.round(n * 10) / 10).toString().replace('.', ',');
 
 export function DependenciesView() {
   const { state, actor, quarter, run } = usePlan();
@@ -27,6 +29,7 @@ export function DependenciesView() {
   const [filter, setFilter] = useState(null); // one of COUNT_ORDER, from the count chips
   useTourNudge(useCallback((d) => { if (d.tab) setTab(d.tab); }, []));
   const [openEpic, setOpenEpic] = useState(null);
+  const [capDialog, setCapDialog] = useState(false);
   const [err, setErr] = useState(null);
   if (!quarter) return <NoQuarter />;
   const epics = byId(state.epics); const teams = byId(state.teams);
@@ -45,9 +48,8 @@ export function DependenciesView() {
   const mayAnswer = mayWrite && answersOpen;
   const locked = isLockedPhase(quarter.phase);
   const act = async (m, ...a) => { const r = await run(m, ...a); setErr(r.ok ? null : r.error); return r; };
-  // Load on the provider (item 6): everything not declined counts as requested; available from the capacity module.
-  const available = availableWeeks(state.capacity.find((c) => c.teamId === teamId && c.quarterId === quarter.id));
-  const requested = incoming.filter((d) => normAsk(d.response) !== 'declined').reduce((s, d) => s + (d.effortHigh || 0), 0);
+  // Release B (L3): own work + committed asks against the calendar-based capacity (domain/capacity.js).
+  const capacity = teamCapacity(state, teamId, quarter.id);
 
   return (
     <div data-tour="dependencies">
@@ -63,11 +65,7 @@ export function DependenciesView() {
 
       <div className="mt-4 flex items-center gap-3 flex-wrap min-h-7">
         <CountChips deps={tab === 'outgoing' ? outgoing : incoming} value={filter} onChange={setFilter} />
-        {tab === 'incoming' && available > 0 && (
-          <span className={`text-label tnum ${requested > available ? 'text-danger-fg font-medium' : 'text-muted'}`}>
-            {t('Requested {n} pw', { n: fmtPw(requested) })} <span aria-hidden="true">·</span> {t('available {n} pw', { n: fmtPw(available) })}
-          </span>
-        )}
+        <CapacityLine cap={capacity} onEdit={mayWrite ? () => setCapDialog(true) : undefined} className="ml-auto" />
       </div>
 
       {tab === 'outgoing' && (
@@ -87,14 +85,49 @@ export function DependenciesView() {
           {!answersOpen && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
           {incoming.length === 0 ? <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div> : (
             <ul className={`${cls.card} divide-y divide-border`}>
-              {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} act={act} onOpen={() => setOpenEpic(d.epicId)} />)}
+              {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} maySignal={mayWrite} act={act} onOpen={() => setOpenEpic(d.epicId)} />)}
               {incomingSorted.length === 0 && <li><EmptyLine>{t('Nothing here.')}</EmptyLine></li>}
             </ul>
           )}
         </div>
       )}
       {openEpic && <SimpleEpicPanel epicId={openEpic} onClose={() => setOpenEpic(null)} />}
+      {capDialog && <CapacityDialog teamId={teamId} team={teams.get(teamId)} cap={capacity.cap} locked={locked} act={act} onClose={() => setCapDialog(false)} />}
     </div>
+  );
+}
+
+// Release B (L2): FTE ingevuld · FTE vacant · Verlofweken (team total) · Run %. Team level only, no names.
+function CapacityDialog({ teamId, team, cap, locked, act, onClose }) {
+  const { quarter } = usePlan();
+  const t = useT();
+  const [form, setForm] = useState({ headcount: cap?.headcount ?? '', fteVacant: cap?.fteVacant ?? 0, absenceWeeks: cap?.absenceWeeks ?? 0, reservePct: cap?.reservePct ?? 20 });
+  const [reason, setReason] = useState('');
+  const [err, setErr] = useState(null);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const submit = async (e) => {
+    e.preventDefault();
+    const num = (v) => (v === '' ? 0 : Number(v));
+    const r = await act('upsertCapacity', { teamId, quarterId: quarter.id, headcount: num(form.headcount), fteVacant: num(form.fteVacant), absenceWeeks: num(form.absenceWeeks), reservePct: num(form.reservePct), reason });
+    if (r.ok) onClose(); else setErr(r.error);
+  };
+  const field = (k, label, step = '0.5', max) => (
+    <label className="block"><span className={cls.label}>{label}</span><input type="number" min="0" max={max} step={step} className={`${cls.input} tnum`} value={form[k]} onChange={set(k)} /></label>
+  );
+  return (
+    <Dialog title={`${t('Capacity')} · ${team?.name || ''}`} onClose={onClose} width="w-[380px]">
+      <form onSubmit={submit} className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          {field('headcount', t('FTE filled'))}
+          {field('fteVacant', t('FTE vacant'))}
+          {field('absenceWeeks', t('Leave weeks (team)'))}
+          {field('reservePct', t('Run %'), '1', 80)}
+        </div>
+        {locked && <label className="block"><span className={cls.label}>{t('Why? (quarter is locked)')}</span><input className={cls.input} value={reason} onChange={(e) => setReason(e.target.value)} /></label>}
+        <ErrorLine error={err} />
+        <div className="flex justify-end gap-2 pt-1"><button type="button" className={cls.secondary} onClick={onClose}>{t('Cancel')}</button><button type="submit" className={cls.primary}>{t('Save')}</button></div>
+      </form>
+    </Dialog>
   );
 }
 
@@ -137,7 +170,8 @@ function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, onOpen }) {
           <li key={d.id} className="group px-3 py-2">
             <div className="flex items-center gap-3 min-h-8">
               <span className="w-40 shrink-0 text-label text-muted truncate">{teams.get(d.providerTeamId)?.name}</span>
-              <span className="flex-1 min-w-0 text-body truncate">{d.ask}</span>
+              <span className="flex-1 min-w-0 text-body truncate">{d.ask}{(d.size || d.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={d.size} low={d.effortLow} high={d.effortHigh} /></span>}{d.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</span>
+              <SignalChip dep={d} />
               <StatusChip response={d.response} />
               {mayWrite && removing !== d.id && <button className={`${cls.icon} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} aria-label={`${t('Remove ask')} ${d.refCode}`} onClick={() => setRemoving(d.id)}><Trash2 size={14} /></button>}
             </div>
@@ -156,23 +190,31 @@ function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, onOpen }) {
   );
 }
 
+// Release B (L1/L4): size picker writes the mapped range; without a size the pw field stays; certainty next to it.
 function NewAskRow({ epic, quarter, others, locked, act, onDone }) {
+  const { state } = usePlan();
   const t = useT();
   const [providerTeamId, setProviderTeamId] = useState(others[0]?.id || '');
   const [ask, setAsk] = useState('');
   const [effort, setEffort] = useState('');
+  const [size, setSize] = useState(null);
+  const [certainty, setCertainty] = useState('medium');
   const [reason, setReason] = useState('');
+  const range = size ? sizeRange(state.settings, size) : null;
   const submit = async (e) => {
     e.preventDefault();
     const pw = Number(effort || 0);
-    const r = await act('addDependency', { epicId: epic.id, providerTeamId, quarterId: quarter.id, ask: ask.trim(), effortLow: pw, effortHigh: pw, reason });
+    const r = await act('addDependency', { epicId: epic.id, providerTeamId, quarterId: quarter.id, ask: ask.trim(), effortLow: pw, effortHigh: pw, size, certainty, reason });
     if (r.ok) onDone();
   };
   return (
     <form onSubmit={submit} className="px-3 py-2 border-t border-border bg-canvas flex items-center gap-2 flex-wrap anim-fade-in">
       <select className={`${cls.input} !w-40`} value={providerTeamId} onChange={(e) => setProviderTeamId(e.target.value)} aria-label={t('Team we need')}>{others.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
       <input autoFocus className={`${cls.input} flex-1 min-w-[200px]`} placeholder={t('What do we need?')} aria-label={t('What do we need?')} value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') onDone(); }} />
-      <input type="number" min="0" step="0.5" className={`${cls.input} !w-20 tnum`} placeholder="pw" aria-label={t('Effort (pw)')} value={effort} onChange={(e) => setEffort(e.target.value)} />
+      <SizePicker value={size} onPick={setSize} />
+      {range ? <span className="text-caption text-muted tnum whitespace-nowrap">{range[0]}–{range[1]} pw</span>
+        : <input type="number" min="0" step="0.5" className={`${cls.input} !w-20 tnum`} placeholder="pw" aria-label={t('Effort (pw)')} value={effort} onChange={(e) => setEffort(e.target.value)} />}
+      <select className={`${cls.input} !w-auto`} value={certainty} onChange={(e) => setCertainty(e.target.value)} aria-label={t('Certainty')} title={t('Certainty')}>{CERTAINTIES.map((c) => <option key={c} value={c}>{t(CERTAINTY_META[c].label)}</option>)}</select>
       {locked && <input className={`${cls.input} !w-48`} placeholder={t('Why? (quarter is locked)')} aria-label={t('Why? (quarter is locked)')} value={reason} onChange={(e) => setReason(e.target.value)} />}
       <button type="submit" className={cls.primary} disabled={!ask.trim()}>{t('Send')}</button>
       <button type="button" className={cls.secondary} onClick={onDone}>{t('Cancel')}</button>
@@ -182,9 +224,20 @@ function NewAskRow({ epic, quarter, others, locked, act, onDone }) {
 
 // An ask to our team: rank · requesting team · what · for epic · Toezeggen / Bespreken / Kan niet.
 // Only "Kan niet" opens an inline reason (item 10); the other two answer in one click.
-function IncomingRow({ dep, epic, rank, team, mayAnswer, act, onOpen }) {
+function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, onOpen }) {
+  const { state, quarter } = usePlan();
   const t = useT();
   const [reasonFor, setReasonFor] = useState(null); // response awaiting an inline reason
+  const [noteFor, setNoteFor] = useState(null); // signal awaiting its optional note (L7)
+  const [sigOpen, setSigOpen] = useState(false); // Op koers stays one quiet button until clicked (D61)
+  const committed = normAsk(dep.response) === 'accepted';
+  const signal = signalOf(dep);
+  const pickSignal = async (s) => {
+    if (s === signal && noteFor == null) return;
+    if (s === 'on_track') { setNoteFor(null); await act('setSignal', dep.id, s, ''); return; }
+    setNoteFor(s);
+  };
+  const confirmDue = maySignal && needsConfirmation(dep, quarter, state.settings);
   const pick = async (response) => {
     if (response === dep.response) return;
     if (REASON_REQUIRED.has(response)) { setReasonFor(response); return; }
@@ -193,15 +246,18 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, act, onOpen }) {
   };
   const labelId = `ask-${dep.id}`;
   return (
-    <li className="px-3 py-2">
+    <li className="group px-3 py-2">
       <div className="flex items-center gap-3 min-h-9 flex-wrap md:flex-nowrap">
         <RankNo rank={rank} size="sm" />
         <span className="w-40 shrink-0 text-label text-muted truncate">{team?.name}</span>
         <div className="flex-1 min-w-[200px]">
-          <div id={labelId} className="text-body">{dep.ask}{dep.effortHigh > 0 && <span className="text-caption text-faint tnum"> · {dep.effortHigh} pw</span>}</div>
+          <div id={labelId} className="text-body">{dep.ask}{(dep.size || dep.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={dep.size} low={dep.effortLow} high={dep.effortHigh} /></span>}{dep.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</div>
           <div className="text-caption text-muted truncate">{t('for')} <button className="hover:underline text-accent focus-ring rounded-control" onClick={onOpen}>{epic?.title}</button></div>
         </div>
-        {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <StatusChip response={dep.response} />}
+        {committed && maySignal && signal === 'on_track' && !sigOpen && noteFor == null && !confirmDue && (
+          <button type="button" className={`${cls.quiet} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} onClick={() => setSigOpen(true)} aria-label={`${t('Signal')}: ${t('On track')}`}><SignalIcon signal="on_track" />{t('Signal')}</button>
+        )}
+                {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <StatusChip response={dep.response} />}
         {mayAnswer && (dep.response === 'partial' || dep.response === 'deferred') && <StatusChip response={dep.response} />}
       </div>
       {dep.responseReason && reasonFor == null && <p className="pl-[172px] text-label text-muted mt-0.5">{dep.responseReason}</p>}
@@ -211,6 +267,17 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, act, onOpen }) {
             onSave={async (reason) => { const r = await act('answerDependency', dep.id, { response: reasonFor, reason }); if (r.ok) setReasonFor(null); }} onCancel={() => setReasonFor(null)} />
         </div>
       )}
+      {committed && (maySignal ? (signal === 'on_track' && !sigOpen && noteFor == null && !confirmDue ? null : (
+        <div className="pl-[172px] pt-1.5 flex items-center gap-2 flex-wrap">
+          <SignalControl value={signal} onPick={(k) => { setSigOpen(false); pickSignal(k); }} labelledBy={labelId} />
+          {noteFor == null && dep.signalNote && signal !== 'on_track' && <span className="text-label text-muted truncate max-w-[320px]">{dep.signalNote}</span>}
+          {confirmDue && noteFor == null && <button type="button" className={cls.quiet} onClick={() => act('confirmSignal', dep.id)} title={t('Still on track, no change')}>{t('Confirm')}</button>}
+          {noteFor && (
+            <InlineReason label={t('Note (optional)')} defaultValue={dep.signalNote || ''} placeholder={t('One line, e.g. what shifts')}
+              onSave={async (note) => { const r = await act('setSignal', dep.id, noteFor, note); if (r.ok) setNoteFor(null); }} onCancel={() => setNoteFor(null)} />
+          )}
+        </div>
+      )) : signal !== 'on_track' && <div className="pl-[172px] pt-1"><SignalChip dep={dep} /></div>)}
     </li>
   );
 }

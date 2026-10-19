@@ -6,7 +6,7 @@ import { quarterLabel, isLockedPhase, ASK_META } from '../../domain/model';
 import { planFor, epicDeps } from '../../domain/plan';
 import { activeThemes, effectiveMust, valueScore, SIMPLE_LEVELS, SIMPLE_META, FIB, RICE_IMPACT, WSJF_FIELDS, ONE_PAGER_FIELDS, THEME_TYPE_LABEL, fmtMonth } from '../../domain/value';
 import { useT } from '../../i18n';
-import { cls, StatusChip, InlineReason, Disclosure, ErrorLine, fmtDate, Tabs, MustChip, ValueChip, normAsk } from './core';
+import { cls, StatusChip, InlineReason, Disclosure, ErrorLine, fmtDate, Tabs, MustChip, ValueChip, normAsk, SizePicker, SizeText, SignalChip } from './core';
 import { PrintSheet } from './PrintSheet';
 import { describeEvent } from './EpicPanel';
 
@@ -115,15 +115,22 @@ export function SimpleEpicPanel({ epicId, onClose }) {
                 <dd><ValueField model={model} epic={epic} plan={plan} score={score} mayEdit={mayEdit} saveEpic={saveEpic} /></dd>
               </>
             )}
-            <dt className="text-muted text-label">{t('Effort (pw)')}</dt>
-            <dd className="flex items-center gap-1 tnum">
+            {/* Release B (L1): size picker writes the mapped range; without a size the numbers stay editable. */}
+            <dt className="text-muted text-label">{t('Size')}</dt>
+            <dd className="flex items-center gap-2 flex-wrap tnum">
               {plan && mayEdit ? (
                 <>
-                  <input type="number" min="0" step="0.5" className={`${cls.input} !w-16`} defaultValue={plan.effortLow || ''} placeholder="0" aria-label={t('Effort low')} onBlur={(e) => Number(e.target.value) !== plan.effortLow && savePlan({ effortLow: Number(e.target.value) })} />
-                  <span className="text-muted">–</span>
-                  <input type="number" min="0" step="0.5" className={`${cls.input} !w-16`} defaultValue={plan.effortHigh || ''} placeholder="0" aria-label={t('Effort high')} onBlur={(e) => Number(e.target.value) !== plan.effortHigh && savePlan({ effortHigh: Number(e.target.value) })} />
+                  <SizePicker value={plan.size || null} onPick={(size) => savePlan({ size })} />
+                  {plan.size ? <span className="text-label text-muted">{plan.effortLow}–{plan.effortHigh} pw</span> : (
+                    <span className="inline-flex items-center gap-1">
+                      <input type="number" min="0" step="0.5" className={`${cls.input} !w-16`} defaultValue={plan.effortLow || ''} placeholder="0" aria-label={t('Effort low')} onBlur={(e) => Number(e.target.value) !== plan.effortLow && savePlan({ effortLow: Number(e.target.value) })} />
+                      <span className="text-muted">–</span>
+                      <input type="number" min="0" step="0.5" className={`${cls.input} !w-16`} defaultValue={plan.effortHigh || ''} placeholder="0" aria-label={t('Effort high')} onBlur={(e) => Number(e.target.value) !== plan.effortHigh && savePlan({ effortHigh: Number(e.target.value) })} />
+                      <span className="text-caption text-muted">pw</span>
+                    </span>
+                  )}
                 </>
-              ) : plan ? <span>{plan.effortLow}–{plan.effortHigh}</span> : <span className="text-muted">–</span>}
+              ) : plan ? <SizeText size={plan.size} low={plan.effortLow} high={plan.effortHigh} /> : <span className="text-muted">–</span>}
             </dd>
             {!plan && mayEdit && <dd className="col-span-2"><button className={cls.secondary} onClick={() => savePlan({ commitment: 'draft', effortLow: 0, effortHigh: 0 })}>{t('Add to this quarter')}</button></dd>}
           </dl>
@@ -135,8 +142,8 @@ export function SimpleEpicPanel({ epicId, onClose }) {
                 {deps.map((d) => (
                   <li key={d.id} className="px-3 py-2 text-body">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0"><span className="text-muted">{state.teams.find((x) => x.id === d.providerTeamId)?.name}</span> · {d.ask}</div>
-                      <StatusChip response={d.response} />
+                      <div className="min-w-0"><span className="text-muted">{state.teams.find((x) => x.id === d.providerTeamId)?.name}</span> · {d.ask}{(d.size || d.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={d.size} low={d.effortLow} high={d.effortHigh} /></span>}</div>
+                      <span className="flex items-center gap-1 shrink-0"><SignalChip dep={d} /><StatusChip response={d.response} /></span>
                     </div>
                     {d.responseReason && <p className="text-caption text-muted mt-0.5">{d.responseReason}</p>}
                   </li>

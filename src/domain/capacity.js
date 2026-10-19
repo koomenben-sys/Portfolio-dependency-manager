@@ -7,11 +7,43 @@
 // * cut line      = own epics AND accepted incoming asks ranked together by strategic rank of the
 //                   (requesting) epic; the first item that no longer fits in `available` is the cut.
 
-export function availableWeeks(cap) {
+//
+// Release B (D51): capacity is team-level and calendar-based. `headcount` = FTE ingevuld, `fteVacant`,
+// `absenceWeeks` = verlofweken (team total), `reservePct` = run %. Beschikbaar =
+// max(0, FTE × werkdagen / 5 − verlofweken) × (1 − run%), werkdagen from domain/holidays.js. The older
+// `weeks` / `focusFactor` fields stay readable (legacy formula when no working days are given) but the core
+// screens and teamLoad always pass the quarter's working days.
+import { workingDays } from './holidays';
+const round1 = (n) => Math.round(n * 10) / 10;
+
+export function availableWeeks(cap, workdays = null) {
   if (!cap) return 0;
-  // Absence is calendar weeks of people, so the focus factor applies to it too (review: EM).
-  const net = Math.max(0, cap.headcount * cap.weeks - cap.absenceWeeks) * cap.focusFactor;
-  return net * (1 - cap.reservePct / 100);
+  if (workdays == null) {
+    // Legacy (pre-Release B): absence is calendar weeks of people, so the focus factor applies to it too.
+    const net = Math.max(0, cap.headcount * (cap.weeks ?? 13) - cap.absenceWeeks) * (cap.focusFactor ?? 1);
+    return net * (1 - cap.reservePct / 100);
+  }
+  const net = Math.max(0, (Number(cap.headcount) || 0) * workdays / 5 - (Number(cap.absenceWeeks) || 0));
+  return net * (1 - (Number(cap.reservePct) || 0) / 100);
+}
+// "+Y pw als gevuld": the same formula for the vacant FTE, without leave (D51).
+export function vacantWeeks(cap, workdays) {
+  if (!cap || !(Number(cap.fteVacant) > 0)) return 0;
+  return (Number(cap.fteVacant) * workdays / 5) * (1 - (Number(cap.reservePct) || 0) / 100);
+}
+// Working days of a quarter from the state (fiscal start month from settings).
+export function quarterWorkdays(state, quarterId) {
+  const q = state.quarters.find((x) => x.id === quarterId);
+  return workingDays(q, state.settings?.fiscalYearStartMonth || 1).workingDays;
+}
+const capOf = (state, teamId, quarterId) => state.capacity.find((c) => c.teamId === teamId && c.quarterId === quarterId) || null;
+
+// The capacity line (L3): available, vacant (+pw), requested (own work + accepted asks), % and band.
+export function teamCapacity(state, teamId, quarterId) {
+  const cap = capOf(state, teamId, quarterId);
+  const workdays = quarterWorkdays(state, quarterId);
+  const load = teamLoad(state, teamId, quarterId);
+  return { cap, workdays, available: load.available, vacant: round1(vacantWeeks(cap, workdays)), requested: round1(load.totalHigh), pct: load.pct, band: load.band, reservePct: cap ? Number(cap.reservePct) || 0 : null, fteVacant: cap ? Number(cap.fteVacant) || 0 : 0 };
 }
 
 // Bands use the exact ratio, not the rounded percentage (100.4% is 'over').
@@ -22,8 +54,6 @@ export function bandFor(ratio, available) {
   return 'over';
 }
 
-const round1 = (n) => Math.round(n * 10) / 10;
-
 // Effort an answered ask costs the provider: granted amount for partial, full for accepted.
 export function incomingEffort(dep) {
   if (dep.response === 'accepted') return { low: dep.effortLow, high: dep.effortHigh };
@@ -33,7 +63,7 @@ export function incomingEffort(dep) {
 
 export function teamLoad(state, teamId, quarterId) {
   const cap = state.capacity.find((c) => c.teamId === teamId && c.quarterId === quarterId);
-  const available = availableWeeks(cap);
+  const available = availableWeeks(cap, quarterWorkdays(state, quarterId));
   const epicTeam = new Map(state.epics.map((e) => [e.id, e.teamId]));
   const own = state.plans.filter(
     (p) => p.quarterId === quarterId && epicTeam.get(p.epicId) === teamId && p.commitment !== 'not_committed',
@@ -72,7 +102,7 @@ export function rankedLoad(state, teamId, quarterId) {
     .filter((d) => d.providerTeamId === teamId && d.quarterId === quarterId && ['accepted', 'partial'].includes(d.response))
     .map((d) => { const e = incomingEffort(d); return { kind: 'ask', id: d.id, epicId: d.epicId, rank: planByEpic.get(d.epicId)?.rank ?? null, low: e.low, high: e.high }; });
   const items = [...own, ...asks].sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9) || (a.kind === b.kind ? 0 : a.kind === 'epic' ? -1 : 1));
-  const available = availableWeeks(state.capacity.find((c) => c.teamId === teamId && c.quarterId === quarterId));
+  const available = availableWeeks(state.capacity.find((c) => c.teamId === teamId && c.quarterId === quarterId), quarterWorkdays(state, quarterId));
   let cum = 0;
   for (const it of items) { cum += it.high; it.cum = round1(cum); it.fits = cum <= available; }
   return { items, available: round1(available) };

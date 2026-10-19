@@ -236,6 +236,12 @@ export function describeEvent(e, t) {
     case 'plan_added': return t('added to the quarter');
     case 'plan_removed': return t('removed from the quarter');
     case 'phase_changed': return t('phase {from} → {to}', { from: fmt(e.before?.phase), to: fmt(e.after?.phase) });
+    // Release B (section 22)
+    case 'signal_set': return t('signal {from} → {to}', { from: fmt(e.before?.signal), to: fmt(e.after?.signal) });
+    case 'signal_confirmed': return t('still on track confirmed');
+    case 'delivered_changed': return e.after?.delivered ? t('marked delivered') : t('delivery unmarked');
+    case 'carried_over': return t('carried over to the next quarter');
+    case 'capacity_changed': return t('capacity changed');
     default: return e.action.replace(/_/g, ' ');
   }
 }

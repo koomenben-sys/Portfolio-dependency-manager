@@ -82,3 +82,9 @@ Bron: `docs/research/persona-interviews-2026-10-18.md`. Kern blijft: drie scherm
 - Kwartaalresultaat: capacity cut line once Release B capacity exists.
 - Kwartaalresultaat: Moet deadline risk per programme in plain text.
 - Demo seed: Dutch epic titles to match the Dutch UI.
+
+## From the Release B concept review (2026-10-19)
+- Director: one roll-up line per team (load band + asks in gevaar) for all teams on one screen.
+- PMO: predictability per team per quarter as export with a trend over quarters.
+- Team lead: a copyable session summary (what was agreed) for Teams / Slack.
+- Owner to revisit: predictability % per team visible to all (works-council sensitivity).

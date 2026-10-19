@@ -3,13 +3,15 @@ import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid } 
 import { PlanProvider, usePlan } from './context/PlanContext';
 import { useAuth } from './context/AuthContext';
 import { DATA_SOURCE, isAdmin } from './data/repository';
-import { quarterLabel, PHASES, cyclePhase } from './domain/model';
+import { quarterLabel, PHASES } from './domain/model';
 import { LoginView } from './views/LoginView';
 import { PrioritizeView } from './views/PrioritizeView';
 import { DependenciesView } from './views/DependenciesView';
 import { AlignView } from './views/AlignView';
 import { SettingsView } from './views/SettingsView';
 import { QuarterResultView } from './views/QuarterResultView';
+import { CloseView } from './views/CloseView';
+import { CyclePhaseWord } from './components/plan/CycleActions';
 import { OverviewView } from './views/OverviewView';
 import { BoardView } from './views/BoardView';
 import { DependenciesViewLegacy } from './views/DependenciesView.legacy';
@@ -40,8 +42,8 @@ const EXTENDED = [
   { id: 'aandacht', label: 'My attention', View: AttentionView },
 ];
 const SETTINGS = { id: 'instellingen', label: 'Settings', View: SettingsView };
-// Reachable by URL or a button, never listed in the nav (Release A, D45).
-const HIDDEN = [{ id: 'kwartaalresultaat', label: 'Quarter result', View: QuarterResultView }];
+// Reachable by URL or a button, never listed in the nav (Release A, D45; Release B, D56).
+const HIDDEN = [{ id: 'kwartaalresultaat', label: 'Quarter result', View: QuarterResultView }, { id: 'afsluiten', label: 'Closing', View: CloseView }];
 const ALL = [...CORE, ...EXTENDED, SETTINGS, ...HIDDEN];
 const VIEW_IDS = new Set(ALL.map((v) => v.id));
 const viewFromHash = () => { const h = window.location.hash.replace('#', ''); return VIEW_IDS.has(h) ? h : 'prioriteren'; };
@@ -115,7 +117,7 @@ function ShellInner({ ctx, onSignOut }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            {quarter && <span className="hidden md:inline text-caption text-muted whitespace-nowrap" title={t('Cycle phase')} data-tour="cycle">{t(cyclePhase(quarter.phase))}</span>}
+            <CyclePhaseWord quarter={quarter} setView={setView} />
             {dataSource === 'mock' && <span className="hidden md:inline-flex items-center h-6 px-2 rounded-full bg-surface-2 text-micro font-semibold uppercase tracking-wide text-muted" title={t('Fictional data, stored in this browser')}>Demo</span>}
             {dataSource !== 'mock' && <LiveIndicator />}
             <label className="flex items-center gap-1.5 text-label text-muted">
