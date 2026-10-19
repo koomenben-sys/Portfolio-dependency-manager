@@ -22,13 +22,11 @@ export function CloseView() {
   const next = nextQuarter(state, quarter.id);
   const act = async (m, ...a) => { const r = await run(m, ...a); setErr(r.ok ? null : r.error); return r; };
   const total = rows.reduce((s, r) => s + r.committed, 0);
-  const delivered = rows.reduce((s, r) => s + r.delivered, 0);
 
   return (
     <div data-tour="close">
       <ViewHeader title={t('Closing')} meta={quarter.phase === 'closed' ? quarterLabel(quarter) : `${quarterLabel(quarter)} · ${t(cyclePhase(quarter.phase))}`} right={<a className={cls.secondary} href="#kwartaalresultaat"><FileBarChart size={14} aria-hidden="true" />{t('Quarter result')}</a>} />
       <ErrorLine error={err} />
-      {total > 0 && <p className="mb-4 text-label tnum text-muted"><span className="font-medium text-ink">{t('Predictability')} {Math.round((delivered / total) * 100)}%</span> ({t('{d} of {n}', { d: delivered, n: total })})</p>}
       {total === 0 ? <div className={cls.card}><EmptyLine>{t('No committed epics in this quarter.')}</EmptyLine></div> : (
         <div className="space-y-4">
           {rows.filter((r) => r.committed > 0).map((r) => {
@@ -37,7 +35,6 @@ export function CloseView() {
               <section key={r.team.id} className={cls.card} aria-label={r.team.name}>
                 <header className="flex items-center gap-3 px-3 h-11 border-b border-border">
                   <h2 className="text-body font-medium text-ink flex-1 truncate">{r.team.name}</h2>
-                  <span className={`text-label tnum ${r.pct != null && r.pct < 100 ? 'text-ink-2' : 'text-muted'}`}>{t('Predictability')} <span className="font-medium">{r.pct}%</span> <span className="text-muted">({t('{d} of {n}', { d: r.delivered, n: r.committed })})</span></span>
                 </header>
                 <ul className="divide-y divide-border">
                   {r.rows.map((x) => (

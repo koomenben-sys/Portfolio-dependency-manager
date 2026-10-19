@@ -668,11 +668,11 @@ Same rule as K: no new main-nav item. New things are one field, one chip, one li
 - L3. The capacity line reads "Beschikbaar 31 pw · run 20% · 1,5 vacant (+8 pw als gevuld)" followed by the load band "Gevraagd 26 pw · 84% · krap" (ruimte ≤ 80%, krap 80–100%, overvraagd > 100%, never colour alone). It shows on Afhankelijkheden for the selected team and, when Prioriteren is filtered to one team, as one compact line above the table. A team without capacity shows "Capaciteit invullen" (planner/admin) or "–".
 - L4. Certainty on the ask only: Laag / Midden / Hoog (default Midden), set by the requesting team in the ask form next to the size. Not on epics.
 - L5. Bottlenecks on Afstemmen are automatic: an ask that is accepted or open gets at most one reason chip, first match wins — "Boven capaciteit" (provider load > 100%), "Grote job" (size L / XL, or high estimate ≥ 8 pw without a size), "Lage zekerheid". A pair with an open, Kan niet or Bespreken ask shows its chip in "Te bespreken" (sorted after the Kan niet / Bespreken pairs); pairs whose asks are all committed but carry a bottleneck sit in one collapsed group "Knelpunten (n)" under the list. No new screen, no manual flag.
-- L6. Plan vastzetten. Admins see "Plan vastzetten" on Afstemmen while the cycle phase is Voorbereiden or Event. A confirm dialog takes an optional reason; confirming stores the baseline and sets the quarter to locked in one step (one `plan_events` row) and the cycle word becomes "Uitvoeren". After that, Prioriteren rows whose rank, commitment, size or asks differ from the baseline show a small muted "gewijzigd" marker; its tooltip says what changed and the last reason.
+- L6. Plan vastzetten. Admins see "Plan vastzetten" on Afstemmen while the cycle phase is Voorbereiden or Event. A confirm dialog (no reason field) stores the baseline and sets the quarter to locked in one step (one `plan_events` row) and the cycle word becomes "Uitvoeren". From then on a rank change needs a reason, signals can be set, and Afsluiten uses the baseline as the committed set. No "gewijzigd" markers (owner, 2026-10-19).
 - L7. Commitment signal. On every accepted ask the providing team (planner or admin) can set — through a quiet "Signaal" button that appears on hover / focus while the ask is Op koers —: Op koers (default, shows nothing) · In gevaar · Gaat niet halen, with an optional one-line note, from "Aan ons gevraagd". Each change leaves a `plan_events` row. Only the provider team may change it (both adapters and the database guard).
 - L8. The requesting team sees the signal in "Wij vragen" next to the answer. Prioriteren's dependency cell shows the worst signal when it is worse than Op koers ("In gevaar · Platform & Security"), taking precedence over Toegezegd. During Uitvoeren Afstemmen shows one top line "Top 5: n in gevaar" (asks of the five highest-ranked epics with In gevaar or Gaat niet halen).
 - L9. Sturen setting (Instellingen › Organisatie, admin): "Op uitzondering" (default) | "Sprintkadans" with N weeks (1–4, default 2). In Sprintkadans, during Uitvoeren, an accepted ask whose signal or last confirmation is older than the start of the current sprint (counted from the quarter start) shows a quiet "Bevestigen" link for the provider team; one click records "Nog op koers" (confirmed_at) without a form. In Op uitzondering nothing prompts.
-- L10. Afsluiten view (`#afsluiten`). The cycle-phase word in the header is a button for admins (menu: "Plan vastzetten" when Voorbereiden / Event, "Kwartaal afsluiten" when Uitvoeren, "Afsluiten openen" when Afsluiten) and a link to Afsluiten for everyone once the quarter is closed. "Kwartaal afsluiten" asks for confirmation and sets the phase to closed. The view lists per team the epics committed at the baseline (or now when there is none) with a "Geleverd" checkbox (team planner or admin; others read) and per team "Voorspelbaarheid 75% (3 van 4)". "Doorschuiven" on each undelivered epic adds it unranked to the next quarter (creates the next quarter's plan when missing, never duplicates) with one `plan_events` row. A link opens Kwartaalresultaat.
+- L10. Afsluiten view (`#afsluiten`). The cycle-phase word in the header is a button for admins (menu: "Plan vastzetten" when Voorbereiden / Event, "Kwartaal afsluiten" when Uitvoeren, "Afsluiten openen" when Afsluiten) and a link to Afsluiten for everyone once the quarter is closed. "Kwartaal afsluiten" asks for confirmation (no reason field) and sets the phase to closed. The view lists per team the epics committed at the baseline (or now when there is none) with a "Geleverd" checkbox (team planner or admin; others read). No predictability percentage (owner, 2026-10-19). "Doorschuiven" on each undelivered epic adds it unranked to the next quarter (creates the next quarter's plan when missing, never duplicates) with one `plan_events` row. A link opens Kwartaalresultaat.
 - L11. Data: migration `010_capacity_rhythm.sql`, additive and re-runnable: `team_capacity.fte_vacant`, `epic_plans.size`, `epic_plans.delivered`, `dependencies.size`, `dependencies.certainty`, `dependencies.signal`, `dependencies.signal_note`, `dependencies.signal_at`, `dependencies.confirmed_at`, with checks; the dependency guard gives size / certainty to the requester and the signal fields to the provider. `db/tests/rls_test.sql` covers them and `npm run test:rls` passes. Mock and Supabase adapters behave the same (same error texts).
 - L12. Every new string has Dutch in `nl.js`; helper text ≤ 6 words; controls ≥ 24 px; keyboard operable; WCAG 2.2 AA; the calm visual language of the core screens is unchanged.
 
@@ -719,10 +719,10 @@ Feature: Plan vastzetten
 
   Scenario: Admin locks the plan
     Given I am Anouk de Jong (admin) on Afstemmen in 2027 Q1 (Voorbereiden)
-    When I click "Plan vastzetten", type "Uitkomst kwartaalsessie" and confirm
+    When I click "Plan vastzetten" and confirm
     Then the header shows "Uitvoeren"
-    When a planner later moves "Pricing data mart" from 9 to 4 with reason "DNB vraag"
-    Then the row shows "gewijzigd" with the tooltip "Rang 9 → 4 · DNB vraag"
+    When a planner later moves "Pricing data mart" from 9 to 4
+    Then a reason is required before the move is saved
 
 Feature: Commitment signals
 
@@ -751,7 +751,7 @@ Feature: Afsluiten
     When I choose "Kwartaal afsluiten" from the phase word and confirm
     Then the header shows "Afsluiten" and Afsluiten opens
     When the Claims planner ticks "Geleverd" on 3 of 4 committed epics
-    Then Claims shows "Voorspelbaarheid 75% (3 van 4)"
+    Then the fourth shows "Doorschuiven" and no percentage is shown
 
   Scenario: Doorschuiven
     When I click "Doorschuiven" on the undelivered Claims epic

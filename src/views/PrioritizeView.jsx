@@ -5,11 +5,9 @@ import { canRank, isPlanner, isAdmin } from '../data/repository';
 import { isLockedPhase } from '../domain/model';
 import { epicDeps, byId } from '../domain/plan';
 import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../domain/value';
-import { changedSinceBaseline, SIGNAL_META } from '../domain/rhythm';
 import { teamCapacity } from '../domain/capacity';
-import { ASK_META, COMMITMENT_META } from '../domain/model';
 import { useT } from '../i18n';
-import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip, ChangedMark, CapacityLine } from '../components/plan/core';
+import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip, CapacityLine } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
@@ -79,21 +77,7 @@ export function PrioritizeView() {
   };
   const strategy = strategyCounts(state, quarter.id, TOP_N);
   const goals = activeThemes(state.themes);
-  const changed = changedSinceBaseline(state, quarter.id);
   const teamCap = fKind === 'team' && teams.has(fId) ? teamCapacity(state, fId, quarter.id) : null;
-  // Tooltip text for "gewijzigd": "Rang 9 → 4 · DNB vraag" (D54).
-  const changeText = (c) => {
-    const parts = c.changes.map((x) => {
-      if (x.kind === 'rank') return t('Rank {from} → {to}', { from: x.from ?? '–', to: x.to ?? '–' });
-      if (x.kind === 'commitment') return `${t('Commitment')} ${t(COMMITMENT_META[x.from]?.label || x.from)} → ${t(COMMITMENT_META[x.to]?.label || x.to)}`;
-      if (x.kind === 'size') return `${t('Size')} ${x.from} → ${x.to}`;
-      if (x.kind === 'ask') return `${x.ref}: ${t(ASK_META[x.from]?.label || x.from)} → ${t(ASK_META[x.to]?.label || x.to)}`;
-      if (x.kind === 'ask_added') return t('Ask added');
-      if (x.kind === 'ask_removed') return t('Ask removed');
-      return t('Added after lock');
-    });
-    return parts.join(' · ') + (c.reason ? ` · ${c.reason}` : '');
-  };
 
   const applyOrder = (ids, movedId) => { setPending({ order: ids, movedId }); setErr(null); };
   const moveTo = (planId, toIndex) => {
@@ -146,7 +130,6 @@ export function PrioritizeView() {
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-body text-ink truncate">{e.title}</span>
               <MustChip must={effectiveMust(e, themes.get(e.themeId))} className="shrink-0" />
-              {changed.has(p.id) && <ChangedMark text={changeText(changed.get(p.id))} className="shrink-0" />}
             </div>
           </td>
           <td className="w-44 pr-3 text-label text-muted truncate">{teams.get(e.teamId)?.name}</td>
