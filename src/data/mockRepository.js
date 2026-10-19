@@ -3,9 +3,10 @@ import { seedState } from './seed';
 import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
 import { PHASES, isLockedPhase, REASON_REQUIRED } from '../domain/model';
 import { checkTheme, isHttpUrl } from '../domain/value';
-import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange } from './repository';
+import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, nextQuarter } from '../domain/rhythm';
+import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange, checkCapacity } from './repository';
 
-const KEY = 'kwartaalplan.mock.v3'; // v3: Release A seed (goals, value, OnePager); v2 was the 2026-10-17 reset
+const KEY = 'kwartaalplan.mock.v4'; // v4: Release B seed (capacity, sizes, signals); v3 Release A; v2 the 2026-10-17 reset
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const now = () => new Date().toISOString();
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -29,15 +30,20 @@ export class MockRepository {
     } catch { /* fall through */ }
     return this.reset();
   }
-  // Older saved states (before 009) lack the Release A fields.
+  // Older saved states (before 009 / 010) lack the Release A and B fields.
   _backfill() {
     this.state.themes.forEach((t) => { t.type ||= 'goal'; t.must = !!t.must; t.mustDeadline ??= null; t.archived = !!t.archived; });
     this.state.epics.forEach((e) => { e.value ||= {}; e.valueNote ||= ''; e.onePager ||= {}; e.onePagerUrl ??= null; });
     this.state.settings.valueModel ||= 'none';
+    this.state.capacity.forEach((c) => { c.fteVacant ??= 0; });
+    this.state.plans.forEach((p) => { p.size ??= null; p.delivered = !!p.delivered; });
+    this.state.dependencies.forEach((d) => { d.size ??= null; d.certainty ||= 'medium'; d.signal ||= 'on_track'; d.signalNote ||= ''; d.signalAt ??= null; d.confirmedAt ??= null; });
+    this.state.settings.sizeMap ||= { ...DEFAULT_SIZE_MAP };
+    this.state.settings.cadence ||= { ...DEFAULT_CADENCE };
   }
   async reset() {
     this.state = { invitations: [], ...seedState() };
-    this.counters = { epic: 33, dependency: 21, impediment: 6 };
+    this.counters = { epic: 33, dependency: 22, impediment: 6 };
     return this._persist();
   }
   // Blank organisation for the onboarding wizard (demo mode). Keeps the language choice.
@@ -139,9 +145,11 @@ export class MockRepository {
       const other = Object.keys(plan).filter((k) => !['id', 'epicId', 'quarterId', 'rank'].includes(k) && plan[k] !== existing[k]);
       if (other.length) throw new PermissionError('Rank permission lets you change the strategic rank only');
     }
+    // Release B (D50): a size writes the organisation's range into the effort fields; clearing it keeps the numbers.
+    if (plan.size !== undefined) plan = { ...plan, ...sizePatch(this.state.settings, plan.size, ValidationError) };
     if (plan.effortLow != null && plan.effortHigh != null && plan.effortHigh < plan.effortLow) throw new ValidationError('High estimate must be at least the low estimate');
     if (existing && isLockedPhase(q.phase) && !reason.trim()) {
-      const changed = ['commitment', 'rank', 'effortLow', 'effortHigh'].some((k) => plan[k] !== undefined && plan[k] !== existing[k]);
+      const changed = ['commitment', 'rank', 'effortLow', 'effortHigh', 'size'].some((k) => plan[k] !== undefined && plan[k] !== existing[k]);
       if (changed) throw new ValidationError('The quarter is locked: a reason is required for changes');
     }
     if (!existing && isLockedPhase(q.phase) && !reason.trim()) throw new ValidationError('The quarter is locked: a reason is required to add an epic');
@@ -149,11 +157,11 @@ export class MockRepository {
       if (rankChanged) this._event(actor, 'rank_changed', 'plans', existing.id, q.id, reason, { rank: existing.rank }, { rank: plan.rank });
       if (plan.commitment !== undefined && plan.commitment !== existing.commitment) this._event(actor, 'commitment_changed', 'plans', existing.id, q.id, reason, { commitment: existing.commitment }, { commitment: plan.commitment });
       if ((plan.effortLow !== undefined && plan.effortLow !== existing.effortLow) || (plan.effortHigh !== undefined && plan.effortHigh !== existing.effortHigh)) {
-        this._event(actor, 'effort_changed', 'plans', existing.id, q.id, reason, { effortLow: existing.effortLow, effortHigh: existing.effortHigh }, { effortLow: plan.effortLow ?? existing.effortLow, effortHigh: plan.effortHigh ?? existing.effortHigh });
+        this._event(actor, 'effort_changed', 'plans', existing.id, q.id, reason, { effortLow: existing.effortLow, effortHigh: existing.effortHigh, size: existing.size ?? null }, { effortLow: plan.effortLow ?? existing.effortLow, effortHigh: plan.effortHigh ?? existing.effortHigh, size: plan.size !== undefined ? plan.size : existing.size ?? null });
       }
       Object.assign(existing, plan, { updatedAt: now() });
     } else {
-      const created = { id: uid(), rank: null, effortLow: 0, effortHigh: 0, commitment: 'draft', confidence: 'medium', ...plan, updatedAt: now() };
+      const created = { id: uid(), rank: null, effortLow: 0, effortHigh: 0, size: null, delivered: false, commitment: 'draft', confidence: 'medium', ...plan, updatedAt: now() };
       this.state.plans.push(created);
       this._event(actor, 'plan_added', 'plans', created.id, q.id, reason, null, { epicId: plan.epicId });
       if (plan.rank != null) this._event(actor, 'rank_changed', 'plans', created.id, q.id, reason, { rank: null }, { rank: plan.rank });
@@ -195,9 +203,11 @@ export class MockRepository {
     if (!canWriteTeam(actor, epic.teamId)) throw new PermissionError('Only the requesting team can add an ask');
     if (dep.providerTeamId === epic.teamId) throw new ValidationError('A team cannot depend on itself');
     if (!dep.ask?.trim()) throw new ValidationError('Describe the ask');
+    if (dep.size !== undefined) dep = { ...dep, ...sizePatch(this.state.settings, dep.size, ValidationError) };
+    if (dep.certainty !== undefined) checkCertainty(dep.certainty, ValidationError);
     if ((dep.effortLow || 0) > (dep.effortHigh || 0)) throw new ValidationError('High estimate must be at least the low estimate');
     this._guardPhase(dep.quarterId, dep.reason, 'add an ask');
-    const created = { id: uid(), refCode: this._ref('dependency'), requesterTeamId: epic.teamId, requesterName: epic.ownerName || actor.name, ifDeclined: '', neededBy: null, effortLow: 0, effortHigh: 0, grantedLow: null, grantedHigh: null, response: 'proposed', responseReason: '', deferredToQuarterId: null, respondedAt: null, createdAt: now(), ...dep };
+    const created = { id: uid(), refCode: this._ref('dependency'), requesterTeamId: epic.teamId, requesterName: epic.ownerName || actor.name, ifDeclined: '', neededBy: null, effortLow: 0, effortHigh: 0, size: null, certainty: 'medium', signal: 'on_track', signalNote: '', signalAt: null, confirmedAt: null, grantedLow: null, grantedHigh: null, response: 'proposed', responseReason: '', deferredToQuarterId: null, respondedAt: null, createdAt: now(), ...dep };
     delete created.reason;
     this.state.dependencies.push(created);
     this._event(actor, 'dependency_added', 'dependencies', created.id, dep.quarterId, '', null, { ask: dep.ask });
@@ -238,8 +248,10 @@ export class MockRepository {
     const d = this.state.dependencies.find((x) => x.id === depId);
     if (!d) throw new ValidationError('Unknown dependency');
     if (!canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can edit the ask');
-    const { reason, ...rest } = patch;
+    let { reason, ...rest } = patch;
     this._guardPhase(d.quarterId, reason, 'edit an ask');
+    if (rest.size !== undefined) rest = { ...rest, ...sizePatch(this.state.settings, rest.size, ValidationError) };
+    if (rest.certainty !== undefined) checkCertainty(rest.certainty, ValidationError);
     const next = { ...d, ...rest };
     if ((next.effortLow || 0) > (next.effortHigh || 0)) throw new ValidationError('Check the effort estimate');
     const effortChanged = next.effortHigh !== d.effortHigh || next.effortLow !== d.effortLow || next.ask !== d.ask;
@@ -302,6 +314,72 @@ export class MockRepository {
     this._event(actor, 'votes_revealed', 'quarters', q.id, q.id, '', null, null);
     return this._persist();
   }
+  // Release B (D54): baseline + phase 'locked' in one step from any earlier phase; one phase_changed row.
+  async lockPlan(actor, quarterId, reason = '') {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin (facilitator) can change the phase');
+    const q = this._quarter(quarterId);
+    if (isLockedPhase(q.phase)) throw new ValidationError('The plan is already locked');
+    q.baseline = buildBaseline(this.state, quarterId); q.lockedAt = now();
+    this._event(actor, 'phase_changed', 'quarters', q.id, q.id, reason, { phase: q.phase }, { phase: 'locked' });
+    q.phase = 'locked';
+    return this._persist();
+  }
+  // Release B (L10): "Kwartaal afsluiten" from Uitvoeren (locked or active) to closed in one step.
+  async closeQuarter(actor, quarterId, reason = '') {
+    if (!isAdmin(actor)) throw new PermissionError('Only an admin (facilitator) can change the phase');
+    const q = this._quarter(quarterId);
+    if (!['locked', 'active'].includes(q.phase)) throw new ValidationError('Only a running quarter can be closed');
+    this._event(actor, 'phase_changed', 'quarters', q.id, q.id, reason, { phase: q.phase }, { phase: 'closed' });
+    q.phase = 'closed';
+    return this._persist();
+  }
+  // Release B (D55): the providing team signals on a committed ask; every change leaves an event row.
+  async setSignal(actor, depId, signal, note = '') {
+    const d = this.state.dependencies.find((x) => x.id === depId);
+    if (!d) throw new ValidationError('Unknown dependency');
+    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can set a signal');
+    if (!['accepted', 'partial'].includes(d.response)) throw new ValidationError('Signals apply to committed asks only');
+    if (!SIGNALS.includes(signal)) throw new ValidationError('Unknown signal');
+    const next = { signal, signalNote: String(note || '').trim().slice(0, 200), signalAt: now() };
+    this._event(actor, 'signal_set', 'dependencies', d.id, d.quarterId, next.signalNote, { signal: d.signal || 'on_track' }, { signal, note: next.signalNote });
+    Object.assign(d, next);
+    return this._persist();
+  }
+  async confirmSignal(actor, depId) {
+    const d = this.state.dependencies.find((x) => x.id === depId);
+    if (!d) throw new ValidationError('Unknown dependency');
+    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can set a signal');
+    if (!['accepted', 'partial'].includes(d.response)) throw new ValidationError('Signals apply to committed asks only');
+    d.confirmedAt = now();
+    this._event(actor, 'signal_confirmed', 'dependencies', d.id, d.quarterId, '', null, { signal: d.signal || 'on_track' });
+    return this._persist();
+  }
+  // Release B (D56): "Geleverd" on a committed epic; works on a closed quarter too.
+  async setDelivered(actor, planId, delivered) {
+    const p = this.state.plans.find((x) => x.id === planId);
+    if (!p) throw new ValidationError('Unknown plan');
+    const e = this._epic(p.epicId);
+    if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Only the epic team can mark delivery');
+    if (!!p.delivered === !!delivered) return this._persist();
+    this._event(actor, 'delivered_changed', 'plans', p.id, p.quarterId, '', { delivered: !!p.delivered }, { delivered: !!delivered });
+    p.delivered = !!delivered;
+    return this._persist();
+  }
+  // Release B (D56): "Doorschuiven" adds the epic unranked to the next quarter; idempotent.
+  async carryOver(actor, planId) {
+    const p = this.state.plans.find((x) => x.id === planId);
+    if (!p) throw new ValidationError('Unknown plan');
+    const e = this._epic(p.epicId);
+    if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Only the epic team can carry over');
+    const next = nextQuarter(this.state, p.quarterId);
+    if (!next) throw new ValidationError('Add the next quarter first');
+    if (next.phase === 'closed') throw new ValidationError('Quarter is closed');
+    if (this.state.plans.some((x) => x.epicId === p.epicId && x.quarterId === next.id)) return this._persist();
+    const created = { id: uid(), epicId: p.epicId, quarterId: next.id, rank: null, effortLow: p.effortLow, effortHigh: p.effortHigh, size: p.size ?? null, delivered: false, commitment: 'draft', confidence: 'medium', updatedAt: now() };
+    this.state.plans.push(created);
+    this._event(actor, 'carried_over', 'plans', created.id, next.id, '', { quarterId: p.quarterId }, { epicId: p.epicId, quarterId: next.id });
+    return this._persist();
+  }
   async raiseDiscussion(actor, item) {
     if (!isPlanner(actor)) throw new PermissionError('Viewers cannot raise discussion items');
     if (!item.reason?.trim()) throw new ValidationError('Say why this needs discussion');
@@ -346,10 +424,10 @@ export class MockRepository {
     if (!canWriteTeam(actor, cap.teamId)) throw new PermissionError('Not your team');
     const { reason, ...capFields } = cap; cap = capFields;
     this._guardPhase(cap.quarterId, reason, 'change capacity');
+    checkCapacity(cap);
     const existing = this.state.capacity.find((c) => c.teamId === cap.teamId && c.quarterId === cap.quarterId);
     if (existing) { this._event(actor, 'capacity_changed', 'capacity', existing.id, cap.quarterId, reason, { ...existing }, { ...existing, ...cap }); Object.assign(existing, cap); }
-    // eslint-disable-next-line no-unused-vars
-    else this.state.capacity.push({ id: uid(), headcount: 0, weeks: 13, focusFactor: 0.65, absenceWeeks: 0, reservePct: 20, ...cap });
+    else this.state.capacity.push({ id: uid(), headcount: 0, fteVacant: 0, weeks: 13, focusFactor: 0.65, absenceWeeks: 0, reservePct: 20, ...cap });
     return this._persist();
   }
   async upsertTeam(actor, team) {
@@ -397,6 +475,8 @@ export class MockRepository {
   async updateSettings(actor, patch) {
     const onlyLanguage = Object.keys(patch).every((k) => k === 'language');
     if (!onlyLanguage && !isAdmin(actor)) throw new PermissionError('Admin only');
+    if (patch.sizeMap !== undefined) patch = { ...patch, sizeMap: checkSizeMap(patch.sizeMap, ValidationError) };
+    if (patch.cadence !== undefined) patch = { ...patch, cadence: checkCadence(patch.cadence, ValidationError) };
     Object.assign(this.state.settings, patch);
     return this._persist();
   }

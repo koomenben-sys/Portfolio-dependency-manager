@@ -1,7 +1,7 @@
 -- ============================================================================
 -- db/tests/rls_test.sql  -  row-level security and tenant-isolation test (BACKLOG P1, docs/design.md section 18)
 -- ----------------------------------------------------------------------------
--- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-009).
+-- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-010).
 -- The result grid shows one row per check with PASS / FAIL; the first row is the total.
 -- Plain SQL, no extension needed (no pgTAP). Re-runnable.
 --
@@ -324,6 +324,50 @@ begin
     format('with x as (update epics set value = ''{"level":"high"}'' where id = %s returning 1) select count(*) from x', EA2), '0');
   perform pg_temp.rls_check('release A', 'viewer cannot write a OnePager (0 rows)', u_viewer,
     format('with x as (update epics set one_pager = ''{"problem":"p"}'' where id = %s returning 1) select count(*) from x', EA1), '0');
+
+  -- 11. Release B (010): size / certainty (requester), signals (provider, committed asks), delivered, fte_vacant
+  perform pg_temp.rls_check('release B', 'requester sets size and certainty on its ask', u_planner,
+    format('with x as (update dependencies set size = ''L'', certainty = ''low'', effort_low = 4, effort_high = 8 where id = %s returning 1) select count(*) from x', DA), '1');
+  perform pg_temp.rls_check('release B', 'provider cannot change size of the ask', u_prov,
+    format('with x as (update dependencies set size = ''S'' where id = %s returning 1) select count(*) from x', DA), 'error:Only the requesting team can edit');
+  perform pg_temp.rls_check('release B', 'provider cannot change certainty of the ask', u_prov,
+    format('with x as (update dependencies set certainty = ''high'' where id = %s returning 1) select count(*) from x', DA), 'error:Only the requesting team can edit');
+  perform pg_temp.rls_check('release B', 'provider accepts and sets a signal with a note', u_prov,
+    format('with x as (update dependencies set response = ''accepted'', signal = ''at_risk'', signal_note = ''rls'', signal_at = now() where id = %s returning 1) select count(*) from x', DA), '1');
+  perform pg_temp.rls_check('release B', 'provider confirms (confirmed_at) on a committed ask', u_prov,
+    format('with x as (update dependencies set response = ''accepted'', confirmed_at = now() where id = %s returning 1) select count(*) from x', DA), '1');
+  perform pg_temp.rls_check('release B', 'provider cannot signal on an open ask', u_prov,
+    format('with x as (update dependencies set signal = ''at_risk'' where id = %s returning 1) select count(*) from x', DA), 'error:committed asks only');
+  perform pg_temp.rls_check('release B', 'requester cannot set a signal', u_planner,
+    format('with x as (update dependencies set signal = ''at_risk'' where id = %s returning 1) select count(*) from x', DA), 'error:Only the provider team can set a signal');
+  perform pg_temp.rls_check('release B', 'admin sets a signal for any team', u_admin,
+    format('with x as (update dependencies set response = ''accepted'', signal = ''wont_make'', signal_at = now() where id = %s returning 1) select count(*) from x', DA), '1');
+  perform pg_temp.rls_check('release B', 'bad signal value is refused', u_prov,
+    format('with x as (update dependencies set response = ''accepted'', signal = ''late'' where id = %s returning 1) select count(*) from x', DA), 'error:dependencies_signal_chk');
+  perform pg_temp.rls_check('release B', 'bad certainty value is refused', u_planner,
+    format('with x as (update dependencies set certainty = ''sure'' where id = %s returning 1) select count(*) from x', DA), 'error:dependencies_certainty_chk');
+  perform pg_temp.rls_check('release B', 'bad size value on an ask is refused', u_planner,
+    format('with x as (update dependencies set size = ''XXL'' where id = %s returning 1) select count(*) from x', DA), 'error:dependencies_size_chk');
+  perform pg_temp.rls_check('release B', 'planner sets size on own team''s plan', u_planner,
+    format('with x as (update epic_plans set size = ''M'', effort_low = 2, effort_high = 4 where id = %s returning 1) select count(*) from x', PA1), '1');
+  perform pg_temp.rls_check('release B', 'bad size value on a plan is refused', u_planner,
+    format('with x as (update epic_plans set size = ''XXL'' where id = %s returning 1) select count(*) from x', PA1), 'error:epic_plans_size_chk');
+  perform pg_temp.rls_check('release B', 'can_rank viewer cannot change size', u_ranker,
+    format('with x as (update epic_plans set size = ''S'' where id = %s returning 1) select count(*) from x', PA2), 'error:strategic rank only', 'rls test');
+  perform pg_temp.rls_check('release B', 'planner marks own team''s epic delivered', u_planner,
+    format('with x as (update epic_plans set delivered = true where id = %s returning 1) select count(*) from x', PA1), '1');
+  perform pg_temp.rls_check('release B', 'planner of another team cannot mark delivered (0 rows)', u_planner,
+    format('with x as (update epic_plans set delivered = true where id = %s returning 1) select count(*) from x', PA2), '0');
+  perform pg_temp.rls_check('release B', 'can_rank viewer cannot mark delivered', u_ranker,
+    format('with x as (update epic_plans set delivered = true where id = %s returning 1) select count(*) from x', PA2), 'error:strategic rank only', 'rls test');
+  perform pg_temp.rls_check('release B', 'admin marks any epic delivered', u_admin,
+    format('with x as (update epic_plans set delivered = true where id = %s returning 1) select count(*) from x', PA2), '1');
+  perform pg_temp.rls_check('release B', 'planner writes capacity with fte_vacant for own team', u_planner,
+    format('with x as (insert into team_capacity (org_id, team_id, quarter_id, headcount, fte_vacant, absence_weeks, reserve_pct) values (%s, %s, %s, 6, 1.5, 4, 20) returning 1) select count(*) from x', A, TA1, QA), '1');
+  perform pg_temp.rls_check('release B', 'planner cannot write fte_vacant for another team', u_planner,
+    format('with x as (insert into team_capacity (org_id, team_id, quarter_id, headcount, fte_vacant) values (%s, %s, %s, 6, 1) returning 1) select count(*) from x', A, TA2, QA), 'error:row-level security');
+  perform pg_temp.rls_check('release B', 'negative fte_vacant is refused', u_planner,
+    format('with x as (insert into team_capacity (org_id, team_id, quarter_id, headcount, fte_vacant) values (%s, %s, %s, 6, -1) returning 1) select count(*) from x', A, TA1, QA), 'error:team_capacity_fte_vacant_chk');
 end $$;
 
 

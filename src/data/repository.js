@@ -16,7 +16,14 @@
 //   raiseDiscussion(actor, item) / resolveDiscussion(actor, id, outcome)
 //   addCheckIn(actor, checkIn)
 //   upsertImpediment(actor, impediment) / resolveImpediment(actor, id)
-//   upsertCapacity(actor, capacity)
+//   upsertCapacity(actor, { teamId, quarterId, headcount (FTE), fteVacant, absenceWeeks, reservePct })   (own team; D51)
+//   upsertPlan / addDependency / updateDependency accept `size` (S|M|L|XL -> writes the mapped effort range, D50);
+//     asks also carry `certainty` (low|medium|high, requester only, D52)
+//   lockPlan(actor, quarterId, reason='')              (admin; baseline + phase locked in one step, one phase_changed row; D54)
+//   closeQuarter(actor, quarterId, reason='')          (admin; locked/active -> closed)
+//   setSignal(actor, depId, signal, note='') / confirmSignal(actor, depId)   (provider team, committed asks only; D55)
+//   setDelivered(actor, planId, bool) / carryOver(actor, planId)            (epic team; carryOver is idempotent; D56)
+//   updateSettings also carries sizeMap { S:[lo,hi], ... } and cadence { mode: 'exception'|'sprint', weeks }
 //   upsertTeam / deleteTeam / upsertQuarter
 //   upsertTheme(actor, { id?, name, type: 'goal'|'program', must, mustDeadline, archived }) / deleteTheme   (rank permission; D40)
 //   upsertEpic also carries themeId, value (jsonb inputs), valueNote, onePager {problem, outcome, outOfScope}, onePagerUrl, externalUrl (D43/D44/D47)
@@ -70,6 +77,12 @@ export function canWriteTeam(actor, teamId) {
 export const isAdmin = (actor) => actor?.role === 'admin';
 export const canRank = (actor) => actor?.role === 'admin' || !!actor?.canRank;
 export const isPlanner = (actor) => actor?.role === 'admin' || actor?.role === 'planner';
+
+// Release B (D51): the four capacity numbers; same texts in both adapters (010 checks them again in SQL).
+export function checkCapacity(cap) {
+  for (const k of ['headcount', 'fteVacant', 'absenceWeeks']) if (cap[k] != null && !(Number(cap[k]) >= 0)) throw new ValidationError('Capacity cannot be negative');
+  if (cap.reservePct != null && !(Number(cap.reservePct) >= 0 && Number(cap.reservePct) <= 80)) throw new ValidationError('Run % is between 0 and 80');
+}
 
 // Members and invitations (docs/design.md section 18). Same checks and texts as db/migrations/007.
 export const ROLES = ['admin', 'planner', 'viewer'];
