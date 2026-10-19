@@ -97,7 +97,7 @@ export function epicStanding(state, epicId, quarterId) {
   if (deps.every((d) => normAsk(d.response) === 'accepted')) return { status: 'committed', blocking: null };
   const worst = [...deps].sort((a, b) => SEVERITY[normAsk(b.response)] - SEVERITY[normAsk(a.response)])[0];
   const w = normAsk(worst.response);
-  return { status: w === 'proposed' ? 'open' : 'at_risk', blocking: w === 'proposed' ? null : worst.providerTeamId, worst: w };
+  return { status: w === 'proposed' ? 'open' : 'at_risk', blocking: worst.providerTeamId, worst: w, reason: worst.responseReason || '' };
 }
 
 // One row per goal / programme for Kwartaalresultaat; Moet programmes first, "without goal" last.
@@ -112,7 +112,7 @@ export function quarterResult(state, quarterId, model = 'none', maxTitles = 5) {
     const value = model === 'none' ? ps.length : round1(ps.reduce((s, p) => s + valueNumber(model, epics.get(p.epicId)?.value, p), 0));
     return {
       theme, planned: ps.length, committed: committed.length, atRisk: standings.filter((s) => s.status === 'at_risk').length, value,
-      notCommitted: notCommitted.slice(0, maxTitles).map((s) => ({ epicId: s.epic?.id, title: s.epic?.title, rank: s.plan.rank, status: s.status, team: s.blocking ? teams.get(s.blocking)?.name : null })),
+      notCommitted: notCommitted.slice(0, maxTitles).map((s) => ({ epicId: s.epic?.id, title: s.epic?.title, rank: s.plan.rank, status: s.status, worst: s.worst, reason: s.reason, team: s.blocking ? teams.get(s.blocking)?.name : null, must: effectiveMust(s.epic, theme) })),
       more: Math.max(0, notCommitted.length - maxTitles),
     };
   };

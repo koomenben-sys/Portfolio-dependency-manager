@@ -930,4 +930,13 @@ export const nl = {
   '{n} committed': '{n} toegezegd',
   'Planned': 'Gepland',
   'open': 'open',
+  // Release A iteration 1
+  'Top {n} per goal': 'Top {n} per doel',
+  'Fill in template': 'Sjabloon invullen',
+  'What goes ahead and what does not': 'Wat gaat door en wat niet',
+  'Of the top {n}: {c} committed, {r} at risk': 'Van de top {n}: {c} toegezegd, {r} in gevaar',
+  'still in talks': 'nog in gesprek',
+  'waiting for {team}': 'wacht op {team}',
+  'Number of epics': 'Aantal epics',
+  'Sum of the value scores': 'Som van de waardescores',
 };

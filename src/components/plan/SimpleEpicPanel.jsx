@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, ExternalLink, Printer } from 'lucide-react';
+import { X, ExternalLink, Printer, Plus } from 'lucide-react';
 import { usePlan } from '../../context/PlanContext';
 import { canWriteTeam, canRank } from '../../data/repository';
 import { quarterLabel, isLockedPhase, ASK_META } from '../../domain/model';
@@ -235,21 +235,20 @@ function OnePagerTab({ epic, facts, mayEdit, saveEpic, err, onPrint }) {
   const { state } = usePlan();
   const op = epic.onePager || {};
   const filled = ONE_PAGER_FIELDS.some(([k]) => String(op[k] || '').trim());
+  const [showTemplate, setShowTemplate] = useState(false);
   const setField = (k, val) => saveEpic({ onePager: { ...op, [k]: val } });
   return (
     <div className="p-4 space-y-5">
       <ErrorLine error={err} />
-      <div className="flex items-center justify-between gap-2">
-        <span className={`${cls.label} !mb-0`}>{t('Link to document')}</span>
-        <button className={cls.secondary} onClick={onPrint}><Printer size={14} aria-hidden="true" />{t('Print')}</button>
+      <div className="space-y-1.5">
+        <span className={cls.label}>{t('Link to document')}</span>
+        {mayEdit && <input type="url" className={cls.input} placeholder="https://" aria-label={t('Link to document')} defaultValue={epic.onePagerUrl || ''} onBlur={(e) => e.target.value.trim() !== (epic.onePagerUrl || '') && saveEpic({ onePagerUrl: e.target.value.trim() || null })} />}
+        {epic.onePagerUrl && <a className="inline-flex items-center gap-1 text-label text-accent hover:underline break-all" href={epic.onePagerUrl} target="_blank" rel="noreferrer"><ExternalLink size={12} aria-hidden="true" />{epic.onePagerUrl}</a>}
+        {!epic.onePagerUrl && !mayEdit && <p className="text-body text-muted">–</p>}
       </div>
-      {mayEdit ? (
-        <input type="url" className={cls.input} placeholder="https://" aria-label={t('Link to document')} defaultValue={epic.onePagerUrl || ''} onBlur={(e) => e.target.value.trim() !== (epic.onePagerUrl || '') && saveEpic({ onePagerUrl: e.target.value.trim() || null })} />
-      ) : null}
-      {epic.onePagerUrl && <a className="inline-flex items-center gap-1 text-label text-accent hover:underline break-all" href={epic.onePagerUrl} target="_blank" rel="noreferrer"><ExternalLink size={12} aria-hidden="true" />{epic.onePagerUrl}</a>}
-      {!epic.onePagerUrl && !mayEdit && <p className="text-body text-muted">–</p>}
 
-      <Disclosure summary={t('Template')} defaultOpen={filled}>
+      {/* Iteration 1 (item 4): filled template shows directly; empty shows one quiet link. */}
+      {filled || showTemplate ? (
         <div className="space-y-3">
           {ONE_PAGER_FIELDS.map(([k, label, placeholder]) => (
             <label key={k} className="block"><span className={cls.label}>{t(label)}</span>
@@ -259,12 +258,13 @@ function OnePagerTab({ epic, facts, mayEdit, saveEpic, err, onPrint }) {
             </label>
           ))}
         </div>
-      </Disclosure>
+      ) : mayEdit && <button type="button" className={`${cls.quiet} -ml-2`} onClick={() => setShowTemplate(true)}><Plus size={13} aria-hidden="true" />{t('Fill in template')}</button>}
 
       <section>
         <h3 className="text-label font-semibold text-ink mb-2">{t('Facts')}</h3>
         <Facts epic={epic} facts={facts} teams={state.teams} t={t} />
       </section>
+      <button className={cls.secondary} onClick={onPrint}><Printer size={14} aria-hidden="true" />{t('Print')}</button>
     </div>
   );
 }
@@ -279,13 +279,13 @@ function Facts({ epic, facts, teams, t, print = false }) {
     <dl className={dl}>
       <dt className={dt}>{t('Rank')}</dt><dd className="tnum">{plan?.rank ?? '–'}</dd>
       <dt className={dt}>{t('Goal')}</dt><dd>{theme ? `${theme.name}${theme.type === 'program' ? ` (${t(THEME_TYPE_LABEL.program)})` : ''}` : '–'}</dd>
-      <dt className={dt}>{t('Must')}</dt><dd>{must ? `${t('Yes')}${must.deadline ? ` · ${fmtMonth(must.deadline, t.lang)}` : ''}` : t('No')}</dd>
-      {model !== 'none' && <><dt className={dt}>{t('Value')}</dt><dd className="flex items-center gap-2">{score == null ? '–' : model === 'simple' ? t(SIMPLE_META[score].label) : <span className="tnum">{score}</span>}{epic.valueNote && <span className="text-muted">· {epic.valueNote}</span>}</dd></>}
-      <dt className={dt}>{t('Effort (pw)')}</dt><dd className="tnum">{plan ? `${plan.effortLow}–${plan.effortHigh}` : '–'}</dd>
+      {(print || must) && <><dt className={dt}>{t('Must')}</dt><dd>{must ? `${t('Yes')}${must.deadline ? ` · ${fmtMonth(must.deadline, t.lang)}` : ''}` : t('No')}</dd></>}
+      {print && model !== 'none' && <><dt className={dt}>{t('Value')}</dt><dd className="flex items-center gap-2">{score == null ? '–' : model === 'simple' ? t(SIMPLE_META[score].label) : <span className="tnum">{score}</span>}{epic.valueNote && <span className="text-muted">· {epic.valueNote}</span>}</dd></>}
+      {print && <><dt className={dt}>{t('Effort (pw)')}</dt><dd className="tnum">{plan ? `${plan.effortLow}–${plan.effortHigh}` : '–'}</dd></>}
       <dt className={dt}>{t('Asks')}</dt>
-      <dd>{deps.length === 0 ? '–' : <ul className="space-y-0.5">{deps.map((d) => <li key={d.id}>{teamName(d.providerTeamId)} · {d.ask} <span className="text-muted">— {t(ASK_META[normAsk(d.response)]?.label || d.response)}</span></li>)}</ul>}</dd>
-      <dt className={dt}>{t('Last changes')}</dt>
-      <dd>{history.length === 0 ? '–' : <ul className="space-y-0.5">{history.slice(0, 3).map((e) => <li key={e.id}><span className="text-muted tnum">{fmtDate(e.at, t.lang)}</span> · {describeEvent(e, t)}</li>)}</ul>}</dd>
+      <dd>{deps.length === 0 ? '–' : <ul className="space-y-0.5">{deps.map((d) => <li key={d.id}>{teamName(d.providerTeamId)}{print && ` · ${d.ask}`} <span className="text-muted">— {t(ASK_META[normAsk(d.response)]?.label || d.response)}</span></li>)}</ul>}</dd>
+      {(print || history.length > 0) && <><dt className={dt}>{t('Last changes')}</dt>
+      <dd>{history.length === 0 ? '–' : <ul className="space-y-0.5">{history.slice(0, 3).map((e) => <li key={e.id}><span className="text-muted tnum">{fmtDate(e.at, t.lang)}</span> · {describeEvent(e, t)}</li>)}</ul>}</dd></>}
     </dl>
   );
 }

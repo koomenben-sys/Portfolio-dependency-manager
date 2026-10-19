@@ -1,10 +1,10 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { GripVertical, ArrowUp, ArrowDown, Plus, Search, ListOrdered, FileText } from 'lucide-react';
+import { GripVertical, ArrowUp, ArrowDown, Plus, Search, ListOrdered } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canRank, isPlanner, isAdmin } from '../data/repository';
-import { isLockedPhase, needsTalk } from '../domain/model';
+import { isLockedPhase } from '../domain/model';
 import { epicDeps, byId } from '../domain/plan';
-import { strategyCounts, activeThemes, effectiveMust, valueScore, hasOnePager } from '../domain/value';
+import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../domain/value';
 import { useT } from '../i18n';
 import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
@@ -102,8 +102,6 @@ export function PrioritizeView() {
   const renderRow = (p, index, inList) => {
     const e = epics.get(p.epicId); if (!e) return null;
     const deps = epicDeps(state, e.id, quarter.id);
-    const talk = deps.some((d) => needsTalk(d.response));
-    const worst = deps.some((d) => d.response === 'declined') ? 'bg-danger' : talk ? 'bg-warn' : null;
     const isMoved = pending?.movedId === p.id;
     const dragging = dragId === p.id;
     return (
@@ -120,20 +118,18 @@ export function PrioritizeView() {
             if (canDrag && inList && ev.altKey && (ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) { ev.preventDefault(); nudge(p.id, ev.key === 'ArrowUp' ? -1 : 1); }
           }}
           className={`group relative h-row cursor-pointer transition-base focus-ring-inset ${dragging ? 'opacity-40' : ''} ${overId === p.id && dragId !== p.id ? 'shadow-[inset_0_2px_0_0_var(--color-accent-500)]' : ''} ${flashId === p.id ? 'anim-flash' : isMoved ? 'bg-accent-50' : 'hover:bg-surface-2'}`}>
-          <td className="w-7 pl-2 relative">
-            {worst && <span className={`absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full ${worst}`} aria-hidden="true" />}
+          <td className="w-7 pl-2">
             {canDrag && inList ? <span title={t('Drag, or Alt+↑/↓')}><GripVertical size={14} className="text-faint group-hover:text-muted" aria-hidden="true" /></span> : null}
           </td>
           <td className="w-10 pr-2"><RankNo rank={inList ? index + 1 : null} size="sm" /></td>
           <td className="pr-3 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-body text-ink truncate">{e.title}</span>
-              {hasOnePager(e) && <FileText size={12} className="text-faint shrink-0" aria-label="OnePager" role="img" />}
               <MustChip must={effectiveMust(e, themes.get(e.themeId))} className="shrink-0" />
             </div>
           </td>
           <td className="w-44 pr-3 text-label text-muted truncate">{teams.get(e.teamId)?.name}</td>
-          {model !== 'none' && <td className="w-16 pr-2"><ValueChip model={model} score={valueScore(model, e.value, p)} /></td>}
+          {model !== 'none' && <td className="w-14 pr-2"><ValueChip model={model} score={valueScore(model, e.value, p)} /></td>}
           <td className="w-64 pr-3"><WorstIssue deps={deps} teams={teams} /></td>
           <td className="w-20 pr-2">
             {mayRank && (inList ? (
@@ -174,24 +170,30 @@ export function PrioritizeView() {
         </>
       } />
 
-      {goals.length > 0 && strategy.top > 0 && (
-        <p className="mb-3 text-label tnum flex items-center gap-x-1 flex-wrap" data-tour="strategy">
-          <span className="font-medium text-ink mr-1">{t('Top {n}', { n: strategy.top })}:</span>
-          {strategy.rows.map((r, i) => {
-            const active = filter === `goal:${r.theme.id}`;
-            return (
-              <React.Fragment key={r.theme.id}>
-                {i > 0 && <span className="text-faint" aria-hidden="true">·</span>}
-                <button type="button" aria-pressed={active} onClick={() => setFilter(active ? '' : `goal:${r.theme.id}`)}
-                  className={`inline-flex items-center gap-1 h-6 px-1.5 rounded-control transition-base focus-ring ${active ? 'bg-accent-50 text-accent-700 font-medium' : r.n === 0 ? 'text-faint hover:text-muted hover:bg-surface-2' : 'text-ink-2 hover:bg-surface-2'}`}>
-                  <span className={r.n === 0 ? '' : 'font-semibold'}>{r.n}</span> {r.theme.name}
-                </button>
-              </React.Fragment>
-            );
-          })}
-          {strategy.none > 0 && <><span className="text-faint" aria-hidden="true">·</span><button type="button" aria-pressed={filter === 'goal:none'} onClick={() => setFilter(filter === 'goal:none' ? '' : 'goal:none')} className={`inline-flex items-center gap-1 h-6 px-1.5 rounded-control transition-base focus-ring ${filter === 'goal:none' ? 'bg-accent-50 text-accent-700 font-medium' : 'text-muted hover:bg-surface-2'}`}><span className="font-semibold">{strategy.none}</span> {t('without goal')}</button></>}
-        </p>
-      )}
+      {goals.length > 0 && strategy.top > 0 && (() => {
+        // Iteration 1 (item 1): goals with epics in the top N first ("Klantcontact 5"), empty goals muted at the end.
+        const goalBtn = (id, label, n, muted) => {
+          const active = filter === `goal:${id}`;
+          return (
+            <button key={id} type="button" aria-pressed={active} onClick={() => setFilter(active ? '' : `goal:${id}`)}
+              className={`inline-flex items-center gap-1 h-6 px-1.5 rounded-control transition-base focus-ring ${active ? 'bg-accent-50 text-accent-700 font-medium' : muted ? 'text-faint hover:text-muted hover:bg-surface-2' : 'text-ink-2 hover:bg-surface-2'}`}>
+              {label}{n != null && <span className="font-semibold">{n}</span>}
+            </button>
+          );
+        };
+        const used = strategy.rows.filter((r) => r.n > 0).sort((a, b) => b.n - a.n);
+        const empty = strategy.rows.filter((r) => r.n === 0);
+        const dot = (k) => <span key={k} className="text-faint" aria-hidden="true">·</span>;
+        const parts = used.map((r) => goalBtn(r.theme.id, r.theme.name, r.n, false));
+        if (strategy.none > 0) parts.push(goalBtn('none', t('without goal'), strategy.none, false));
+        return (
+          <p className="mb-3 text-label tnum flex items-center gap-x-1 flex-wrap" data-tour="strategy">
+            <span className="font-medium text-ink mr-1">{t('Top {n} per goal', { n: strategy.top })}:</span>
+            {parts.flatMap((x, i) => (i ? [dot(`d${i}`), x] : [x]))}
+            {empty.length > 0 && <><span className="text-faint ml-2">{t('none')}:</span>{empty.flatMap((r, i) => { const b = goalBtn(r.theme.id, r.theme.name, null, true); return i ? [<span key={`e${i}`} className="text-faint" aria-hidden="true">,</span>, b] : [b]; })}</>}
+          </p>
+        );
+      })()}
 
       {plansQ.length === 0 ? (
         <div className={cls.card}><EmptyLine action={mayAdd && <button className={cls.primary} onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" />{t('Epic')}</button>}>{t('No epics in this quarter yet.')}</EmptyLine></div>
@@ -204,7 +206,7 @@ export function PrioritizeView() {
                 <th className="w-10 pr-2 font-medium" scope="col"><span className="inline-flex w-6 justify-center">#</span></th>
                 <th className="font-medium" scope="col">{t('Epic')}</th>
                 <th className="w-44 font-medium" scope="col">{t('Team')}</th>
-                {model !== 'none' && <th className="w-16 font-medium" scope="col">{t('Value')}</th>}
+                {model !== 'none' && <th className="w-14 font-medium" scope="col">{t('Value')}</th>}
                 <th className="w-64 font-medium" scope="col">{t('Dependencies')}</th>
                 <th className="w-20" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
               </tr>

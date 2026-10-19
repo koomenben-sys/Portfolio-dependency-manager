@@ -544,13 +544,13 @@ Everything lives inside the three core screens, the epic panel and Instellingen:
 **Acceptance criteria**
 - K1. Instellingen › "Doelen & programma's" lists the organisation's goals (the `themes` table): name, type (Strategisch doel | Programma), "Moet" yes/no with a month deadline, and an "archiveren" action. Admins and users with rank permission edit; others read. Archived goals leave every picker and the strategy bar but keep their epics and history; they sit in a collapsed "Gearchiveerd (n)" group with "herstel".
 - K2. An epic has at most one goal ("Doel" picker in the epic panel, "– geen –" allowed). An epic of a "Moet" programme shows the chip "Moet · <maand>" (inherited) unless the epic carries its own regulatory deadline, which wins.
-- K3. Prioriteren shows one strategy line above the table: "Top 10: 5 Klantcontact digitaal · 3 DORA · 1 Kernmigratie · 1 Datagedreven sturen · 0 Efficiënte operatie" counted over the ten highest-ranked epics per active goal; zero-count goals are muted but shown. Clicking a goal filters the table (aria-pressed); the same goals appear as a second group in the existing filter select ("Alle" · Teams · Doelen · "Zonder doel"), so there is one select. Reordering pauses while a filter is active (as with the team filter).
+- K3. Prioriteren shows one strategy line above the table: "Top 10 per doel: Klantcontact digitaal 5 · DORA 3 · Datagedreven sturen 1 · Kernmigratie 1   geen: Efficiënte operatie" counted over the ten highest-ranked epics per active goal, highest count first; goals with zero are grouped at the end in muted text after "geen:". Clicking a goal filters the table (aria-pressed); the same goals appear as a second group in the existing filter select ("Alle" · Teams · Doelen · "Zonder doel"), so there is one select. Reordering pauses while a filter is active (as with the team filter).
 - K4. Instellingen › Organisatie has "Waardemodel": Geen (default) | Eenvoudig (Hoog / Midden / Laag) | WSJF | RICE (admin only; `settings.valueModel`, `org_settings.profile` in Supabase). With Geen nothing about value is shown anywhere.
 - K5. With a model on, the epic panel shows "Waarde": Eenvoudig = three-button Hoog / Midden / Laag; WSJF / RICE = the computed score with the inputs one click deeper (Disclosure "Invoer"): WSJF = (business value + time criticality + risk reduction) / job size, each 1/2/3/5/8/13/20; RICE = reach × impact (0.25/0.5/1/2/3) × confidence % / effort (effort defaults to the plan's high estimate in pw). An optional one-line "Toelichting" (valueNote). Inputs are stored in `epics.value` (jsonb) in the same column for every model; the score is computed, never stored.
-- K6. Prioriteren shows a "Waarde" column only when a model is on: a letter chip H / M / L (with full label for assistive tech) for Eenvoudig, the number for WSJF / RICE, "–" when empty. No value-order arrow (dropped by owner decision).
-- K7. The epic panel has two tabs, "Epic" and "OnePager". OnePager holds a URL field "Link naar document" (opens in a new tab) and a collapsed "Sjabloon" with exactly three short fields: "Probleem en gevolg" (placeholder: Wat gaat mis als we dit niet doen, en voor wie?), "Gewenst resultaat" (Wat is aantoonbaar anders aan het eind van het kwartaal?), "Buiten scope / risico" (Wat doen we expliciet niet, of wat kan dit laten mislukken?). Below them the auto-filled facts: rang, doel / programma, Moet + deadline, waarde + toelichting, inspanning (pw), verzoeken met status, laatste wijzigingen. The team's planner or an admin edits; others read. Stored in `epics.one_pager` ({problem, outcome, outOfScope}) and `epics.one_pager_url`.
-- K8. "Afdrukken" on the OnePager tab prints one clean A4 page (header: titel · team · rang; the three fields; the facts) through a print stylesheet; the app itself does not print. Lists (Prioriteren) show a small document icon after the title when the link or any template field is filled; nothing otherwise.
-- K9. Afstemmen has a "Kwartaalresultaat" button (every role, including viewers) opening `#kwartaalresultaat`: one line "Top 10: n toegezegd · m in gevaar", then one row per goal / programme (Moet programmes first, then goals and programmes in their order, "Zonder doel" last) with toegezegd / gepland (committed = every ask in the quarter answered Toegezegd or no asks), waarde in de pijplijn (sum of scores with a model, else the count of planned epics), and "niet toegezegd" (at most five titles with the blocking team: the team of the worst ask, "open" when only unanswered asks). "Afdrukken / PDF" prints one A4 landscape page; "Exporteren (CSV)" downloads the same rows (one row per goal, UTF-8 with BOM, semicolon separated).
+- K6. Prioriteren shows a narrow "Waarde" column only when a model is on: a plain letter H / M / L (no chip border) (with full label for assistive tech) for Eenvoudig, the number for WSJF / RICE, "–" when empty. No value-order arrow (dropped by owner decision).
+- K7. The epic panel has two tabs, "Epic" and "OnePager". OnePager holds a URL field "Link naar document" (opens in a new tab) and a light template with exactly three short fields — shown directly when any field has content, otherwise one quiet "+ Sjabloon invullen" link —: "Probleem en gevolg" (placeholder: Wat gaat mis als we dit niet doen, en voor wie?), "Gewenst resultaat" (Wat is aantoonbaar anders aan het eind van het kwartaal?), "Buiten scope / risico" (Wat doen we expliciet niet, of wat kan dit laten mislukken?). Below them at most four lines of auto-filled facts: rang, doel / programma, Moet + deadline (only when set), verzoeken (one line per ask: team — status); "laatste wijzigingen" only when there are any. The printed sheet keeps the full facts (also waarde and inspanning). The team's planner or an admin edits; others read. Stored in `epics.one_pager` ({problem, outcome, outOfScope}) and `epics.one_pager_url`.
+- K8. "Afdrukken" (below the facts) on the OnePager tab prints one clean A4 page (header: titel · team · rang; the three fields; the facts) through a print stylesheet; the app itself does not print. Lists show no OnePager icon (iteration 1: at most two signals per row — the Moet chip and the dependency cell; no coloured left bar, no "+n" suffix, the tooltip keeps the full ask list).
+- K9. Afstemmen has a "Kwartaalresultaat" button (every role, including viewers) opening `#kwartaalresultaat` titled "Wat gaat door en wat niet" with the sub-line "Kwartaalresultaat · 2027 Q1 · <today>" and a small back link; one line "Van de top 10: n toegezegd, m in gevaar", then one row per goal / programme (Moet programmes first with "Moet · <maand>" on the row, then goals and programmes in their order, a muted "Zonder doel" last and only when it has epics) with toegezegd / gepland (committed = every ask in the quarter answered Toegezegd or no asks) and "niet toegezegd" (at most five titles, each with its Moet chip when set and the reason in plain words on a second line: "Kan niet — <reden>", "Bespreken — <reden of 'nog in gesprek'>", "Open — wacht op <team>", plus the blocking team). "Afdrukken / PDF" prints one A4 landscape page. No CSV export (iteration 1: boards print).
 - K10. Non-imported epics get an editable "Link" (externalUrl) in the panel's "Meer"; imported epics keep the source link read-only.
 - K11. The header shows the cycle phase next to the quarter selector as one muted word: Voorbereiden (prep … review), Event (vote), Uitvoeren (locked, active), Afsluiten (closed). Read-only in this release.
 - K12. Both adapters apply the same checks: goals need rank permission; type must be goal or program; a deadline needs Moet; a name is required. Epic value / OnePager fields follow the epic's team permission. Migration `009_value_strategy.sql` is additive and re-runnable; `db/tests/rls_test.sql` covers the new columns and `npm run test:rls` passes.
@@ -585,8 +585,8 @@ Feature: Strategy line on Prioriteren
   Scenario: Director reads the top-10 spread
     Given 2027 Q1 with the demo seed
     When I open Prioriteren
-    Then the line reads "Top 10: 5 Klantcontact digitaal · 3 DORA · 1 Kernmigratie · 1 Datagedreven sturen · 0 Efficiënte operatie"
-    And "0 Efficiënte operatie" is muted
+    Then the line reads "Top 10 per doel: Klantcontact digitaal 5 · DORA 3 · Datagedreven sturen 1 · Kernmigratie 1"
+    And "geen: Efficiënte operatie" follows in muted text
     When I click "DORA"
     Then only the DORA epics are listed and the drag handles are hidden
     And the filter select shows "DORA"
@@ -596,7 +596,7 @@ Feature: Value
   Scenario: Simple model in the list
     Given the value model is Eenvoudig
     When I open Prioriteren
-    Then a column "Waarde" shows H / M / L chips
+    Then a narrow column "Waarde" shows H / M / L
     When I open "Instant payouts" and click "Laag"
     Then the row shows "L"
 
@@ -616,11 +616,12 @@ Feature: OnePager
   Scenario: Link only
     Given I am Mark van Dijk on the OnePager tab of "DORA ICT register and resilience testing"
     When I paste "https://intranet.example/dora-onepager" in "Link naar document"
-    Then the tab shows the link with an external-link icon and Prioriteren shows a document icon on that row
+    Then the tab shows the link with an external-link icon
+    And the template shows only "+ Sjabloon invullen"
 
   Scenario: Template and print
     Given I am Sanne Bakker on the OnePager tab of "Digital claims intake"
-    When I expand "Sjabloon" and fill the three fields
+    When I click "+ Sjabloon invullen" and fill the three fields
     And click "Afdrukken"
     Then the print preview is one A4 page with title, team, rank, the three fields and the facts (goal, Moet, value, pw, asks, last changes)
 
@@ -633,14 +634,13 @@ Feature: Kwartaalresultaat
   Scenario: Open from Afstemmen
     Given I am Ruud Visser on Afstemmen in 2027 Q1
     When I click "Kwartaalresultaat"
-    Then the view reads "Top 10: 4 toegezegd · 5 in gevaar"
-    And the first row is "DORA · Programma · Moet mrt 2027" with 2 / 4 toegezegd (two open asks)
-    And "Zonder doel" is the last row
-    And the row "Klantcontact digitaal" lists "Self-service policy changes — Polisadministratie" under niet toegezegd
-
-  Scenario: Export
-    When I click "Exporteren (CSV)"
-    Then a file kwartaalresultaat-2027-Q1.csv downloads with one row per goal
+    Then the title reads "Wat gaat door en wat niet"
+    And the top line reads "Van de top 10: 4 toegezegd, 5 in gevaar"
+    And the first row is "DORA · Programma" with the chip "Moet · mrt 2027" and 2 / 4 toegezegd
+    And under niet toegezegd "AVG retention and erasure automation" reads "Open — wacht op Claims"
+    And "Zonder doel" is the last row, muted
+    And the row "Klantcontact digitaal" lists "Self-service policy changes" with "Bespreken — <reden> · Polisadministratie"
+    And there is no CSV button
 
   Scenario: Print
     When I click "Afdrukken / PDF"

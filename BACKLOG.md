@@ -76,3 +76,9 @@ Bron: `docs/research/persona-interviews-2026-10-18.md`. Kern blijft: drie scherm
 | Roadmap-swimlane | Open → P3 |
 | Cross-portfolio afhankelijkheid | Vervalt (portfolio is alleen een label) |
 | Jira/Linear-sync | Open → P2 |
+
+## From the Release A re-test (2026-10-19, director + PMO)
+- Kwartaalresultaat: decision owner + date per at-risk item ("who decides, by when").
+- Kwartaalresultaat: capacity cut line once Release B capacity exists.
+- Kwartaalresultaat: Moet deadline risk per programme in plain text.
+- Demo seed: Dutch epic titles to match the Dutch UI.

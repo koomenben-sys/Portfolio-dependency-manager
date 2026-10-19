@@ -72,7 +72,7 @@ export function ValueChip({ model, score }) {
   if (score == null) return <span className="text-faint text-caption">–</span>;
   if (model === 'simple') {
     const m = SIMPLE_META[score];
-    return <span className="inline-flex items-center justify-center w-6 h-6 rounded-control bg-surface-2 text-caption font-semibold text-ink-2" aria-label={t(m.label)} title={t(m.label)}>{m.letter}</span>;
+    return <span className="inline-flex items-center w-6 h-6 text-caption font-semibold text-ink-2" aria-label={t(m.label)} title={t(m.label)}>{m.letter}</span>;
   }
   return <span className="tnum text-label font-medium text-ink-2">{String(score).replace('.', t.lang === 'nl' ? ',' : '.')}</span>;
 }
@@ -103,10 +103,9 @@ export function WorstIssue({ deps, teams }) {
   const text = worst === 'declined' || worst === 'needs_priority_call'
     ? <>{t(ASK_META[worst].label)} <span className="text-muted">· {teams.get(first.providerTeamId)?.name}</span></>
     : <>{n} {t(ASK_META[worst].label).toLowerCase()}</>;
-  const rest = deps.length - (worst === 'declined' || worst === 'needs_priority_call' ? 1 : n);
   return (
     <span className={`inline-flex items-center gap-1.5 text-label font-medium min-w-0 ${WORST_TEXT[worst]}`} title={all} aria-label={all}>
-      <AskIcon response={worst} size={13} className="shrink-0" /><span className="truncate">{text}</span>{rest > 0 && <span className="text-caption text-muted tnum shrink-0">+{rest}</span>}
+      <AskIcon response={worst} size={13} className="shrink-0" /><span className="truncate">{text}</span>
     </span>
   );
 }
