@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ArrowRight, Check } from 'lucide-react';
+import { ChevronDown, ArrowRight, Check, FileBarChart } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canWriteTeam } from '../data/repository';
 import { ASK_META, REASON_REQUIRED, needsTalk } from '../domain/model';
@@ -75,7 +75,7 @@ export function AlignView() {
 
   return (
     <div data-tour="align">
-      <ViewHeader title={t('Align')} />
+      <ViewHeader title={t('Align')} right={<a className={cls.secondary} href="#kwartaalresultaat" data-tour="quarter-result-link"><FileBarChart size={14} aria-hidden="true" />{t('Quarter result')}</a>} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5" data-tour="tiles">
         {STATES.map((s) => {

@@ -513,7 +513,7 @@ Feature: RLS test script
   Scenario: Owner runs the test
     Given migrations 001-008 have been run
     When the owner pastes db/tests/rls_test.sql into the SQL editor and runs it
-    Then the first row reads "73 checks: 73 passed, 0 failed" with result PASS
+    Then the first row reads "n checks: n passed, 0 failed" with result PASS (80 checks after migration 009)
     And no organisation named "RLS test A" or user "rls-*@example.invalid" remains
 
   Scenario: A loosened policy is caught
@@ -536,6 +536,116 @@ Feature: Live updates
     Given demo mode open in two tabs
     When I untick "can rank" for a member in the first tab
     Then the second tab shows the change without a reload
+
+## K. Release A — Waarde & strategie (2026-10-18, docs/design.md section 21)
+
+Everything lives inside the three core screens, the epic panel and Instellingen: no new nav item. Kwartaalresultaat is a printable view reached from a button on Afstemmen (`#kwartaalresultaat`, not in the nav).
+
+**Acceptance criteria**
+- K1. Instellingen › "Doelen & programma's" lists the organisation's goals (the `themes` table): name, type (Strategisch doel | Programma), "Moet" yes/no with a month deadline, and an "archiveren" action. Admins and users with rank permission edit; others read. Archived goals leave every picker and the strategy bar but keep their epics and history; they sit in a collapsed "Gearchiveerd (n)" group with "herstel".
+- K2. An epic has at most one goal ("Doel" picker in the epic panel, "– geen –" allowed). An epic of a "Moet" programme shows the chip "Moet · <maand>" (inherited) unless the epic carries its own regulatory deadline, which wins.
+- K3. Prioriteren shows one strategy line above the table: "Top 10 per doel: Klantcontact digitaal 5 · DORA 3 · Datagedreven sturen 1 · Kernmigratie 1   geen: Efficiënte operatie" counted over the ten highest-ranked epics per active goal, highest count first; goals with zero are grouped at the end in muted text after "geen:". Clicking a goal filters the table (aria-pressed); the same goals appear as a second group in the existing filter select ("Alle" · Teams · Doelen · "Zonder doel"), so there is one select. Reordering pauses while a filter is active (as with the team filter).
+- K4. Instellingen › Organisatie has "Waardemodel": Geen (default) | Eenvoudig (Hoog / Midden / Laag) | WSJF | RICE (admin only; `settings.valueModel`, `org_settings.profile` in Supabase). With Geen nothing about value is shown anywhere.
+- K5. With a model on, the epic panel shows "Waarde": Eenvoudig = three-button Hoog / Midden / Laag; WSJF / RICE = the computed score with the inputs one click deeper (Disclosure "Invoer"): WSJF = (business value + time criticality + risk reduction) / job size, each 1/2/3/5/8/13/20; RICE = reach × impact (0.25/0.5/1/2/3) × confidence % / effort (effort defaults to the plan's high estimate in pw). An optional one-line "Toelichting" (valueNote). Inputs are stored in `epics.value` (jsonb) in the same column for every model; the score is computed, never stored.
+- K6. Prioriteren shows a narrow "Waarde" column only when a model is on: a plain letter H / M / L (no chip border) (with full label for assistive tech) for Eenvoudig, the number for WSJF / RICE, "–" when empty. No value-order arrow (dropped by owner decision).
+- K7. The epic panel has two tabs, "Epic" and "OnePager". OnePager holds a URL field "Link naar document" (opens in a new tab) and a light template with exactly three short fields — shown directly when any field has content, otherwise one quiet "+ Sjabloon invullen" link —: "Probleem en gevolg" (placeholder: Wat gaat mis als we dit niet doen, en voor wie?), "Gewenst resultaat" (Wat is aantoonbaar anders aan het eind van het kwartaal?), "Buiten scope / risico" (Wat doen we expliciet niet, of wat kan dit laten mislukken?). Below them at most four lines of auto-filled facts: rang, doel / programma, Moet + deadline (only when set), verzoeken (one line per ask: team — status); "laatste wijzigingen" only when there are any. The printed sheet keeps the full facts (also waarde and inspanning). The team's planner or an admin edits; others read. Stored in `epics.one_pager` ({problem, outcome, outOfScope}) and `epics.one_pager_url`.
+- K8. "Afdrukken" (below the facts) on the OnePager tab prints one clean A4 page (header: titel · team · rang; the three fields; the facts) through a print stylesheet; the app itself does not print. Lists show no OnePager icon (iteration 1: at most two signals per row — the Moet chip and the dependency cell; no coloured left bar, no "+n" suffix, the tooltip keeps the full ask list).
+- K9. Afstemmen has a "Kwartaalresultaat" button (every role, including viewers) opening `#kwartaalresultaat` titled "Wat gaat door en wat niet" with the sub-line "Kwartaalresultaat · 2027 Q1 · <today>" and a small back link; one line "Van de top 10: n toegezegd, m in gevaar", then one row per goal / programme (Moet programmes first with "Moet · <maand>" on the row, then goals and programmes in their order, a muted "Zonder doel" last and only when it has epics) with toegezegd / gepland (committed = every ask in the quarter answered Toegezegd or no asks) and "niet toegezegd" (at most five titles, each with its Moet chip when set and the reason in plain words on a second line: "Kan niet — <reden>", "Bespreken — <reden of 'nog in gesprek'>", "Open — wacht op <team>", plus the blocking team). "Afdrukken / PDF" prints one A4 landscape page. No CSV export (iteration 1: boards print).
+- K10. Non-imported epics get an editable "Link" (externalUrl) in the panel's "Meer"; imported epics keep the source link read-only.
+- K11. The header shows the cycle phase next to the quarter selector as one muted word: Voorbereiden (prep … review), Event (vote), Uitvoeren (locked, active), Afsluiten (closed). Read-only in this release.
+- K12. Both adapters apply the same checks: goals need rank permission; type must be goal or program; a deadline needs Moet; a name is required. Epic value / OnePager fields follow the epic's team permission. Migration `009_value_strategy.sql` is additive and re-runnable; `db/tests/rls_test.sql` covers the new columns and `npm run test:rls` passes.
+- K13. Every new string has a Dutch text; helper text ≤ 6 words; controls ≥ 24 px; keyboard operable (buttons, selects, tabs with arrow keys); WCAG 2.2 AA contrast with the existing tokens.
+
+```gherkin
+Feature: Goals and programmes
+
+  Scenario: Facilitator adds a Moet programme
+    Given I am Anouk de Jong in Instellingen › Doelen & programma's
+    When I add "Woo" as Programma, tick Moet and choose 2027-06
+    Then the row reads Woo · Programma · Moet · jun 2027
+    And "Woo" appears in the Doel picker of every epic panel and in the strategy line with count 0
+
+  Scenario: Inherited Moet chip
+    Given "DORA" is a programme with Moet and deadline mrt 2027
+    When I open the epic "DORA incident reporting to DNB"
+    Then the panel shows the chip "Moet · mrt 2027"
+
+  Scenario: Archive keeps history
+    Given "Kernmigratie" has two epics
+    When I click "archiveren" on Kernmigratie
+    Then it leaves the Doel picker and the strategy line
+    And both epics still show Kernmigratie as their goal in the panel
+
+  Scenario: Planner cannot edit goals
+    Given I am Joris Smit (planner, cannot rank)
+    Then the goal rows are read-only and there is no add row
+
+Feature: Strategy line on Prioriteren
+
+  Scenario: Director reads the top-10 spread
+    Given 2027 Q1 with the demo seed
+    When I open Prioriteren
+    Then the line reads "Top 10 per doel: Klantcontact digitaal 5 · DORA 3 · Datagedreven sturen 1 · Kernmigratie 1"
+    And "geen: Efficiënte operatie" follows in muted text
+    When I click "DORA"
+    Then only the DORA epics are listed and the drag handles are hidden
+    And the filter select shows "DORA"
+
+Feature: Value
+
+  Scenario: Simple model in the list
+    Given the value model is Eenvoudig
+    When I open Prioriteren
+    Then a narrow column "Waarde" shows H / M / L
+    When I open "Instant payouts" and click "Laag"
+    Then the row shows "L"
+
+  Scenario: WSJF one click deeper
+    Given the admin set the value model to WSJF
+    When I open an epic and expand "Invoer"
+    And choose business value 8, time criticality 5, risk reduction 3, job size 8
+    Then "Waarde" reads 2
+    And Prioriteren shows 2 in the Waarde column
+
+  Scenario: No model, nothing shown
+    Given the value model is Geen
+    Then Prioriteren has no Waarde column and the panel has no Waarde row
+
+Feature: OnePager
+
+  Scenario: Link only
+    Given I am Mark van Dijk on the OnePager tab of "DORA ICT register and resilience testing"
+    When I paste "https://intranet.example/dora-onepager" in "Link naar document"
+    Then the tab shows the link with an external-link icon
+    And the template shows only "+ Sjabloon invullen"
+
+  Scenario: Template and print
+    Given I am Sanne Bakker on the OnePager tab of "Digital claims intake"
+    When I click "+ Sjabloon invullen" and fill the three fields
+    And click "Afdrukken"
+    Then the print preview is one A4 page with title, team, rank, the three fields and the facts (goal, Moet, value, pw, asks, last changes)
+
+  Scenario: Viewer reads
+    Given I am Guest viewer
+    Then the OnePager tab shows the link and the three fields as text, no inputs
+
+Feature: Kwartaalresultaat
+
+  Scenario: Open from Afstemmen
+    Given I am Ruud Visser on Afstemmen in 2027 Q1
+    When I click "Kwartaalresultaat"
+    Then the title reads "Wat gaat door en wat niet"
+    And the top line reads "Van de top 10: 4 toegezegd, 5 in gevaar"
+    And the first row is "DORA · Programma" with the chip "Moet · mrt 2027" and 2 / 4 toegezegd
+    And under niet toegezegd "AVG retention and erasure automation" reads "Open — wacht op Claims"
+    And "Zonder doel" is the last row, muted
+    And the row "Klantcontact digitaal" lists "Self-service policy changes" with "Bespreken — <reden> · Polisadministratie"
+    And there is no CSV button
+
+  Scenario: Print
+    When I click "Afdrukken / PDF"
+    Then the print preview is one landscape A4 page without the app header
+```
 
 ## H. Out of scope (explicit)
 

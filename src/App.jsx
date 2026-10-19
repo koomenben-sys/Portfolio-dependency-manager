@@ -3,12 +3,13 @@ import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid } 
 import { PlanProvider, usePlan } from './context/PlanContext';
 import { useAuth } from './context/AuthContext';
 import { DATA_SOURCE, isAdmin } from './data/repository';
-import { quarterLabel, PHASES } from './domain/model';
+import { quarterLabel, PHASES, cyclePhase } from './domain/model';
 import { LoginView } from './views/LoginView';
 import { PrioritizeView } from './views/PrioritizeView';
 import { DependenciesView } from './views/DependenciesView';
 import { AlignView } from './views/AlignView';
 import { SettingsView } from './views/SettingsView';
+import { QuarterResultView } from './views/QuarterResultView';
 import { OverviewView } from './views/OverviewView';
 import { BoardView } from './views/BoardView';
 import { DependenciesViewLegacy } from './views/DependenciesView.legacy';
@@ -39,7 +40,9 @@ const EXTENDED = [
   { id: 'aandacht', label: 'My attention', View: AttentionView },
 ];
 const SETTINGS = { id: 'instellingen', label: 'Settings', View: SettingsView };
-const ALL = [...CORE, ...EXTENDED, SETTINGS];
+// Reachable by URL or a button, never listed in the nav (Release A, D45).
+const HIDDEN = [{ id: 'kwartaalresultaat', label: 'Quarter result', View: QuarterResultView }];
+const ALL = [...CORE, ...EXTENDED, SETTINGS, ...HIDDEN];
 const VIEW_IDS = new Set(ALL.map((v) => v.id));
 const viewFromHash = () => { const h = window.location.hash.replace('#', ''); return VIEW_IDS.has(h) ? h : 'prioriteren'; };
 
@@ -65,7 +68,7 @@ function Shell({ onSignOut }) {
 }
 
 function ShellInner({ ctx, onSignOut }) {
-  const { state, actor, chooseActor, personas, quarterId, setQuarterId, error, dataSource, run } = ctx;
+  const { state, actor, chooseActor, personas, quarter, quarterId, setQuarterId, error, dataSource, run } = ctx;
   const t = useT();
   const [tour, setTour] = useState(null);
   const [skipWizard, setSkipWizard] = useState(false);
@@ -78,14 +81,14 @@ function ShellInner({ ctx, onSignOut }) {
   const modules = !!state.settings.modules;
   const needsSetup = !state.settings.setupComplete && isAdmin(actor) && !skipWizard;
   const current = ALL.find((v) => v.id === view) || CORE[0];
-  const reachable = current === SETTINGS || CORE.includes(current) || modules;
+  const reachable = current === SETTINGS || CORE.includes(current) || HIDDEN.includes(current) || modules;
   const Current = reachable ? current.View : CORE[0].View;
   const initials = (actor.name || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
     <div className="min-h-screen bg-canvas text-ink">
       <a href="#main" className="skip-link sr-only-focusable">{t('Skip to content')}</a>
-      <header className="bg-surface border-b border-border sticky top-0 z-header">
+      <header className="bg-surface border-b border-border sticky top-0 z-header" data-print="hide">
         <div className="h-14 px-4 flex items-center gap-4">
           <button className="flex items-center gap-2 h-8 px-1 -ml-1 rounded-control focus-ring" onClick={() => setView('prioriteren')} aria-label="Kwartaalplan">
             <span className="w-6 h-6 rounded-control bg-accent text-accent-fg font-semibold text-caption flex items-center justify-center" aria-hidden="true">K</span>
@@ -112,6 +115,7 @@ function ShellInner({ ctx, onSignOut }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            {quarter && <span className="hidden md:inline text-caption text-muted whitespace-nowrap" title={t('Cycle phase')} data-tour="cycle">{t(cyclePhase(quarter.phase))}</span>}
             {dataSource === 'mock' && <span className="hidden md:inline-flex items-center h-6 px-2 rounded-full bg-surface-2 text-micro font-semibold uppercase tracking-wide text-muted" title={t('Fictional data, stored in this browser')}>Demo</span>}
             {dataSource !== 'mock' && <LiveIndicator />}
             <label className="flex items-center gap-1.5 text-label text-muted">

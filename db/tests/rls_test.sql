@@ -1,7 +1,7 @@
 -- ============================================================================
 -- db/tests/rls_test.sql  -  row-level security and tenant-isolation test (BACKLOG P1, docs/design.md section 18)
 -- ----------------------------------------------------------------------------
--- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-008).
+-- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-009).
 -- The result grid shows one row per check with PASS / FAIL; the first row is the total.
 -- Plain SQL, no extension needed (no pgTAP). Re-runnable.
 --
@@ -30,7 +30,7 @@ truncate rls_results restart identity;
 -- a004 viewer A                    00a4 epic A1  00a5 epic A2  00b4 epic B1
 -- a005 viewer A + can_rank         00a6 plan A1  00a7 plan A2  00b6 plan B1
 -- a006 invitee (no membership)     00a8 ask: epic A1 -> team A2
--- b001 admin B                     00a9 invitation for a006
+-- b001 admin B                     00a9 invitation for a006    00ab goal (programme, Moet) in A
 
 create or replace function pg_temp.rls_cleanup() returns void language plpgsql as $$
 declare _orgs uuid[] := array['00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000b0']::uuid[];
@@ -114,6 +114,8 @@ insert into epic_plans (org_id, id, epic_id, quarter_id, strategic_rank, effort_
 insert into dependencies (org_id, id, ref_code, epic_id, requester_team_id, provider_team_id, quarter_id, ask, effort_low, effort_high) values
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000a8', 'RLS-DEP-1', '00000000-0000-4000-8000-0000000000a4',
    '00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-0000000000a2', '00000000-0000-4000-8000-0000000000a3', 'RLS ask', 1, 2);
+insert into themes (org_id, id, name, type, must, must_deadline) values
+  ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000ab', 'RLS goal', 'program', true, '2099-03-01');
 insert into invitations (org_id, id, email, role) values
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000a9', 'rls-invitee@example.invalid', 'viewer');
 
@@ -126,6 +128,7 @@ declare
   EA1 text := '''00000000-0000-4000-8000-0000000000a4'''; EA2 text := '''00000000-0000-4000-8000-0000000000a5'''; EB1 text := '''00000000-0000-4000-8000-0000000000b4''';
   PA1 text := '''00000000-0000-4000-8000-0000000000a6'''; PA2 text := '''00000000-0000-4000-8000-0000000000a7'''; PB1 text := '''00000000-0000-4000-8000-0000000000b6''';
   QA text := '''00000000-0000-4000-8000-0000000000a3'''; QA2 text := '''00000000-0000-4000-8000-0000000000aa'''; DA text := '''00000000-0000-4000-8000-0000000000a8''';
+  GA text := '''00000000-0000-4000-8000-0000000000ab''';
   u_admin   uuid := '00000000-0000-4000-8000-00000000a001';
   u_planner uuid := '00000000-0000-4000-8000-00000000a002';
   u_prov    uuid := '00000000-0000-4000-8000-00000000a003';
@@ -306,7 +309,23 @@ begin
     format('select count(*) from member_directory where org_id = %s', A), '5');
   perform pg_temp.rls_check('members', 'admin of A cannot change members of B (0 rows)', u_admin,
     format('with x as (update memberships set can_rank = false where org_id = %s returning 1) select count(*) from x', B), '0');
+  -- 10. Release A (009): goals / programmes and the epic value + OnePager columns
+  perform pg_temp.rls_check('release A', 'planner cannot change a goal''s type (0 rows)', u_planner,
+    format('with x as (update themes set type = ''goal'' where id = %s returning 1) select count(*) from x', GA), '0');
+  perform pg_temp.rls_check('release A', 'planner cannot archive a goal (0 rows)', u_planner,
+    format('with x as (update themes set archived = true where id = %s returning 1) select count(*) from x', GA), '0');
+  perform pg_temp.rls_check('release A', 'can_rank viewer archives a goal', u_ranker,
+    format('with x as (update themes set archived = true where id = %s returning 1) select count(*) from x', GA), '1');
+  perform pg_temp.rls_check('release A', 'unknown goal type is refused', u_admin,
+    format('with x as (update themes set type = ''theme'' where id = %s returning 1) select count(*) from x', GA), 'error:themes_type_chk');
+  perform pg_temp.rls_check('release A', 'planner writes value and OnePager of own team''s epic', u_planner,
+    format('with x as (update epics set value = ''{"level":"high"}'', value_note = ''rls'', one_pager = ''{"problem":"p"}'', one_pager_url = ''https://example.invalid/x'' where id = %s returning 1) select count(*) from x', EA1), '1');
+  perform pg_temp.rls_check('release A', 'planner cannot write value of another team''s epic (0 rows)', u_planner,
+    format('with x as (update epics set value = ''{"level":"high"}'' where id = %s returning 1) select count(*) from x', EA2), '0');
+  perform pg_temp.rls_check('release A', 'viewer cannot write a OnePager (0 rows)', u_viewer,
+    format('with x as (update epics set one_pager = ''{"problem":"p"}'' where id = %s returning 1) select count(*) from x', EA1), '0');
 end $$;
+
 
 -- ── cleanup ─────────────────────────────────────────────────────────────────
 select pg_temp.rls_cleanup();

@@ -17,7 +17,9 @@
 //   addCheckIn(actor, checkIn)
 //   upsertImpediment(actor, impediment) / resolveImpediment(actor, id)
 //   upsertCapacity(actor, capacity)
-//   upsertTeam / deleteTeam / upsertTheme / deleteTheme / upsertQuarter
+//   upsertTeam / deleteTeam / upsertQuarter
+//   upsertTheme(actor, { id?, name, type: 'goal'|'program', must, mustDeadline, archived }) / deleteTheme   (rank permission; D40)
+//   upsertEpic also carries themeId, value (jsonb inputs), valueNote, onePager {problem, outcome, outOfScope}, onePagerUrl, externalUrl (D43/D44/D47)
 //   updateSettings(actor, patch)
 //   importExternalEpics(actor, externalEpics, teamMapping) -> { created, updated }
 //   inviteMember(actor, { email, role, teamId, canRank, displayName })   (admin; state.invitations)

@@ -2,9 +2,10 @@
 import { seedState } from './seed';
 import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
 import { PHASES, isLockedPhase, REASON_REQUIRED } from '../domain/model';
+import { checkTheme, isHttpUrl } from '../domain/value';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange } from './repository';
 
-const KEY = 'kwartaalplan.mock.v2'; // v2: calmer seed of the 2026-10-17 reset
+const KEY = 'kwartaalplan.mock.v3'; // v3: Release A seed (goals, value, OnePager); v2 was the 2026-10-17 reset
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const now = () => new Date().toISOString();
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -24,9 +25,15 @@ export class MockRepository {
     if (this.state) return clone(this.state);
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) { const saved = JSON.parse(raw); this.state = saved.state; this.counters = saved.counters; this.state.invitations ||= []; return clone(this.state); }
+      if (raw) { const saved = JSON.parse(raw); this.state = saved.state; this.counters = saved.counters; this.state.invitations ||= []; this._backfill(); return clone(this.state); }
     } catch { /* fall through */ }
     return this.reset();
+  }
+  // Older saved states (before 009) lack the Release A fields.
+  _backfill() {
+    this.state.themes.forEach((t) => { t.type ||= 'goal'; t.must = !!t.must; t.mustDeadline ??= null; t.archived = !!t.archived; });
+    this.state.epics.forEach((e) => { e.value ||= {}; e.valueNote ||= ''; e.onePager ||= {}; e.onePagerUrl ??= null; });
+    this.state.settings.valueModel ||= 'none';
   }
   async reset() {
     this.state = { invitations: [], ...seedState() };
@@ -80,6 +87,9 @@ export class MockRepository {
     const teamId = epic.teamId ?? existing?.teamId;
     if (!canWriteTeam(actor, teamId) || (existing && !canWriteTeam(actor, existing.teamId))) throw new PermissionError('You can only edit epics of your own team');
     if ((!existing || epic.title !== undefined) && !epic.title?.trim()) throw new ValidationError('Title is required');
+    if (epic.onePagerUrl && !isHttpUrl(epic.onePagerUrl)) throw new ValidationError('Enter a link that starts with http(s)://');
+    if (epic.externalUrl && !isHttpUrl(epic.externalUrl)) throw new ValidationError('Enter a link that starts with http(s)://');
+    if (epic.themeId && !this.state.themes.some((t) => t.id === epic.themeId)) throw new ValidationError('Unknown goal');
     if (existing && epic.teamId && epic.teamId !== existing.teamId) {
       const deps = this.state.dependencies.filter((d) => d.epicId === existing.id);
       if (deps.some((d) => d.providerTeamId === epic.teamId)) throw new ValidationError('This epic asks the new team for something; remove that ask first');
@@ -92,7 +102,7 @@ export class MockRepository {
       Object.assign(existing, epic);
     } else {
       const { id: _ignored, ...fields } = epic; // createEpic passes id: undefined; never let it override the uid
-      this.state.epics.push({ id: uid(), refCode: this._ref('epic'), description: '', ownerName: '', label: '', regulatory: false, regulatoryDeadline: null, themeId: null, externalSource: null, externalId: null, externalUrl: null, ...fields });
+      this.state.epics.push({ id: uid(), refCode: this._ref('epic'), description: '', ownerName: '', label: '', regulatory: false, regulatoryDeadline: null, themeId: null, externalSource: null, externalId: null, externalUrl: null, value: {}, valueNote: '', onePager: {}, onePagerUrl: null, ...fields });
     }
     return this._persist();
   }
@@ -357,10 +367,15 @@ export class MockRepository {
     this.state.capacity = this.state.capacity.filter((c) => c.teamId !== id);
     return this._persist();
   }
+  // Goals and programmes (D40): name, type goal | program, Moet + month deadline, archived.
   async upsertTheme(actor, theme) {
     if (!canRank(actor)) throw new PermissionError('Themes need rank permission');
     const existing = theme.id && this.state.themes.find((t) => t.id === theme.id);
-    if (existing) Object.assign(existing, theme); else this.state.themes.push({ id: uid(), position: this.state.themes.length, description: '', ...theme });
+    const next = checkTheme(theme, existing || undefined, ValidationError);
+    if (next.name !== undefined) next.name = String(next.name).trim();
+    if (!next.must) next.mustDeadline = null;
+    if (existing) Object.assign(existing, next);
+    else this.state.themes.push({ id: uid(), position: this.state.themes.length, description: '', type: 'goal', must: false, mustDeadline: null, archived: false, ...next });
     return this._persist();
   }
   async deleteTheme(actor, id) {
@@ -456,7 +471,7 @@ export class MockRepository {
       const existing = byExt.get(key);
       if (existing) { Object.assign(existing, { title: x.title, externalUrl: x.url, externalSyncedAt: now(), externalState: x.state }); updated += 1; }
       else {
-        const e = { id: uid(), refCode: this._ref('epic'), teamId, themeId: null, title: x.title, description: '', ownerName: x.ownerName || '', label: '', regulatory: false, regulatoryDeadline: null, externalSource: x.source, externalId: x.externalId, externalUrl: x.url, externalSyncedAt: now(), externalState: x.state };
+        const e = { id: uid(), refCode: this._ref('epic'), teamId, themeId: null, title: x.title, description: '', ownerName: x.ownerName || '', label: '', regulatory: false, regulatoryDeadline: null, externalSource: x.source, externalId: x.externalId, externalUrl: x.url, externalSyncedAt: now(), externalState: x.state, value: {}, valueNote: '', onePager: {}, onePagerUrl: null };
         this.state.epics.push(e); byExt.set(key, e); created += 1;
       }
     }
