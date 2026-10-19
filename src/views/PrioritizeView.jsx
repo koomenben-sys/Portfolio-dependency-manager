@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { GripVertical, ArrowUp, ArrowDown, Plus, Search, ListOrdered } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canRank, isPlanner, isAdmin } from '../data/repository';
-import { isLockedPhase } from '../domain/model';
+import { isLockedPhase, cyclePhase } from '../domain/model';
 import { followsOf } from '../domain/follows';
 import { epicDeps, byId } from '../domain/plan';
 import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../domain/value';
@@ -182,7 +182,7 @@ export function PrioritizeView() {
         </>
       } />
 
-      {goals.length > 0 && strategy.top > 0 && (() => {
+      {goals.length > 0 && strategy.top > 0 && cyclePhase(quarter.phase) === 'Planning' && (() => {
         // Iteration 1 (item 1): goals with epics in the top N first ("Klantcontact 5"), empty goals muted at the end.
         const goalBtn = (id, label, n, muted) => {
           const active = filter === `goal:${id}`;

@@ -44,7 +44,7 @@ export function ResultTable({ onOpen }) {
   const why = (x) => (x.worst === 'declined' ? `${t("Can't")} — ${x.reason || x.team || ''}`
     : x.worst === 'needs_priority_call' ? `${t('Discuss')} — ${x.reason || t('still in talks')}`
     : `${t('Open')} — ${t('waiting for {team}', { team: x.team || '?' })}`);
-  const rows = res.rows.filter((r) => r.theme || r.planned > 0);
+  const rows = res.rows.filter((r) => r.planned > 0); // only goals with epics (iteration 1)
 
   return (
     <>

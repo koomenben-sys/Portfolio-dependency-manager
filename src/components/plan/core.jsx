@@ -234,6 +234,7 @@ export function FollowButton({ on, onToggle, disabled = false }) {
 // "Alleen gevolgd" filter toggle (Afgestemd, Voortgang); `count` is the number of followed epics in the quarter.
 export function FollowOnlyToggle({ on, onChange, count, className = '' }) {
   const t = useT();
+  if (!on && count === 0) return null; // nothing followed yet: no toggle (iteration 1)
   return (
     <button type="button" aria-pressed={on} onClick={() => onChange(!on)}
       className={`inline-flex items-center gap-1 h-7 px-2 rounded-full text-caption font-medium tnum transition-base focus-ring ${on ? 'bg-accent-50 text-accent-700' : 'bg-surface-2 text-muted hover:text-ink'} ${className}`}>

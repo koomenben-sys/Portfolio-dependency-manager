@@ -631,3 +631,6 @@ Owner direction in chat (2026-10-19): three phases that cycle (Planning → Uitv
 
 ### Left out on purpose
 A Supabase live test of `followEpic` / 011 (SQL is never run from here; the owner pastes 011 and `rls_test.sql`); `epic_follows` in the realtime publication (personal rows, the writer's own `run()` reloads); notifications for followed epics; a "Gevolgd" filter on Afstemmen and Resultaat (M8 names Prioriteren, Afgestemd and Voortgang); risks / ROAM on Voortgang; editing an impediment's title or owner from the core screen; the beta views (Sessie, In het kwartaal) which keep the eight-phase flow and the old impediment table.
+
+### Iteration 1 (2026-10-19, director 8/7, team lead 7/7 on screenshots)
+- **D74 — Less in execution.** The "Top 10 per doel" line shows only during Planning; "Alleen gevolgd" appears once you follow something; the result table lists only goals with epics in the quarter (no 0/0 rows; "Zonder doel" only when it has epics); Resultaat shows no delivered counts (in line with D62). Not changed, for the owner: both personas again asked to drop the per-pair "Besproken" checkbox and the Open / Toegezegd tiles on Afstemmen (owner-approved core UI), and the director misses a cross-team early-warning overview (backlog).
