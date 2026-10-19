@@ -26,7 +26,7 @@ export function CloseView() {
 
   return (
     <div data-tour="close">
-      <ViewHeader title={t('Closing')} meta={`${quarterLabel(quarter)} · ${t(cyclePhase(quarter.phase))}`} right={<a className={cls.secondary} href="#kwartaalresultaat"><FileBarChart size={14} aria-hidden="true" />{t('Quarter result')}</a>} />
+      <ViewHeader title={t('Closing')} meta={quarter.phase === 'closed' ? quarterLabel(quarter) : `${quarterLabel(quarter)} · ${t(cyclePhase(quarter.phase))}`} right={<a className={cls.secondary} href="#kwartaalresultaat"><FileBarChart size={14} aria-hidden="true" />{t('Quarter result')}</a>} />
       <ErrorLine error={err} />
       {total > 0 && <p className="mb-4 text-label tnum text-muted"><span className="font-medium text-ink">{t('Predictability')} {Math.round((delivered / total) * 100)}%</span> ({t('{d} of {n}', { d: delivered, n: total })})</p>}
       {total === 0 ? <div className={cls.card}><EmptyLine>{t('No committed epics in this quarter.')}</EmptyLine></div> : (

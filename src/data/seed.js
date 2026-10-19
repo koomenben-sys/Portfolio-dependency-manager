@@ -224,7 +224,7 @@ state.quarters.find((q) => q.id === 'q-26-4').lockedAt = ago(30);
 const p0 = state.plans.find((p) => p.id === 'p0-9');
 p0.commitment = 'at_risk';
 state.events.push({ id: 'ev-3', at: ago(7), actorId: 'u-pay', actorName: 'Joris Smit', action: 'commitment_changed', entity: 'plans', entityId: 'p0-9', quarterId: 'q-26-4', reason: 'PSP vendor delivered late', before: { commitment: 'committed' }, after: { commitment: 'at_risk' } });
-state.plans.push({ id: 'p0-13', epicId: eid(29), quarterId: 'q-26-4', rank: 13, effortLow: 2, effortHigh: 3, commitment: 'committed', confidence: 'medium', size: null, delivered: false, updatedAt: ago(10) });
+state.plans.push({ id: 'p0-13', epicId: eid(23), quarterId: 'q-26-4', rank: 13, effortLow: 2, effortHigh: 3, commitment: 'committed', confidence: 'medium', size: null, delivered: false, updatedAt: ago(10) });
 state.events.push({ id: 'ev-4', at: ago(2), actorId: 'u-cld', actorName: 'Mark van Dijk', action: 'signal_set', entity: 'dependencies', entityId: 'd-21', quarterId: 'q-26-4', reason: 'Pentest schuift', before: { signal: 'on_track' }, after: { signal: 'at_risk', note: 'Pentest schuift' } });
 
 export const seedState = () => JSON.parse(JSON.stringify(state));

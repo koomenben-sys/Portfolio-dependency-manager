@@ -7,7 +7,7 @@ import { teamCapacity } from '../domain/capacity';
 import { planFor, phaseAllows, byId } from '../domain/plan';
 import { CERTAINTIES, CERTAINTY_META, sizeRange, signalOf, needsConfirmation } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, ErrorLine, Disclosure, Dialog, toneClass, normAsk, SizePicker, SizeText, SignalChip, SignalControl, CapacityLine } from '../components/plan/core';
+import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, ErrorLine, Disclosure, Dialog, toneClass, normAsk, SizePicker, SizeText, SignalChip, SignalControl, SignalIcon, CapacityLine } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 import { useTourNudge } from '../components/plan/TourPanel';
@@ -229,6 +229,7 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, onOpen 
   const t = useT();
   const [reasonFor, setReasonFor] = useState(null); // response awaiting an inline reason
   const [noteFor, setNoteFor] = useState(null); // signal awaiting its optional note (L7)
+  const [sigOpen, setSigOpen] = useState(false); // Op koers stays one quiet button until clicked (D61)
   const committed = normAsk(dep.response) === 'accepted';
   const signal = signalOf(dep);
   const pickSignal = async (s) => {
@@ -245,7 +246,7 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, onOpen 
   };
   const labelId = `ask-${dep.id}`;
   return (
-    <li className="px-3 py-2">
+    <li className="group px-3 py-2">
       <div className="flex items-center gap-3 min-h-9 flex-wrap md:flex-nowrap">
         <RankNo rank={rank} size="sm" />
         <span className="w-40 shrink-0 text-label text-muted truncate">{team?.name}</span>
@@ -253,7 +254,10 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, onOpen 
           <div id={labelId} className="text-body">{dep.ask}{(dep.size || dep.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={dep.size} low={dep.effortLow} high={dep.effortHigh} /></span>}{dep.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</div>
           <div className="text-caption text-muted truncate">{t('for')} <button className="hover:underline text-accent focus-ring rounded-control" onClick={onOpen}>{epic?.title}</button></div>
         </div>
-        {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <StatusChip response={dep.response} />}
+        {committed && maySignal && signal === 'on_track' && !sigOpen && noteFor == null && !confirmDue && (
+          <button type="button" className={`${cls.quiet} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} onClick={() => setSigOpen(true)} aria-label={`${t('Signal')}: ${t('On track')}`}><SignalIcon signal="on_track" />{t('Signal')}</button>
+        )}
+                {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <StatusChip response={dep.response} />}
         {mayAnswer && (dep.response === 'partial' || dep.response === 'deferred') && <StatusChip response={dep.response} />}
       </div>
       {dep.responseReason && reasonFor == null && <p className="pl-[172px] text-label text-muted mt-0.5">{dep.responseReason}</p>}
@@ -263,9 +267,9 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, onOpen 
             onSave={async (reason) => { const r = await act('answerDependency', dep.id, { response: reasonFor, reason }); if (r.ok) setReasonFor(null); }} onCancel={() => setReasonFor(null)} />
         </div>
       )}
-      {committed && (maySignal ? (
+      {committed && (maySignal ? (signal === 'on_track' && !sigOpen && noteFor == null && !confirmDue ? null : (
         <div className="pl-[172px] pt-1.5 flex items-center gap-2 flex-wrap">
-          <SignalControl value={signal} onPick={pickSignal} labelledBy={labelId} />
+          <SignalControl value={signal} onPick={(k) => { setSigOpen(false); pickSignal(k); }} labelledBy={labelId} />
           {noteFor == null && dep.signalNote && signal !== 'on_track' && <span className="text-label text-muted truncate max-w-[320px]">{dep.signalNote}</span>}
           {confirmDue && noteFor == null && <button type="button" className={cls.quiet} onClick={() => act('confirmSignal', dep.id)} title={t('Still on track, no change')}>{t('Confirm')}</button>}
           {noteFor && (
@@ -273,7 +277,7 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, onOpen 
               onSave={async (note) => { const r = await act('setSignal', dep.id, noteFor, note); if (r.ok) setNoteFor(null); }} onCancel={() => setNoteFor(null)} />
           )}
         </div>
-      ) : signal !== 'on_track' && <div className="pl-[172px] pt-1"><SignalChip dep={dep} /></div>)}
+      )) : signal !== 'on_track' && <div className="pl-[172px] pt-1"><SignalChip dep={dep} /></div>)}
     </li>
   );
 }

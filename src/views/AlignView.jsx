@@ -6,7 +6,7 @@ import { ASK_META, REASON_REQUIRED, needsTalk, isLockedPhase } from '../domain/m
 import { planFor, phaseAllows, byId } from '../domain/plan';
 import { bottleneckFor, hasSignal, inExecution } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, StatusChip, AskIcon, RankNo, AnswerControl, InlineReason, toneClass, toneBorder, EmptyLine, ViewHeader, ErrorLine, normAsk, ASK_SEVERITY, worstAsk, BottleneckChip, SignalChip } from '../components/plan/core';
+import { cls, StatusChip, AskIcon, RankNo, AnswerControl, InlineReason, toneClass, toneBorder, EmptyLine, ViewHeader, ErrorLine, Disclosure, normAsk, ASK_SEVERITY, worstAsk, BottleneckChip, SignalChip } from '../components/plan/core';
 import { LockPlanDialog } from '../components/plan/CycleActions';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
@@ -62,12 +62,46 @@ export function AlignView() {
   pairs.forEach((p) => { p.deps.sort((a, b) => rankOf(a) - rankOf(b)); p.top = rankOf(p.deps[0]); p.problem = p.deps.some(talk); p.worst = worstAsk(p.deps); p.bottleneck = p.deps.map((d) => bottleneck.get(d.id)).find(Boolean) || null; });
   // Kan niet / Bespreken pairs first, then pairs with a bottleneck, then the rest; within a group by highest rank (L5).
   pairs.sort((a, b) => (b.problem - a.problem) || (!!b.bottleneck - !!a.bottleneck) || a.top - b.top || b.deps.length - a.deps.length);
+  // D61: in the default list, pairs that are only there for a bottleneck (every ask committed) fold into one
+  // collapsed "Knelpunten" group under the list, so "Te bespreken" stays the short list it was.
+  const grouped = !filter && !pairFocus;
+  const mainPairs = grouped ? pairs.filter((p) => p.deps.some((d) => normAsk(d.response) !== 'accepted')) : pairs;
+  const quietPairs = grouped ? pairs.filter((p) => !mainPairs.includes(p)) : [];
   const listTitle = pairFocus ? `${teams.get(pairFocus.req)?.name} → ${teams.get(pairFocus.prov)?.name}` : filter ? t(ASK_META[filter].label) : t('To discuss');
 
   // "Top 5: 2 in gevaar (rang 2, 6)" — the highest-ranked epics with a Kan niet / Bespreken ask (item 13).
   const topPlans = state.plans.filter((p) => p.quarterId === quarter.id && p.rank != null).sort((a, b) => a.rank - b.rank).slice(0, TOP_N);
   // During Uitvoeren a committed ask with In gevaar / Gaat niet halen counts too (L8).
   const atRisk = topPlans.filter((p) => deps.some((d) => d.epicId === p.epicId && (talk(d) || (executing && hasSignal(d)))));
+  // Plain render function: one team pair row (summary + its asks).
+  const renderPair = (p, i) => {
+              const done = discussed.has(p.key);
+              const quiet = !p.problem || done;
+              const worstN = p.deps.filter((d) => normAsk(d.response) === p.worst).length;
+              return (
+                <li key={p.key}>
+                  <details ref={(el) => { if (el) detailRefs.current.set(p.key, el); else detailRefs.current.delete(p.key); }} className="group" open={(i === 0 && p.problem) || !!pairFocus}>
+                    <summary className="list-none cursor-pointer select-none flex items-center gap-3 px-3 h-11 hover:bg-surface-2 focus-ring-inset">
+                      <ChevronDown size={14} className="text-muted transition-transform group-open:rotate-180 shrink-0" aria-hidden="true" />
+                      <RankNo rank={p.top === 1e9 ? null : p.top} size="sm" />
+                      <span className={`text-body flex items-center gap-1.5 min-w-0 ${quiet ? 'text-ink-2' : 'font-medium text-ink'}`}><span className="truncate">{teams.get(p.req)?.name}</span><ArrowRight size={13} className="text-muted shrink-0" aria-hidden="true" /><span className="truncate">{teams.get(p.prov)?.name}</span></span>
+                      <span className="ml-auto flex items-center gap-2">
+                        <BottleneckChip kind={p.bottleneck} />
+                        <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 h-5 text-micro font-semibold tnum ${quiet && !LOUD.has(p.worst) ? 'bg-surface-2 text-muted' : toneClass(ASK_META[p.worst].tone)}`} aria-label={`${worstN} ${t(ASK_META[p.worst].label)}`}>{worstN}<AskIcon response={p.worst} size={10} /></span>
+                        <button type="button" role="checkbox" aria-checked={done} aria-label={`${t('Discussed')}: ${teams.get(p.req)?.name} → ${teams.get(p.prov)?.name}`}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleDiscussed(p.key); }}
+                          className={`inline-flex items-center gap-1 h-7 px-1.5 rounded-control text-caption font-medium transition-base focus-ring ${done ? 'text-ok-fg bg-ok-bg' : 'text-muted hover:text-ink hover:bg-surface-2'}`}>
+                          <span className={`inline-flex items-center justify-center w-4 h-4 rounded border ${done ? 'bg-ok-fg border-ok-fg text-surface' : 'border-border-strong bg-surface'}`} aria-hidden="true">{done && <Check size={11} strokeWidth={3} />}</span>{t('Discussed')}
+                        </button>
+                      </span>
+                    </summary>
+                    <ul className="border-t border-border divide-y divide-border bg-canvas anim-fade-in">
+                      {p.deps.map((d) => <PairAsk key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} bottleneck={bottleneck.get(d.id)} mayAnswer={mayAnswerDep(d)} act={act} onOpen={() => setOpenEpic(d.epicId)} />)}
+                    </ul>
+                  </details>
+                </li>
+              );
+  };
   const revealEpic = (epicId) => {
     setFilter(null); setPairFocus(null);
     const keys = [...new Set(deps.filter((d) => d.epicId === epicId && talk(d)).map((d) => `${d.requesterTeamId}|${d.providerTeamId}`))];
@@ -118,40 +152,20 @@ export function AlignView() {
 
       <section aria-label={listTitle} data-tour="pairs">
         <div className="flex items-center gap-3 mb-2 min-h-8">
-          <h2 className="text-subtitle font-semibold">{listTitle} <span className="text-muted font-normal tnum">({pairs.length})</span></h2>
+          <h2 className="text-subtitle font-semibold">{listTitle} <span className="text-muted font-normal tnum">({mainPairs.length})</span></h2>
           {(filter || pairFocus) && <button className={cls.quiet} onClick={() => { setFilter(null); setPairFocus(null); }}>{t('Show all to discuss')}</button>}
         </div>
-        {pairs.length === 0 ? <div className={cls.card}><EmptyLine>{filter || pairFocus ? t('Nothing here.') : t('Nothing to discuss. Nice.')}</EmptyLine></div> : (
+        {mainPairs.length === 0 ? <div className={cls.card}><EmptyLine>{filter || pairFocus ? t('Nothing here.') : t('Nothing to discuss. Nice.')}</EmptyLine></div> : (
           <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
-            {pairs.map((p, i) => {
-              const done = discussed.has(p.key);
-              const quiet = !p.problem || done;
-              const worstN = p.deps.filter((d) => normAsk(d.response) === p.worst).length;
-              return (
-                <li key={p.key}>
-                  <details ref={(el) => { if (el) detailRefs.current.set(p.key, el); else detailRefs.current.delete(p.key); }} className="group" open={(i === 0 && p.problem) || !!pairFocus}>
-                    <summary className="list-none cursor-pointer select-none flex items-center gap-3 px-3 h-11 hover:bg-surface-2 focus-ring-inset">
-                      <ChevronDown size={14} className="text-muted transition-transform group-open:rotate-180 shrink-0" aria-hidden="true" />
-                      <RankNo rank={p.top === 1e9 ? null : p.top} size="sm" />
-                      <span className={`text-body flex items-center gap-1.5 min-w-0 ${quiet ? 'text-ink-2' : 'font-medium text-ink'}`}><span className="truncate">{teams.get(p.req)?.name}</span><ArrowRight size={13} className="text-muted shrink-0" aria-hidden="true" /><span className="truncate">{teams.get(p.prov)?.name}</span></span>
-                      <span className="ml-auto flex items-center gap-2">
-                        <BottleneckChip kind={p.bottleneck} />
-                        <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 h-5 text-micro font-semibold tnum ${quiet && !LOUD.has(p.worst) ? 'bg-surface-2 text-muted' : toneClass(ASK_META[p.worst].tone)}`} aria-label={`${worstN} ${t(ASK_META[p.worst].label)}`}>{worstN}<AskIcon response={p.worst} size={10} /></span>
-                        <button type="button" role="checkbox" aria-checked={done} aria-label={`${t('Discussed')}: ${teams.get(p.req)?.name} → ${teams.get(p.prov)?.name}`}
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleDiscussed(p.key); }}
-                          className={`inline-flex items-center gap-1 h-7 px-1.5 rounded-control text-caption font-medium transition-base focus-ring ${done ? 'text-ok-fg bg-ok-bg' : 'text-muted hover:text-ink hover:bg-surface-2'}`}>
-                          <span className={`inline-flex items-center justify-center w-4 h-4 rounded border ${done ? 'bg-ok-fg border-ok-fg text-surface' : 'border-border-strong bg-surface'}`} aria-hidden="true">{done && <Check size={11} strokeWidth={3} />}</span>{t('Discussed')}
-                        </button>
-                      </span>
-                    </summary>
-                    <ul className="border-t border-border divide-y divide-border bg-canvas anim-fade-in">
-                      {p.deps.map((d) => <PairAsk key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} bottleneck={bottleneck.get(d.id)} mayAnswer={mayAnswerDep(d)} act={act} onOpen={() => setOpenEpic(d.epicId)} />)}
-                    </ul>
-                  </details>
-                </li>
-              );
-            })}
+            {mainPairs.map(renderPair)}
           </ul>
+        )}
+        {quietPairs.length > 0 && (
+          <div className="mt-3">
+            <Disclosure summary={<>{t('Bottlenecks')} <span className="tnum">({quietPairs.length})</span></>}>
+              <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>{quietPairs.map((p) => renderPair(p, -1))}</ul>
+            </Disclosure>
+          </div>
         )}
       </section>
 
