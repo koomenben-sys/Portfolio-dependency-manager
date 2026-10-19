@@ -4,6 +4,7 @@ import { usePlan } from '../context/PlanContext';
 import { isAdmin, canRank } from '../data/repository';
 import { PHASES, quarterLabel } from '../domain/model';
 import { VALUE_MODELS, VALUE_MODEL_LABEL, THEME_TYPES, THEME_TYPE_LABEL, monthToDate, dateToMonth } from '../domain/value';
+import { SIZES, sizeMapOf, cadenceOf } from '../domain/rhythm';
 import { useT, LANGUAGES } from '../i18n';
 import { cls, ViewHeader, ErrorLine, Disclosure, MustChip } from '../components/plan/core';
 import { Field, input, btn, ErrorNote } from '../components/plan/ui';
@@ -52,7 +53,9 @@ export function SettingsView() {
             <label className="block"><span className={cls.label}>{t('Name')}</span><input className={cls.input} defaultValue={state.settings.orgName || ''} disabled={!admin} onBlur={(e) => e.target.value !== (state.settings.orgName || '') && act('updateSettings', { orgName: e.target.value })} /></label>
             <label className="block"><span className={cls.label}>{t('Language')}</span><select className={cls.input} value={state.settings.language || 'nl'} onChange={(e) => act('updateSettings', { language: e.target.value })}>{LANGUAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
             <label className="block"><span className={cls.label}>{t('Value model')}</span><select className={cls.input} value={state.settings.valueModel || 'none'} disabled={!admin} onChange={(e) => act('updateSettings', { valueModel: e.target.value })}>{VALUE_MODELS.map((m) => <option key={m} value={m}>{t(VALUE_MODEL_LABEL[m])}</option>)}</select></label>
+            <Steering act={act} admin={admin} />
           </div>
+          <SizeMap act={act} admin={admin} />
         </Section>
 
         <Section id="teams" title={t('Teams')} meta={state.teams.length}>
@@ -104,6 +107,49 @@ export function SettingsView() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// Release B (L1): Jobgroottes — person-week range per T-shirt size; changing it never rewrites old records (D50).
+function SizeMap({ act, admin }) {
+  const { state } = usePlan();
+  const t = useT();
+  const map = sizeMapOf(state.settings);
+  const save = (size, i, value) => {
+    const next = { ...map, [size]: [...map[size]] }; next[size][i] = Number(value);
+    if (next[size][i] === map[size][i]) return;
+    act('updateSettings', { sizeMap: next });
+  };
+  return (
+    <div className="mt-4">
+      <span className={cls.label}>{t('Job sizes (pw)')}</span>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {SIZES.map((s) => (
+          <div key={s} className="inline-flex items-center gap-1 tnum">
+            <span className="w-6 text-label font-medium text-ink-2">{s}</span>
+            <input type="number" min="0" step="0.5" className={`${cls.input} !w-16`} defaultValue={map[s][0]} disabled={!admin} aria-label={`${s} ${t('low')}`} onBlur={(e) => save(s, 0, e.target.value)} />
+            <span className="text-muted">–</span>
+            <input type="number" min="0" step="0.5" className={`${cls.input} !w-16`} defaultValue={map[s][1]} disabled={!admin} aria-label={`${s} ${t('high')}`} onBlur={(e) => save(s, 1, e.target.value)} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+// Release B (L9): Sturen — Op uitzondering (default, prompts nothing) or Sprintkadans with N weeks.
+function Steering({ act, admin }) {
+  const { state } = usePlan();
+  const t = useT();
+  const c = cadenceOf(state.settings);
+  return (
+    <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+      <label className="block"><span className={cls.label}>{t('Steering')}</span>
+        <select className={cls.input} value={c.mode} disabled={!admin} onChange={(e) => act('updateSettings', { cadence: { ...c, mode: e.target.value } })}>
+          <option value="exception">{t('By exception')}</option><option value="sprint">{t('Sprint cadence')}</option>
+        </select>
+      </label>
+      {c.mode === 'sprint' && <label className="block"><span className={cls.label}>{t('Weeks')}</span><select className={`${cls.input} !w-16 tnum`} value={c.weeks} disabled={!admin} onChange={(e) => act('updateSettings', { cadence: { ...c, weeks: Number(e.target.value) } })}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>}
     </div>
   );
 }

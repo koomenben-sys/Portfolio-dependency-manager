@@ -1,8 +1,9 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown, Flag } from 'lucide-react';
+import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown, Flag, TriangleAlert, OctagonX, Pencil } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { ASK_META, COMMITMENT_META } from '../../domain/model';
 import { SIMPLE_META, fmtMonth } from '../../domain/value';
+import { SIZES, SIGNALS, SIGNAL_META, BOTTLENECK_META, signalOf, worstSignal, fmtEffort } from '../../domain/rhythm';
 import { useT } from '../../i18n';
 
 // Calm primitives for the three core screens (docs/design.md section 19). Tokens come from src/index.css;
@@ -93,10 +94,21 @@ const WORST_TEXT = { declined: 'text-danger-fg', needs_priority_call: 'text-warn
 
 // One readable "worst issue" per epic (iteration 1, item 2): "✕ Kan niet · Platform & Security", "? Bespreken · Team",
 // "◷ 1 open", "✓ 2 toegezegd", "–". Several asks: the worst plus "+n"; the tooltip lists them all.
+// Release B (L8): a signal worse than Op koers on a committed ask wins over Toegezegd ("In gevaar · Team").
 export function WorstIssue({ deps, teams }) {
   const t = useT();
   if (!deps.length) return <span className="text-faint text-caption">–</span>;
   const worst = worstAsk(deps);
+  const sig = worst === 'accepted' || worst === 'proposed' ? worstSignal(deps) : null;
+  if (sig) {
+    const all = deps.map((d) => `${teams.get(d.providerTeamId)?.name || '?'}: ${d.ask} — ${t(ASK_META[normAsk(d.response)].label)}${signalOf(d) !== 'on_track' ? ` · ${t(SIGNAL_META[signalOf(d)].label)}${d.signalNote ? ` (${d.signalNote})` : ''}` : ''}`).join('\n');
+    const m = SIGNAL_META[signalOf(sig)];
+    return (
+      <span className={`inline-flex items-center gap-1.5 text-label font-medium min-w-0 ${m.tone === 'danger' ? 'text-danger-fg' : 'text-warn-fg'}`} title={all} aria-label={all}>
+        <SignalIcon signal={signalOf(sig)} size={13} className="shrink-0" /><span className="truncate">{t(m.label)} <span className="text-muted">· {teams.get(sig.providerTeamId)?.name}</span></span>
+      </span>
+    );
+  }
   const all = deps.map((d) => `${teams.get(d.providerTeamId)?.name || '?'}: ${d.ask} — ${t(ASK_META[normAsk(d.response)].label)}`).join('\n');
   const first = deps.find((d) => normAsk(d.response) === worst);
   const n = deps.filter((d) => normAsk(d.response) === worst).length;
@@ -107,6 +119,121 @@ export function WorstIssue({ deps, teams }) {
     <span className={`inline-flex items-center gap-1.5 text-label font-medium min-w-0 ${WORST_TEXT[worst]}`} title={all} aria-label={all}>
       <AskIcon response={worst} size={13} className="shrink-0" /><span className="truncate">{text}</span>
     </span>
+  );
+}
+
+// ── Release B primitives (docs/design.md section 22) ─────────────────────────
+// Segmented size picker S · M · L · XL (role=radiogroup); clicking the active size clears it (numbers stay).
+export function SizePicker({ value, onPick, disabled = false, ariaLabel, size = 'md' }) {
+  const t = useT();
+  const h = size === 'sm' ? 'h-7 px-2 text-caption' : 'h-8 px-2.5 text-label';
+  return (
+    <div role="radiogroup" aria-label={ariaLabel || t('Size')} className="inline-flex rounded-control border border-border-strong overflow-hidden bg-surface">
+      {SIZES.map((k, i) => {
+        const active = value === k;
+        return (
+          <button key={k} type="button" role="radio" aria-checked={active} disabled={disabled} onClick={() => onPick(active ? null : k)}
+            className={`inline-flex items-center justify-center min-w-8 font-medium tnum transition-base focus-ring-inset disabled:cursor-not-allowed ${h} ${i > 0 ? 'border-l border-border-strong' : ''} ${active ? 'bg-accent-50 text-accent-700' : 'text-ink-2 hover:bg-surface-2 disabled:opacity-50'}`}>{k}</button>
+        );
+      })}
+    </div>
+  );
+}
+// "L · 4–8 pw" or "6–8 pw"; "–" when nothing is estimated.
+export function SizeText({ size, low, high, className = '' }) {
+  if (!size && !(high > 0)) return <span className={`text-faint ${className}`}>–</span>;
+  return <span className={`tnum whitespace-nowrap ${className}`}>{size && <span className="font-medium">{size} · </span>}{fmtEffort(low || 0, high || 0)} pw</span>;
+}
+
+const SIGNAL_ICON = { on_track: Check, at_risk: TriangleAlert, wont_make: OctagonX };
+export const SignalIcon = ({ signal, size = 12, className = '' }) => { const I = SIGNAL_ICON[signal] || Check; return <I size={size} strokeWidth={2.25} className={className} aria-hidden="true" />; };
+// Read-only signal: icon + label (+ note), nothing when on track (L7: Op koers shows nothing).
+export function SignalChip({ dep, className = '' }) {
+  const t = useT();
+  const sig = signalOf(dep);
+  if (sig === 'on_track') return null;
+  const m = SIGNAL_META[sig];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(m.tone)} ${className}`} title={dep.signalNote || undefined}>
+      <SignalIcon signal={sig} />{t(m.label)}{dep.signalNote && <span className="font-normal truncate max-w-[220px]"> · {dep.signalNote}</span>}
+    </span>
+  );
+}
+// Provider control: Op koers · In gevaar · Gaat niet halen (role=radiogroup); the caller opens the note input.
+const SIG_ACTIVE = { on_track: 'bg-surface-2 text-ink-2 border-border-strong', at_risk: 'bg-warn-bg text-warn-fg border-warn-border', wont_make: 'bg-danger-bg text-danger-fg border-danger-border' };
+export function SignalControl({ value, onPick, disabled = false, labelledBy }) {
+  const t = useT();
+  return (
+    <div role="radiogroup" aria-labelledby={labelledBy} aria-label={labelledBy ? undefined : t('Signal')} className="inline-flex rounded-control border border-border-strong overflow-hidden bg-surface">
+      {SIGNALS.map((k, i) => {
+        const active = value === k;
+        return (
+          <button key={k} type="button" role="radio" aria-checked={active} disabled={disabled} onClick={() => onPick(k)}
+            className={`inline-flex items-center gap-1 h-7 px-2 text-caption font-medium transition-base focus-ring-inset disabled:cursor-not-allowed ${i > 0 ? 'border-l border-border-strong' : ''} ${active ? SIG_ACTIVE[k] : 'text-muted hover:bg-surface-2 hover:text-ink disabled:opacity-50'}`}>
+            <SignalIcon signal={k} size={12} />{t(SIGNAL_META[k].label)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+// One reason chip per ask / pair (D53): Boven capaciteit · Grote job · Lage zekerheid.
+export function BottleneckChip({ kind, className = '' }) {
+  const t = useT();
+  if (!kind) return null;
+  const m = BOTTLENECK_META[kind];
+  return <span className={`inline-flex items-center rounded-full px-2 h-5 text-micro font-semibold whitespace-nowrap ${toneClass(m.tone)} ${className}`}>{t(m.label)}</span>;
+}
+// Small muted "gewijzigd" marker with the change list as tooltip (D54).
+export function ChangedMark({ text, className = '' }) {
+  const t = useT();
+  return <span className={`inline-flex items-center gap-0.5 text-micro text-muted whitespace-nowrap ${className}`} title={text} aria-label={`${t('changed')}: ${text}`}><Pencil size={10} aria-hidden="true" />{t('changed')}</span>;
+}
+const BAND_TEXT = { ok: 'text-muted', warn: 'text-warn-fg', over: 'text-danger-fg', none: 'text-muted' };
+const BAND_LABEL = { ok: 'room', warn: 'tight', over: 'over capacity' };
+const fmtPw1 = (n, lang) => (Math.round(n * 10) / 10).toString().replace('.', lang === 'nl' ? ',' : '.');
+// The capacity line (L3): "Beschikbaar 31 pw · run 20% · 1,5 vacant (+8 pw als gevuld)   Gevraagd 26 pw · 84% · krap".
+// Without capacity: "Capaciteit invullen" (planner / admin, `onEdit`) or "–".
+export function CapacityLine({ cap, onEdit, compact = false, className = '' }) {
+  const t = useT();
+  if (!cap.cap) {
+    return (
+      <span className={`inline-flex items-center gap-2 text-label text-muted ${className}`}>
+        <span>{t('Capacity')}</span>
+        {onEdit ? <button type="button" className={cls.ghost} onClick={onEdit}>{t('Fill in capacity')}</button> : <span className="text-faint">–</span>}
+      </span>
+    );
+  }
+  const dot = <span className="text-faint" aria-hidden="true">·</span>;
+  return (
+    <span className={`inline-flex items-center gap-x-2 gap-y-1 flex-wrap text-label tnum ${className}`}>
+      <span className="text-ink-2"><span className="text-muted">{t('Available')}</span> <span className="font-medium text-ink">{fmtPw1(cap.available, t.lang)} pw</span></span>
+      {dot}<span className="text-muted">{t('run')} {cap.reservePct}%</span>
+      {cap.fteVacant > 0 && <>{dot}<span className="text-muted">{fmtPw1(cap.fteVacant, t.lang)} {t('vacant')} <span className="text-faint">(+{fmtPw1(cap.vacant, t.lang)} pw {t('if filled')})</span></span></>}
+      <span className={`inline-flex items-center gap-2 ${compact ? '' : 'ml-2'} ${BAND_TEXT[cap.band]}`}>
+        <span><span className={cap.band === 'over' ? '' : 'text-muted'}>{t('Requested')}</span> <span className="font-medium">{fmtPw1(cap.requested, t.lang)} pw</span></span>
+        {dot}<span className="font-medium">{cap.pct}%</span>
+        {cap.band !== 'none' && <>{dot}<span className="font-medium">{t(BAND_LABEL[cap.band])}</span></>}
+      </span>
+      {onEdit && <button type="button" className={cls.icon} onClick={onEdit} aria-label={t('Edit capacity')} title={t('Edit capacity')}><Pencil size={13} /></button>}
+    </span>
+  );
+}
+// Confirm dialog with an optional one-line reason (Plan vastzetten, Kwartaal afsluiten).
+export function ConfirmDialog({ title, line, confirmLabel, onConfirm, onClose, withReason = true, error }) {
+  const t = useT();
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const go = async (e) => { e.preventDefault(); if (busy) return; setBusy(true); try { await onConfirm(reason.trim()); } finally { setBusy(false); } };
+  return (
+    <Dialog title={title} onClose={onClose}>
+      <form onSubmit={go} className="space-y-3">
+        {line && <p className="text-body text-ink-2">{line}</p>}
+        {withReason && <label className="block"><span className={cls.label}>{t('Why? (optional)')}</span><input className={cls.input} value={reason} onChange={(e) => setReason(e.target.value)} /></label>}
+        <ErrorLine error={error} />
+        <div className="flex justify-end gap-2 pt-1"><button type="button" className={cls.secondary} onClick={onClose}>{t('Cancel')}</button><button type="submit" className={cls.primary} disabled={busy}>{confirmLabel}</button></div>
+      </form>
+    </Dialog>
   );
 }
 

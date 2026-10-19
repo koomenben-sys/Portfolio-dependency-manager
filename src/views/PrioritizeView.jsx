@@ -5,14 +5,19 @@ import { canRank, isPlanner, isAdmin } from '../data/repository';
 import { isLockedPhase } from '../domain/model';
 import { epicDeps, byId } from '../domain/plan';
 import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../domain/value';
+import { changedSinceBaseline, SIGNAL_META } from '../domain/rhythm';
+import { teamCapacity } from '../domain/capacity';
+import { ASK_META, COMMITMENT_META } from '../domain/model';
 import { useT } from '../i18n';
-import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip } from '../components/plan/core';
+import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip, ChangedMark, CapacityLine } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
 // Screen 1 — Prioriteren (docs/design.md section 19, D26/D28; Release A section 21, D42/D43). One ranked table; drag
 // or use the arrow buttons to reorder; the moved row shows an inline optional reason; unranked epics sit in a collapsed
 // group. Above the table one strategy line (top-10 per goal) that filters; one filter select for teams and goals.
+// Release B (section 22): a compact capacity line when filtered to one team (L3), a muted "gewijzigd" marker after
+// Plan vastzetten (L6), and the worst signal in the dependency cell (L8, inside WorstIssue).
 const TOP_N = 10;
 export function PrioritizeView() {
   const { state, actor, quarter, run } = usePlan();
@@ -74,6 +79,21 @@ export function PrioritizeView() {
   };
   const strategy = strategyCounts(state, quarter.id, TOP_N);
   const goals = activeThemes(state.themes);
+  const changed = changedSinceBaseline(state, quarter.id);
+  const teamCap = fKind === 'team' && teams.has(fId) ? teamCapacity(state, fId, quarter.id) : null;
+  // Tooltip text for "gewijzigd": "Rang 9 → 4 · DNB vraag" (D54).
+  const changeText = (c) => {
+    const parts = c.changes.map((x) => {
+      if (x.kind === 'rank') return t('Rank {from} → {to}', { from: x.from ?? '–', to: x.to ?? '–' });
+      if (x.kind === 'commitment') return `${t('Commitment')} ${t(COMMITMENT_META[x.from]?.label || x.from)} → ${t(COMMITMENT_META[x.to]?.label || x.to)}`;
+      if (x.kind === 'size') return `${t('Size')} ${x.from} → ${x.to}`;
+      if (x.kind === 'ask') return `${x.ref}: ${t(ASK_META[x.from]?.label || x.from)} → ${t(ASK_META[x.to]?.label || x.to)}`;
+      if (x.kind === 'ask_added') return t('Ask added');
+      if (x.kind === 'ask_removed') return t('Ask removed');
+      return t('Added after lock');
+    });
+    return parts.join(' · ') + (c.reason ? ` · ${c.reason}` : '');
+  };
 
   const applyOrder = (ids, movedId) => { setPending({ order: ids, movedId }); setErr(null); };
   const moveTo = (planId, toIndex) => {
@@ -126,6 +146,7 @@ export function PrioritizeView() {
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-body text-ink truncate">{e.title}</span>
               <MustChip must={effectiveMust(e, themes.get(e.themeId))} className="shrink-0" />
+              {changed.has(p.id) && <ChangedMark text={changeText(changed.get(p.id))} className="shrink-0" />}
             </div>
           </td>
           <td className="w-44 pr-3 text-label text-muted truncate">{teams.get(e.teamId)?.name}</td>
@@ -194,6 +215,8 @@ export function PrioritizeView() {
           </p>
         );
       })()}
+
+      {teamCap && <p className="mb-3 flex items-center gap-2 min-h-7" data-tour="team-capacity"><span className="text-label font-medium text-ink">{teams.get(fId)?.name}</span><CapacityLine cap={teamCap} compact /></p>}
 
       {plansQ.length === 0 ? (
         <div className={cls.card}><EmptyLine action={mayAdd && <button className={cls.primary} onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" />{t('Epic')}</button>}>{t('No epics in this quarter yet.')}</EmptyLine></div>
