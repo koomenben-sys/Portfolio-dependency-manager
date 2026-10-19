@@ -758,3 +758,78 @@ Feature: Afsluiten
     Then it appears under "Nog niet geprioriteerd" in 2027 Q1
     And clicking it again does nothing new
 ```
+
+## M. Three phases, three steps each; Voortgang; Volgen (2026-10-19, docs/design.md section 23)
+
+Owner direction (Ben, 2026-10-19): the cycle is Planning → Uitvoering → Afgesloten → Planning. The main nav keeps three numbered steps; what step 2 and 3 are depends on the phase of the selected quarter. No fourth tab, no hidden menus.
+
+**Acceptance criteria**
+- M1. Three phases, mapped from `quarter.phase` without migration: prep / draft / negotiate / review / vote → **Planning**; locked / active → **Uitvoering**; closed → **Afgesloten**. The quiet phase word next to the quarter selector shows one of the three (no menu). Because the phase belongs to the quarter, switching quarter switches the steps (2027 Q1 can be in Planning while 2026 Q4 is in Uitvoering).
+- M2. Steps per phase: Planning = 1 Prioriteren · 2 Afhankelijkheden · 3 Afstemmen; Uitvoering = 1 Prioriteren · 2 Afgestemd · 3 Voortgang; Afgesloten = 1 Prioriteren · 2 Afgestemd · 3 Resultaat. Step 1 keeps its name in every phase. The URL hashes `#prioriteren`, `#afhankelijkheden`, `#afstemmen`, `#voortgang`, `#resultaat` keep working; opening a step that does not belong to the quarter's phase shows that phase's step with the same number.
+- M3. Afgestemd (Uitvoering) is the Afhankelijkheden screen with the agreements: per team Wij vragen / Aan ons gevraagd; the provider sets the commitment signal there; a new ask can still be added and shows a small "na vastzetten" label. In Afgesloten it is read-only (no answer, signal or add controls).
+- M4. Prioriteren in Uitvoering: reordering needs a reason (existing rule); the dependency cell shows the worst signal. In Afgesloten it is read-only (no drag, no arrows, no "+ Epic").
+- M5. Voortgang (Uitvoering, step 3): one top line "Week 5 van 13 · 2 in gevaar · 1 impediment" (week counted from the quarter start); then three compact sections, each hidden when empty: **In gevaar** (asks with In gevaar / Gaat niet halen, by rank: rank, epic, providing team, note), **Impediments** (open ones: IMP code, title, epic, owner, "n dagen open", one "Opgelost" button for planners; "+ Impediment" opens a small dialog: title + epic picker), **Nieuw sinds vastzetten** (asks created after `lockedAt`, with their answer). When all are empty: "Alles op koers." At the bottom, admins see "Kwartaal afsluiten" (confirm, no reason) → Afgesloten, the steps switch and Resultaat opens.
+- M6. Resultaat (Afgesloten, step 3) merges Kwartaalresultaat and Afsluiten: the title "Wat gaat door en wat niet" with the per-goal table, then per team the committed epics with "Geleverd" checkboxes and "Doorschuiven naar <next quarter>" on undelivered ones; Afdrukken / PDF. The separate `#kwartaalresultaat` and `#afsluiten` routes redirect here; during Planning the "Kwartaalresultaat" button on Afstemmen opens the same result table (tussenstand) without the checklist.
+- M7. Phase transitions are buttons at the end of step 3: "Plan vastzetten" on Afstemmen (admin, Planning → Uitvoering), "Kwartaal afsluiten" on Voortgang (admin, Uitvoering → Afgesloten). Doorschuiven puts epics unranked into the next quarter, which is in Planning.
+- M8. Volgen. Every user can follow epics: a star toggle "Volgen" in the epic panel header and a small filled star after the title in lists for followed epics. The filter select on Prioriteren gets "Gevolgd (n)" at the top; Afgestemd and Voortgang get one toggle "Alleen gevolgd" (remembered per user). Following is personal: nobody else sees who follows what. Stored per user (`epic_follows`: org_id, user_id, epic_id; RLS own rows only); mock keeps it per actor.
+- M9. All strings via t() with Dutch; helper text ≤ 6 words; WCAG 2.2 AA; current calm visual language; `npm run build` and `npm run test:rls` pass; migration `011_follows.sql` additive and re-runnable, `rls_test.sql` extended (own rows only, cannot follow on behalf of another user, cannot read others' follows).
+
+```gherkin
+Feature: Steps follow the phase
+
+  Scenario: Planning quarter
+    Given 2027 Q1 is in Planning
+    Then the steps read "1 Prioriteren · 2 Afhankelijkheden · 3 Afstemmen" and the phase word reads "Planning"
+
+  Scenario: Executing quarter
+    Given 2026 Q4 is in Uitvoering
+    When I select 2026 Q4
+    Then the steps read "1 Prioriteren · 2 Afgestemd · 3 Voortgang"
+
+  Scenario: Closed quarter is read-only
+    Given 2026 Q3 is Afgesloten
+    Then step 3 is "Resultaat" and Prioriteren has no drag handles or "+ Epic"
+
+Feature: Voortgang
+
+  Scenario: What needs attention
+    Given 2026 Q4 is in week 5 and Platform & Security set "In gevaar · Pentest schuift" on a Claims ask
+    And one impediment is open
+    When I open Voortgang
+    Then the top line reads "Week 5 van 13 · 1 in gevaar · 1 impediment"
+    And "In gevaar" lists "Digital claims intake" with Platform & Security and "Pentest schuift"
+
+  Scenario: Raise and resolve an impediment
+    Given I am the Claims planner on Voortgang
+    When I click "+ Impediment", type "Testomgeving ligt eruit", pick "Digital claims intake" and save
+    Then it is listed with my name and "0 dagen open"
+    When I click "Opgelost"
+    Then it leaves the list
+
+  Scenario: Close the quarter
+    Given I am the admin on Voortgang
+    When I click "Kwartaal afsluiten" and confirm
+    Then the steps read "1 Prioriteren · 2 Afgestemd · 3 Resultaat" and Resultaat is open
+
+Feature: Resultaat
+
+  Scenario: Deliver and carry over
+    Given 2026 Q3 is Afgesloten
+    When the Claims planner ticks "Geleverd" on one epic and clicks "Doorschuiven naar 2026 Q4" on the other
+    Then the second epic appears unranked in 2026 Q4
+
+Feature: Volgen
+
+  Scenario: Follow and filter
+    Given I am Ruud Visser (director) on Prioriteren in 2026 Q4
+    When I open "Digital claims intake" and click "Volgen"
+    Then a small star follows its title in the list
+    When I choose "Gevolgd (1)" in the filter
+    Then only that epic is listed
+    And on Voortgang "Alleen gevolgd" shows only its risks and impediments
+
+  Scenario: Following is private
+    Given Ruud follows "Digital claims intake"
+    When Sanne opens the same epic
+    Then she sees her own "Volgen" state, not Ruud's
+```
