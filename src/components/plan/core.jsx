@@ -184,11 +184,6 @@ export function BottleneckChip({ kind, className = '' }) {
   const m = BOTTLENECK_META[kind];
   return <span className={`inline-flex items-center rounded-full px-2 h-5 text-micro font-semibold whitespace-nowrap ${toneClass(m.tone)} ${className}`}>{t(m.label)}</span>;
 }
-// Small muted "gewijzigd" marker with the change list as tooltip (D54).
-export function ChangedMark({ text, className = '' }) {
-  const t = useT();
-  return <span className={`inline-flex items-center gap-0.5 text-micro text-muted whitespace-nowrap ${className}`} title={text} aria-label={`${t('changed')}: ${text}`}><Pencil size={10} aria-hidden="true" />{t('changed')}</span>;
-}
 const BAND_TEXT = { ok: 'text-muted', warn: 'text-warn-fg', over: 'text-danger-fg', none: 'text-muted' };
 const BAND_LABEL = { ok: 'room', warn: 'tight', over: 'over capacity' };
 const fmtPw1 = (n, lang) => (Math.round(n * 10) / 10).toString().replace('.', lang === 'nl' ? ',' : '.');

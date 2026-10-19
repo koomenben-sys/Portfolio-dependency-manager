@@ -1,6 +1,6 @@
 // Release B — Capaciteit & ritme (docs/design.md section 22, D50-D56). Pure functions shared by both
-// adapters and every screen: T-shirt sizes, certainty, derived bottlenecks, the "gewijzigd" diff against the
-// baseline, commitment signals with the sprint cadence, and predictability for Afsluiten.
+// adapters and every screen: T-shirt sizes, certainty, derived bottlenecks, commitment signals with the sprint
+// cadence, and the delivered checklist for Afsluiten.
 import { byId, quarterOrdinal, quarterStart } from './plan';
 import { teamLoad } from './capacity';
 
@@ -62,44 +62,6 @@ export function bottleneckFor(state, dep, loads = null) {
   if (dep.size === 'L' || dep.size === 'XL' || (!dep.size && (Number(dep.effortHigh) || 0) >= BIG_JOB_PW)) return 'big_job';
   if (dep.certainty === 'low') return 'low_certainty';
   return null;
-}
-
-// ── "gewijzigd" since Plan vastzetten (D54) ──────────────────────────────────
-// Map planId -> { changes: [{ kind, from, to }], reason }. Compares rank, commitment, size / effort and the
-// epic's asks (answers, added, removed) with quarter.baseline; the reason is the last plan_events reason on the
-// plan or one of its asks after lockedAt. Empty map without a baseline.
-export function changedSinceBaseline(state, quarterId) {
-  const out = new Map();
-  const q = state.quarters.find((x) => x.id === quarterId);
-  const base = q?.baseline;
-  if (!base) return out;
-  const since = q.lockedAt || base.takenAt || '';
-  const baseDeps = base.dependencies || [];
-  for (const p of state.plans.filter((x) => x.quarterId === quarterId)) {
-    const b = base.plans.find((x) => x.epicId === p.epicId);
-    const changes = [];
-    if (!b) changes.push({ kind: 'added' });
-    else {
-      if ((b.rank ?? null) !== (p.rank ?? null)) changes.push({ kind: 'rank', from: b.rank, to: p.rank });
-      if (b.commitment !== p.commitment) changes.push({ kind: 'commitment', from: b.commitment, to: p.commitment });
-      if ((b.size ?? null) !== (p.size ?? null) || b.effortLow !== p.effortLow || b.effortHigh !== p.effortHigh) {
-        changes.push({ kind: 'size', from: b.size || fmtEffort(b.effortLow, b.effortHigh), to: p.size || fmtEffort(p.effortLow, p.effortHigh) });
-      }
-    }
-    const deps = state.dependencies.filter((d) => d.quarterId === quarterId && d.epicId === p.epicId);
-    const bDeps = baseDeps.filter((d) => d.epicId === p.epicId);
-    for (const d of deps) {
-      const bd = bDeps.find((x) => x.id === d.id);
-      if (!bd) changes.push({ kind: 'ask_added', to: d.refCode });
-      else if (normAsk(bd.response) !== normAsk(d.response)) changes.push({ kind: 'ask', ref: d.refCode, from: normAsk(bd.response), to: normAsk(d.response), teamId: d.providerTeamId });
-    }
-    for (const bd of bDeps) if (!deps.some((d) => d.id === bd.id)) changes.push({ kind: 'ask_removed' });
-    if (!changes.length) continue;
-    const ids = new Set([p.id, ...deps.map((d) => d.id)]);
-    const ev = state.events.filter((e) => ids.has(e.entityId) && e.at > since && e.reason).sort((a, b) => b.at.localeCompare(a.at))[0];
-    out.set(p.id, { changes, reason: ev?.reason || '' });
-  }
-  return out;
 }
 
 // ── Commitment signals (D55) ─────────────────────────────────────────────────

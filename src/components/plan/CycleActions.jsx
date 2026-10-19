@@ -38,14 +38,14 @@ export function CyclePhaseWord({ quarter, setView }) {
   );
 }
 
-// "Plan vastzetten": optional reason, one command (baseline + locked), the word becomes Uitvoeren.
+// "Plan vastzetten": no reason field (D62), one command (baseline + locked), the word becomes Uitvoeren.
 export function LockPlanDialog({ quarter, onClose, onDone }) {
   const { run } = usePlan();
   const t = useT();
   const [err, setErr] = useState(null);
   return (
-    <ConfirmDialog title={t('Lock plan')} line={t('Changes then need a reason.')} confirmLabel={t('Lock plan')} onClose={onClose} error={err}
-      onConfirm={async (reason) => { const r = await run('lockPlan', quarter.id, reason); if (r.ok) { onClose(); onDone?.(); } else setErr(r.error); }} />
+    <ConfirmDialog title={t('Lock plan')} line={t('Changes then need a reason.')} confirmLabel={t('Lock plan')} onClose={onClose} error={err} withReason={false}
+      onConfirm={async () => { const r = await run('lockPlan', quarter.id, ''); if (r.ok) { onClose(); onDone?.(); } else setErr(r.error); }} />
   );
 }
 
@@ -54,7 +54,7 @@ export function CloseQuarterDialog({ quarter, onClose, onDone }) {
   const t = useT();
   const [err, setErr] = useState(null);
   return (
-    <ConfirmDialog title={t('Close quarter')} line={t('Then Closing opens.')} confirmLabel={t('Close quarter')} onClose={onClose} error={err}
-      onConfirm={async (reason) => { const r = await run('closeQuarter', quarter.id, reason); if (r.ok) { onClose(); onDone?.(); } else setErr(r.error); }} />
+    <ConfirmDialog title={t('Close quarter')} line={t('Then Closing opens.')} confirmLabel={t('Close quarter')} onClose={onClose} error={err} withReason={false}
+      onConfirm={async () => { const r = await run('closeQuarter', quarter.id, ''); if (r.ok) { onClose(); onDone?.(); } else setErr(r.error); }} />
   );
 }
