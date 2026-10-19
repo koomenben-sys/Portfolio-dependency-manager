@@ -1,6 +1,6 @@
 // Release B — Capaciteit & ritme (docs/design.md section 22, D50-D56). Pure functions shared by both
 // adapters and every screen: T-shirt sizes, certainty, derived bottlenecks, commitment signals with the sprint
-// cadence, and the delivered checklist for Afsluiten.
+// cadence, the Voortgang selectors (section 23) and the delivered checklist for Resultaat.
 import { byId, quarterOrdinal, quarterStart } from './plan';
 import { teamLoad } from './capacity';
 
@@ -111,6 +111,23 @@ export function needsConfirmation(dep, quarter, settings, now = Date.now()) {
   const last = Math.max(dep.signalAt ? new Date(dep.signalAt).getTime() : 0, dep.confirmedAt ? new Date(dep.confirmedAt).getTime() : 0);
   return last < sprint;
 }
+
+// ── Voortgang (section 23, D65) ──────────────────────────────────────────────
+// Week n of the quarter, counted from its calendar start; total weeks from the length of the quarter (M5).
+export function quarterWeek(quarter, settings, now = Date.now()) {
+  const start = quarterStart(quarter, settings?.fiscalYearStartMonth || 1);
+  const end = new Date(start.getFullYear(), start.getMonth() + 3, 1);
+  const total = Math.round((end - start) / (7 * DAY));
+  const week = Math.floor((now - start.getTime()) / (7 * DAY)) + 1;
+  return { week: Math.max(1, Math.min(total, week)), total };
+}
+// Open impediments (kind 'impediment'; risks stay beta) whose epic is planned in the quarter, oldest first.
+export function openImpediments(state, quarterId) {
+  const planned = new Set(state.plans.filter((p) => p.quarterId === quarterId).map((p) => p.epicId));
+  return state.impediments.filter((i) => i.status === 'open' && (i.kind || 'impediment') === 'impediment' && planned.has(i.epicId)).sort((a, b) => a.raisedAt.localeCompare(b.raisedAt));
+}
+// Asks created after the quarter was locked ("na vastzetten", M3/M5).
+export const isPostLock = (dep, quarter) => !!(quarter?.lockedAt && dep?.createdAt && dep.createdAt > quarter.lockedAt);
 
 // ── Afsluiten (D56) ──────────────────────────────────────────────────────────
 // "Toegezegd" = epics whose plan was in the baseline with every ask accepted (or none); without a baseline the
