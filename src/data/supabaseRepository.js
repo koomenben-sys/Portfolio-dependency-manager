@@ -112,6 +112,12 @@ export class SupabaseRepository {
     return (data || []).map(fromRow).map((m) => ({ id: m.userId, name: m.displayName || m.userId, title: '', role: m.role, teamId: m.teamId, canRank: m.canRank }));
   }
 
+  // Volgen (011): RLS returns the current user's rows only; a database without 011 gives an empty list.
+  async _follows(org) {
+    const { data, error } = await supabase.from('epic_follows').select('epic_id').eq('org_id', org);
+    if (error) return [];
+    return data.map((r) => r.epic_id);
+  }
   // Admins only (RLS, 007); others and databases without 007 get an empty list.
   async _invitations(org) {
     const { data, error } = await supabase.from('invitations').select('*').eq('org_id', org);
@@ -121,10 +127,11 @@ export class SupabaseRepository {
 
   async load() {
     const org = await this._org();
-    const [rows, members, invitations, osRes, orgRes] = await Promise.all([
+    const [rows, members, invitations, follows, osRes, orgRes] = await Promise.all([
       Promise.all(Object.values(TABLES).map((t) => this._all(t))),
       this._members(org),
       this._invitations(org),
+      this._follows(org),
       supabase.from('org_settings').select('*').eq('org_id', org).maybeSingle(),
       supabase.from('organisations').select('name').eq('id', org).maybeSingle(),
     ]);
@@ -158,6 +165,7 @@ export class SupabaseRepository {
         .sort((a, b) => a.at.localeCompare(b.at)),
       members,
       invitations,
+      follows,
       settings: { ...this.settings },
     };
     return this.state;
@@ -547,6 +555,19 @@ export class SupabaseRepository {
     if (!isPlanner(actor)) throw new PermissionError('Viewers cannot resolve impediments');
     const i = await this._row('impediments', id, 'impediment');
     this._throw((await supabase.from('impediments').update({ status: 'resolved', resolved_at: now(), roam: i.kind === 'risk' ? 'resolved' : null }).eq('id', id)).error);
+    return this.load();
+  }
+
+  // ── Volgen (section 23, D67): own rows only, enforced again by the 011 policies ──
+  async followEpic(actor, epicId) {
+    if (!actor?.id) throw new PermissionError('Sign in to follow epics');
+    await this._epic(epicId);
+    this._throw((await supabase.from('epic_follows').upsert({ org_id: await this._org(), user_id: actor.id, epic_id: epicId }, { onConflict: 'org_id,user_id,epic_id', ignoreDuplicates: true })).error);
+    return this.load();
+  }
+  async unfollowEpic(actor, epicId) {
+    if (!actor?.id) throw new PermissionError('Sign in to follow epics');
+    this._throw((await supabase.from('epic_follows').delete().eq('org_id', await this._org()).eq('user_id', actor.id).eq('epic_id', epicId)).error);
     return this.load();
   }
 

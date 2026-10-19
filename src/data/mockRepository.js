@@ -6,7 +6,7 @@ import { checkTheme, isHttpUrl } from '../domain/value';
 import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, nextQuarter } from '../domain/rhythm';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange, checkCapacity } from './repository';
 
-const KEY = 'kwartaalplan.mock.v4'; // v4: Release B seed (capacity, sizes, signals); v3 Release A; v2 the 2026-10-17 reset
+const KEY = 'kwartaalplan.mock.v5'; // v5: section 23 seed (follows, impediments, post-lock ask); v4 Release B; v3 Release A; v2 the 2026-10-17 reset
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const now = () => new Date().toISOString();
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -40,16 +40,17 @@ export class MockRepository {
     this.state.dependencies.forEach((d) => { d.size ??= null; d.certainty ||= 'medium'; d.signal ||= 'on_track'; d.signalNote ||= ''; d.signalAt ??= null; d.confirmedAt ??= null; });
     this.state.settings.sizeMap ||= { ...DEFAULT_SIZE_MAP };
     this.state.settings.cadence ||= { ...DEFAULT_CADENCE };
+    if (!this.state.follows || Array.isArray(this.state.follows)) this.state.follows = {};
   }
   async reset() {
     this.state = { invitations: [], ...seedState() };
-    this.counters = { epic: 33, dependency: 22, impediment: 6 };
+    this.counters = { epic: 33, dependency: 23, impediment: 6 };
     return this._persist();
   }
   // Blank organisation for the onboarding wizard (demo mode). Keeps the language choice.
   async resetEmpty(actor, language = 'nl') {
     const seed = seedState();
-    this.state = { teams: [], themes: [], quarters: [], capacity: [], epics: [], plans: [], dependencies: [], votes: [], discussions: [], checkIns: [], impediments: [], events: [],
+    this.state = { teams: [], themes: [], quarters: [], capacity: [], epics: [], plans: [], dependencies: [], votes: [], discussions: [], checkIns: [], impediments: [], events: [], follows: {},
       members: seed.members.filter((m) => m.role === 'admin').map((m) => ({ ...m, teamId: null })), invitations: [],
       settings: { ...seed.settings, language, setupComplete: false, orgName: '' } };
     this.counters = { epic: 1, dependency: 1, impediment: 1 };
@@ -126,6 +127,7 @@ export class MockRepository {
     this.state.discussions = this.state.discussions.filter((x) => x.epicId !== epicId);
     this.state.checkIns = this.state.checkIns.filter((x) => x.epicId !== epicId);
     this.state.impediments = this.state.impediments.filter((x) => x.epicId !== epicId);
+    for (const k of Object.keys(this.state.follows || {})) this.state.follows[k] = this.state.follows[k].filter((id) => id !== epicId);
     return this._persist();
   }
 
@@ -415,7 +417,24 @@ export class MockRepository {
   async resolveImpediment(actor, id) {
     if (!isPlanner(actor)) throw new PermissionError('Viewers cannot resolve impediments');
     const i = this.state.impediments.find((x) => x.id === id);
+    if (!i) throw new ValidationError('Unknown impediment');
     Object.assign(i, { status: 'resolved', resolvedAt: now(), roam: i.kind === 'risk' ? 'resolved' : null });
+    return this._persist();
+  }
+
+  // ── Volgen (section 23, D67): personal, per actor, no event rows ──────────────
+  async followEpic(actor, epicId) {
+    if (!actor?.id) throw new PermissionError('Sign in to follow epics');
+    this._epic(epicId);
+    this.state.follows ||= {};
+    const mine = (this.state.follows[actor.id] ||= []);
+    if (!mine.includes(epicId)) mine.push(epicId);
+    return this._persist();
+  }
+  async unfollowEpic(actor, epicId) {
+    if (!actor?.id) throw new PermissionError('Sign in to follow epics');
+    this.state.follows ||= {};
+    this.state.follows[actor.id] = (this.state.follows[actor.id] || []).filter((id) => id !== epicId);
     return this._persist();
   }
 

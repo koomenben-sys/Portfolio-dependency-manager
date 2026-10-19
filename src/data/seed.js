@@ -159,6 +159,8 @@ const D = [
   [19, 11, 't-cld', 'q-26-4', 'Network segmentation review', 1, 2, 'accepted', '', 40],
   [20, 7, 't-dat', 'q-26-4', 'Training data extract', 2, 2, 'accepted', '', 40],
   [21, 7, 't-cld', 'q-26-4', 'Pentest of the intake API', 1, 2, 'accepted', '', 35, 'S'],
+  // Section 23 (M3/M5): one ask created after 2026 Q4 was locked (lockedAt = 30 days ago) -> "na vastzetten".
+  [22, 23, 't-dat', 'q-26-4', 'Log export as remediation evidence', 1, 2, 'accepted', '', 8, 'S'],
 ];
 const dependencies = D.map(([n, epicN, provider, quarterId, ask, effortLow, effortHigh, response, responseReason, created, size, certainty]) => ({
   id: `d-${n}`, refCode: `DEP-${String(n).padStart(4, '0')}`, epicId: eid(epicN),
@@ -193,6 +195,7 @@ const checkIns = [
 ].map(([n, confidence, note, d], i) => ({ id: `ci-${i + 1}`, epicId: eid(n), quarterId: 'q-26-4', confidence, note, authorName: E.find((x) => x[0] === n)[5], createdAt: ago(d) }));
 // Epics 29 and 31 intentionally have no check-in (stale).
 
+// Section 23 (M5): in 2026 Q4 two open impediments (IMP-0001 older than 7 days, IMP-0002 fresh); risks stay beta.
 const impediments = [
   { id: 'im-1', refCode: 'IMP-0001', kind: 'impediment', title: 'Waiting on firewall change approval', epicId: eid(17), depId: null, ownerName: 'Mark van Dijk', status: 'open', roam: null, raisedAt: ago(12), resolvedAt: null },
   { id: 'im-2', refCode: 'IMP-0002', kind: 'impediment', title: 'No access to claims archive for model training', epicId: eid(7), depId: null, ownerName: 'Sanne Bakker', status: 'open', roam: null, raisedAt: ago(3), resolvedAt: null },
@@ -209,6 +212,7 @@ const events = [
 const state = {
   teams: TEAMS, themes: THEMES, quarters: QUARTERS, capacity, epics, plans: [...plans, ...plans0, ...plans3], dependencies,
   votes, discussions, checkIns, impediments, events,
+  follows: {}, // Volgen (D67): per persona; the demo user follows nothing by default
   members: PERSONAS,
   settings: { language: 'nl', setupComplete: true, orgName: 'Oranje Verzekeringen', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5, voteBlocksLock: false,
     capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false, valueModel: 'simple',

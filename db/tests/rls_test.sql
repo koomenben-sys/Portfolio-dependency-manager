@@ -1,7 +1,7 @@
 -- ============================================================================
 -- db/tests/rls_test.sql  -  row-level security and tenant-isolation test (BACKLOG P1, docs/design.md section 18)
 -- ----------------------------------------------------------------------------
--- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-010).
+-- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-011).
 -- The result grid shows one row per check with PASS / FAIL; the first row is the total.
 -- Plain SQL, no extension needed (no pgTAP). Re-runnable.
 --
@@ -118,6 +118,9 @@ insert into themes (org_id, id, name, type, must, must_deadline) values
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000ab', 'RLS goal', 'program', true, '2099-03-01');
 insert into invitations (org_id, id, email, role) values
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000a9', 'rls-invitee@example.invalid', 'viewer');
+-- Volgen (011): the A2 planner follows epic A1; nobody else may see that row.
+insert into epic_follows (org_id, user_id, epic_id) values
+  ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-00000000a003', '00000000-0000-4000-8000-0000000000a4');
 
 -- ── checks ────────────────────────────────────────────────────────────────────
 -- Short names in the SQL below: A = org A, B = org B (literal ids, so every check is self-contained).
@@ -217,7 +220,8 @@ begin
     || ' + (select count(*) from impediments where org_id = %1$s) + (select count(*) from plan_events where org_id = %1$s)'
     || ' + (select count(*) from org_settings where org_id = %1$s) + (select count(*) from member_directory where org_id = %1$s)'
     || ' + (select count(*) from invitations where org_id = %1$s) + (select count(*) from team_load where org_id = %1$s)'
-    || ' + (select count(*) from integration_connections where org_id = %1$s) + (select count(*) from ref_counters where org_id = %1$s)';
+    || ' + (select count(*) from integration_connections where org_id = %1$s) + (select count(*) from ref_counters where org_id = %1$s)'
+    || ' + (select count(*) from epic_follows where org_id = %1$s)';
   perform pg_temp.rls_check('tenant', 'admin of B reads nothing of A (all tables and views)', u_other, format(every_table, A), '0');
   perform pg_temp.rls_check('tenant', 'planner of A reads nothing of B (all tables and views)', u_planner, format(every_table, B), '0');
   perform pg_temp.rls_check('tenant', 'admin of A reads nothing of B (all tables and views)', u_admin, format(every_table, B), '0');
@@ -368,6 +372,28 @@ begin
     format('with x as (insert into team_capacity (org_id, team_id, quarter_id, headcount, fte_vacant) values (%s, %s, %s, 6, 1) returning 1) select count(*) from x', A, TA2, QA), 'error:row-level security');
   perform pg_temp.rls_check('release B', 'negative fte_vacant is refused', u_planner,
     format('with x as (insert into team_capacity (org_id, team_id, quarter_id, headcount, fte_vacant) values (%s, %s, %s, 6, -1) returning 1) select count(*) from x', A, TA1, QA), 'error:team_capacity_fte_vacant_chk');
+
+  -- 12. Volgen (011, D67): own rows only
+  perform pg_temp.rls_check('follows', 'planner follows an epic of another team (own row)', u_planner,
+    format('with x as (insert into epic_follows (org_id, user_id, epic_id) values (%s, %L, %s) returning 1) select count(*) from x', A, u_planner, EA2), '1');
+  perform pg_temp.rls_check('follows', 'viewer follows an epic', u_viewer,
+    format('with x as (insert into epic_follows (org_id, user_id, epic_id) values (%s, %L, %s) returning 1) select count(*) from x', A, u_viewer, EA1), '1');
+  perform pg_temp.rls_check('follows', 'planner cannot follow on behalf of another user', u_planner,
+    format('with x as (insert into epic_follows (org_id, user_id, epic_id) values (%s, %L, %s) returning 1) select count(*) from x', A, u_viewer, EA1), 'error:row-level security');
+  perform pg_temp.rls_check('follows', 'the follower reads own follow', u_prov,
+    format('select count(*) from epic_follows where org_id = %s', A), '1');
+  perform pg_temp.rls_check('follows', 'admin cannot read another member''s follows', u_admin,
+    format('select count(*) from epic_follows where org_id = %s', A), '0');
+  perform pg_temp.rls_check('follows', 'planner cannot read another member''s follows', u_planner,
+    format('select count(*) from epic_follows where org_id = %s', A), '0');
+  perform pg_temp.rls_check('follows', 'the follower removes own follow', u_prov,
+    format('with x as (delete from epic_follows where org_id = %s and epic_id = %s returning 1) select count(*) from x', A, EA1), '1');
+  perform pg_temp.rls_check('follows', 'another member cannot remove it (0 rows)', u_planner,
+    format('with x as (delete from epic_follows where org_id = %s and epic_id = %s returning 1) select count(*) from x', A, EA1), '0');
+  perform pg_temp.rls_check('follows', 'a follow cannot be edited (no update policy, 0 rows)', u_prov,
+    format('with x as (update epic_follows set epic_id = %s where org_id = %s and epic_id = %s returning 1) select count(*) from x', EA2, A, EA1), '0');
+  perform pg_temp.rls_check('follows', 'admin of B cannot follow an epic of A', u_other,
+    format('with x as (insert into epic_follows (org_id, user_id, epic_id) values (%s, %L, %s) returning 1) select count(*) from x', A, u_other, EA1), 'error:row-level security');
 end $$;
 
 

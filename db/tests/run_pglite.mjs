@@ -1,7 +1,7 @@
 // Local check of the migrations and db/tests/rls_test.sql without a database: `npm run test:rls`.
 // Runs PGlite (Postgres compiled to WASM, in memory) with a minimal Supabase prelude: roles anon /
 // authenticated / service_role, default grants, auth.users and auth.uid() / auth.jwt(), and a non-superuser
-// owner like Supabase's `postgres`. Then migrations 001-003 and 005-010 (twice, to prove they are re-runnable;
+// owner like Supabase's `postgres`. Then migrations 001-003 and 005-011 (twice, to prove they are re-runnable;
 // 004 needs a real e-mail) and the RLS test script twice. Exit code 1 on any failure.
 // This is an approximation of Supabase (auth.users is simplified); the real check is running
 // rls_test.sql in the Supabase SQL editor (docs/design.md section 18).
@@ -37,12 +37,12 @@ await db.exec(`
   set role app_owner;
 `);
 
-const migrations = ['001_core', '002_rls', '003_functions_and_triggers', '005_review_round2', '006_live_test', '007_invitations', '008_realtime', '009_value_strategy', '010_capacity_rhythm'];
+const migrations = ['001_core', '002_rls', '003_functions_and_triggers', '005_review_round2', '006_live_test', '007_invitations', '008_realtime', '009_value_strategy', '010_capacity_rhythm', '011_follows'];
 for (const f of [...migrations, ...migrations.slice(3)]) {
   try { await db.exec(readFileSync(`${ROOT}db/migrations/${f}.sql`, 'utf8')); }
   catch (e) { console.error(`migration ${f} failed: ${e.message}`); process.exit(1); }
 }
-console.log('migrations ok (005-010 applied twice)');
+console.log('migrations ok (005-011 applied twice)');
 
 let failed = 0;
 for (let run = 1; run <= 2; run++) {
