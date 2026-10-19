@@ -4,9 +4,10 @@ import { usePlan } from '../../context/PlanContext';
 import { canWriteTeam, canRank } from '../../data/repository';
 import { quarterLabel, isLockedPhase, ASK_META } from '../../domain/model';
 import { planFor, epicDeps } from '../../domain/plan';
+import { followsOf } from '../../domain/follows';
 import { activeThemes, effectiveMust, valueScore, SIMPLE_LEVELS, SIMPLE_META, FIB, RICE_IMPACT, WSJF_FIELDS, ONE_PAGER_FIELDS, THEME_TYPE_LABEL, fmtMonth } from '../../domain/value';
 import { useT } from '../../i18n';
-import { cls, StatusChip, InlineReason, Disclosure, ErrorLine, fmtDate, Tabs, MustChip, ValueChip, normAsk, SizePicker, SizeText, SignalChip } from './core';
+import { cls, StatusChip, InlineReason, Disclosure, ErrorLine, fmtDate, Tabs, MustChip, ValueChip, normAsk, SizePicker, SizeText, SignalChip, FollowButton } from './core';
 import { PrintSheet } from './PrintSheet';
 import { describeEvent } from './EpicPanel';
 
@@ -62,6 +63,7 @@ export function SimpleEpicPanel({ epicId, onClose }) {
     if (r.ok) setRankDraft(null);
   };
   const goalName = (th) => (th ? `${th.name}${th.archived ? ` (${t('archived')})` : ''}` : '–');
+  const following = followsOf(state, actor.id).has(epic.id); // Volgen (M8): personal, every role
   const facts = { plan, theme, must, model, score, deps, history, team, quarter, ranked };
 
   return (
@@ -77,6 +79,7 @@ export function SimpleEpicPanel({ epicId, onClose }) {
               ? <input className="mt-0.5 w-full text-subtitle font-semibold bg-transparent border-b border-transparent hover:border-border focus:border-accent focus:outline-none" defaultValue={epic.title} aria-label={t('Title')} onBlur={(e) => e.target.value.trim() && e.target.value !== epic.title && saveEpic({ title: e.target.value.trim() })} />
               : <h2 className="mt-0.5 text-subtitle font-semibold leading-6">{epic.title}</h2>}
           </div>
+          <FollowButton on={following} onToggle={() => act(following ? 'unfollowEpic' : 'followEpic', epic.id)} />
           <button ref={closeBtn} className={cls.icon} onClick={onClose} aria-label={t('Close')}><X size={16} /></button>
         </div>
         <div className="-mx-4 px-4"><Tabs ariaLabel={t('Panel')} value={tab} onChange={setTab} items={[{ id: 'epic', label: t('Epic') }, { id: 'onepager', label: 'OnePager' }]} /></div>

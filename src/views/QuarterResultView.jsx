@@ -8,20 +8,38 @@ import { cls, ViewHeader, RankNo, EmptyLine, MustChip } from '../components/plan
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
-// Kwartaalresultaat (docs/design.md section 21, D45): the output of the quarter meeting. Reached from a button
-// on Afstemmen (#kwartaalresultaat, not in the nav), readable by every role. One line, one table, print (iteration 1:
-// plain-words title and reasons, Moet deadlines, no CSV).
+// Kwartaalresultaat (docs/design.md section 21, D45): the output of the quarter meeting. During Planning it is the
+// tussenstand, reached from a button on Afstemmen (#kwartaalresultaat, not in the nav), readable by every role. One
+// line, one table, print (iteration 1: plain-words title and reasons, Moet deadlines, no CSV). Section 23 (D66): the
+// same table is the top of Resultaat once the quarter is closed (ResultView.jsx uses ResultTable).
+export const resultDate = (lang) => new Date().toLocaleDateString(lang === 'nl' ? 'nl-NL' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
 export function QuarterResultView() {
-  const { state, quarter } = usePlan();
+  const { quarter } = usePlan();
   const t = useT();
   const [openEpic, setOpenEpic] = useState(null);
   if (!quarter) return <NoQuarter />;
+  return (
+    <div className="print-landscape" data-tour="quarter-result">
+      <a className={`${cls.quiet} print:hidden -ml-2 mb-1`} href="#afstemmen"><ArrowLeft size={13} aria-hidden="true" />{t('Align')}</a>
+      <ViewHeader title={t('What goes ahead and what does not')} meta={`${t('Quarter result')} · ${quarterLabel(quarter)} · ${resultDate(t.lang)}`} right={
+        <button className={`${cls.secondary} print:hidden`} onClick={() => window.print()}><Printer size={14} aria-hidden="true" />{t('Print / PDF')}</button>
+      } />
+      <ResultTable onOpen={setOpenEpic} />
+      {openEpic && <SimpleEpicPanel epicId={openEpic} onClose={() => setOpenEpic(null)} />}
+    </div>
+  );
+}
+
+// The per-goal table with its top line ("Of the top 10: 7 committed, 2 at risk").
+export function ResultTable({ onOpen }) {
+  const { state, quarter } = usePlan();
+  const t = useT();
   const model = state.settings.valueModel || 'none';
   const res = quarterResult(state, quarter.id, model);
   const label = (r) => (r.theme ? r.theme.name : t('Without goal'));
   const kind = (r) => (r.theme ? t(THEME_TYPE_LABEL[r.theme.type] || THEME_TYPE_LABEL.goal) : '');
 
-  const today = new Date().toLocaleDateString(t.lang === 'nl' ? 'nl-NL' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   // "Kan niet — reden" / "Bespreken — nog in gesprek" / "Open — wacht op Team" (iteration 1, item 8).
   const why = (x) => (x.worst === 'declined' ? `${t("Can't")} — ${x.reason || x.team || ''}`
     : x.worst === 'needs_priority_call' ? `${t('Discuss')} — ${x.reason || t('still in talks')}`
@@ -29,14 +47,7 @@ export function QuarterResultView() {
   const rows = res.rows.filter((r) => r.theme || r.planned > 0);
 
   return (
-    <div className="print-landscape" data-tour="quarter-result">
-      <a className={`${cls.quiet} print:hidden -ml-2 mb-1`} href="#afstemmen"><ArrowLeft size={13} aria-hidden="true" />{t('Align')}</a>
-      <ViewHeader title={t('What goes ahead and what does not')} meta={`${t('Quarter result')} · ${quarterLabel(quarter)} · ${today}`} right={
-        <>
-          <button className={`${cls.secondary} print:hidden`} onClick={() => window.print()}><Printer size={14} aria-hidden="true" />{t('Print / PDF')}</button>
-        </>
-      } />
-
+    <>
       {res.top > 0 && (
         <p className={`mb-4 text-label tnum ${res.topAtRisk ? 'text-ink' : 'text-muted'}`}>
           {t('Of the top {n}: {c} committed, {r} at risk', { n: res.top, c: res.topCommitted, r: res.topAtRisk })}
@@ -69,7 +80,7 @@ export function QuarterResultView() {
                             <RankNo rank={x.rank} size="sm" />
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <button className="text-left hover:underline focus-ring rounded-control print:no-underline" onClick={() => setOpenEpic(x.epicId)}>{x.title}</button>
+                                <button className="text-left hover:underline focus-ring rounded-control print:no-underline" onClick={() => onOpen(x.epicId)}>{x.title}</button>
                                 {x.must && <MustChip must={x.must} className="shrink-0" />}
                               </div>
                               <div className={`text-caption ${x.worst === 'declined' ? 'text-danger-fg' : x.worst === 'needs_priority_call' ? 'text-warn-fg' : 'text-muted'}`}>{why(x)}{x.worst !== 'proposed' && x.team && x.reason ? <span className="text-muted"> · {x.team}</span> : null}</div>
@@ -86,7 +97,6 @@ export function QuarterResultView() {
           </table>
         </div>
       )}
-      {openEpic && <SimpleEpicPanel epicId={openEpic} onClose={() => setOpenEpic(null)} />}
-    </div>
+    </>
   );
 }

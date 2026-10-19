@@ -15,8 +15,9 @@ import { useTourNudge } from '../components/plan/TourPanel';
 // Screen 3 — Afstemmen (docs/design.md section 19, D26; iteration 1 items 12-16): four counts by urgency, a
 // "Top 5" line, the team pairs to discuss sorted by the highest-ranked epic involved (problem pairs first,
 // open-only pairs after), inline answers for those allowed, a session-local "Besproken" check, matrix at the end.
-// Release B (section 22): derived bottleneck chips on pairs and asks (L5), "Plan vastzetten" for admins before
-// lock (L6), and during Uitvoeren the top line counts signals as well (L8).
+// Release B (section 22): derived bottleneck chips on pairs and asks (L5) and during Uitvoeren the top line counts
+// signals as well (L8). Section 23 (M7): "Plan vastzetten" is the button at the end of this step (admin, Planning);
+// after it the steps become Afgestemd and Voortgang. "Kwartaalresultaat" opens the tussenstand (M6).
 const STATES = ['declined', 'needs_priority_call', 'proposed', 'accepted'];
 const LOUD = new Set(['declined', 'needs_priority_call']);
 const LOUD_ICON = { declined: 'text-danger', needs_priority_call: 'text-warn' };
@@ -122,10 +123,7 @@ export function AlignView() {
   return (
     <div data-tour="align">
       <ViewHeader title={t('Align')} right={
-        <>
-          {mayLock && <button className={cls.primary} onClick={() => setLocking(true)} data-tour="lock-plan"><Lock size={14} aria-hidden="true" />{t('Lock plan')}</button>}
-          <a className={cls.secondary} href="#kwartaalresultaat" data-tour="quarter-result-link"><FileBarChart size={14} aria-hidden="true" />{t('Quarter result')}</a>
-        </>
+        <a className={cls.secondary} href="#kwartaalresultaat" data-tour="quarter-result-link"><FileBarChart size={14} aria-hidden="true" />{t('Quarter result')}</a>
       } />
       {locking && <LockPlanDialog quarter={quarter} onClose={() => setLocking(false)} />}
 
@@ -171,6 +169,7 @@ export function AlignView() {
 
       <div className="mt-8 flex items-center gap-3">
         <button className="inline-flex items-center h-7 px-1.5 rounded-control text-caption font-medium text-accent hover:underline focus-ring" aria-expanded={showMatrix} aria-controls="align-matrix" onClick={() => setShowMatrix((v) => !v)}>{showMatrix ? t('Hide matrix') : t('Show matrix')}</button>
+        {mayLock && <button className={`${cls.primary} ml-auto`} onClick={() => setLocking(true)} data-tour="lock-plan"><Lock size={14} aria-hidden="true" />{t('Lock plan')}</button>}
       </div>
       {showMatrix && (
         <section id="align-matrix" className={`${cls.card} mt-2 p-3 overflow-x-auto anim-slide-in-up`} aria-label={t('Team matrix')} data-tour="matrix">
