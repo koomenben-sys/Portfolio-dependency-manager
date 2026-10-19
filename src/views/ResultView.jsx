@@ -37,7 +37,7 @@ export function ResultView() {
       <ErrorLine error={err} />
 
       <section className="mt-8" aria-label={t('Delivered per team')} data-tour="delivered">
-        <h2 className="text-subtitle font-semibold mb-2">{t('Delivered per team')} <span className="text-muted font-normal tnum">({rows.reduce((s, r) => s + r.delivered, 0)}/{total})</span></h2>
+        <h2 className="text-subtitle font-semibold mb-2">{t('Delivered per team')}</h2>
         {total === 0 ? <div className={cls.card}><EmptyLine>{t('No committed epics in this quarter.')}</EmptyLine></div> : (
           <div className="space-y-4">
             {rows.filter((r) => r.committed > 0).map((r) => {
@@ -46,7 +46,6 @@ export function ResultView() {
                 <section key={r.team.id} className={cls.card} aria-label={r.team.name}>
                   <header className="flex items-center gap-3 px-3 h-11 border-b border-border">
                     <h3 className="text-body font-medium text-ink flex-1 truncate">{r.team.name}</h3>
-                    <span className="text-caption text-muted tnum">{r.delivered}/{r.committed}</span>
                   </header>
                   <ul className="divide-y divide-border">
                     {r.rows.map((x) => (
