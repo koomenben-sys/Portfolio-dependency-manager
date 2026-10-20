@@ -31,14 +31,14 @@ export function SetupPanel({ onGoTo }) {
   const done = steps.filter((x) => x.done).length;
 
   return (
-    <Panel title={t('Organisation setup — {done}/{total} steps complete', { done, total: steps.length })} right={<span className="text-xs text-gray-600">{t('What a new organisation needs before its first session')}</span>}>
+    <Panel title={t('Organisation setup — {done}/{total} steps complete', { done, total: steps.length })} right={<span className="text-xs text-muted">{t('What a new organisation needs before its first session')}</span>}>
       <ol className="space-y-1.5 text-sm">
         {steps.map((st, i) => (
           <li key={st.id} className="flex items-start gap-2">
             <span aria-hidden="true" className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs ${st.done ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>{st.done ? '✓' : i + 1}</span>
             <div className="flex-1">
               <button className="font-medium hover:underline text-left" onClick={() => onGoTo(st.where)}>{st.label}</button>
-              <div className="text-xs text-gray-600">{st.detail}</div>
+              <div className="text-xs text-muted">{st.detail}</div>
             </div>
           </li>
         ))}
@@ -91,9 +91,9 @@ export function BulkCapacity() {
   if (!isAdmin(actor)) return null;
   return (
     <Panel title={t('Capacity for all teams at once')} right={<select aria-label={t('Quarter')} className={`${input} !w-auto`} value={quarterId} onChange={(e) => { const id = e.target.value; setQuarterId(id); setRows(Object.fromEntries(state.teams.map((x) => { const c = state.capacity.find((y) => y.teamId === x.id && y.quarterId === id); return [x.id, { headcount: c?.headcount ?? '', absenceWeeks: c?.absenceWeeks ?? 0 }]; }))); }}>{quarters.map((q) => <option key={q.id} value={q.id}>{quarterLabel(q)}</option>)}</select>}>
-      <p className="text-xs text-gray-600 mb-2">{t('Uses the organisation defaults ({weeks} weeks, focus {focus}, reserve {reserve}%). Teams can refine their own assumptions on the board.', { weeks: d.weeks, focus: d.focusFactor, reserve: d.reservePct })}</p>
+      <p className="text-xs text-muted mb-2">{t('Uses the organisation defaults ({weeks} weeks, focus {focus}, reserve {reserve}%). Teams can refine their own assumptions on the board.', { weeks: d.weeks, focus: d.focusFactor, reserve: d.reservePct })}</p>
       <table className="text-sm">
-        <thead className="text-xs text-gray-600 text-left"><tr><th className="py-1 pr-3">{t('Team')}</th><th className="pr-3">{t('Headcount')}</th><th>{t('Absence weeks (team total)')}</th></tr></thead>
+        <thead className="text-xs text-muted text-left"><tr><th className="py-1 pr-3">{t('Team')}</th><th className="pr-3">{t('Headcount')}</th><th>{t('Absence weeks (team total)')}</th></tr></thead>
         <tbody>{state.teams.map((x) => (
           <tr key={x.id}><td className="py-1 pr-3">{x.name}</td>
             <td className="pr-3"><input type="number" step="0.5" aria-label={`${t('Headcount')} ${x.name}`} className={`${input} !w-24`} value={rows[x.id]?.headcount ?? ''} onChange={(e) => setRows({ ...rows, [x.id]: { ...rows[x.id], headcount: e.target.value } })} /></td>

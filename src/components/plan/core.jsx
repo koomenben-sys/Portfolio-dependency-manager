@@ -363,7 +363,7 @@ export function Menu({ button, children, align = 'right', ariaLabel, width = 'w-
     const onKey = (e) => {
       if (e.key === 'Escape') { setOpen(false); trig.current?.focus(); return; }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        const items = [...(wrap.current?.querySelectorAll('[role="menuitem"], [role="menuitemradio"], select') || [])].filter((el) => !el.disabled);
+        const items = [...(wrap.current?.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], select') || [])].filter((el) => !el.disabled);
         if (!items.length) return;
         e.preventDefault();
         const i = items.indexOf(document.activeElement);
@@ -371,7 +371,7 @@ export function Menu({ button, children, align = 'right', ariaLabel, width = 'w-
       }
     };
     document.addEventListener('mousedown', onDoc); document.addEventListener('keydown', onKey);
-    const first = wrap.current?.querySelector('[role="menuitem"], [role="menuitemradio"]'); first?.focus();
+    const first = wrap.current?.querySelector('[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'); first?.focus();
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [open]);
   return (

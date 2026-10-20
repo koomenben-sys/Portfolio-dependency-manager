@@ -35,15 +35,15 @@ export function LoginView() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-h-screen bg-surface-2 flex flex-col">
       {/* Header */}
-      <div className="bg-indigo-800 text-white p-4">
+      <div className="bg-accent-700 text-white p-4">
         <h1 className="text-2xl font-bold">Kwartaalplan</h1>
       </div>
 
       {/* Card */}
       <div className="flex flex-1 items-center justify-center">
-        <div className="bg-white rounded-lg shadow p-8 w-full max-w-sm">
+        <div className="bg-surface rounded-lg shadow p-8 w-full max-w-sm">
           <h2 className="text-xl font-bold mb-6 text-center">
             {mode === 'signin' ? 'Sign in' : 'Create account'}
           </h2>
@@ -56,7 +56,7 @@ export function LoginView() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
                 placeholder="you@company.com"
                 autoComplete="email"
               />
@@ -69,7 +69,7 @@ export function LoginView() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
                 placeholder="••••••••"
                 autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               />
@@ -90,7 +90,7 @@ export function LoginView() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+              className="w-full bg-accent text-white py-2 rounded hover:bg-accent-600 disabled:opacity-50"
             >
               {loading
                 ? 'Please wait…'
@@ -100,13 +100,13 @@ export function LoginView() {
             </button>
           </form>
 
-          <div className="mt-4 text-center text-sm text-gray-500">
+          <div className="mt-4 text-center text-sm text-muted">
             {mode === 'signin' ? (
               <>
                 No account?{' '}
                 <button
                   onClick={() => { setMode('signup'); setError(''); setMessage(''); }}
-                  className="text-indigo-600 hover:underline"
+                  className="text-accent hover:underline"
                 >
                   Sign up
                 </button>
@@ -116,7 +116,7 @@ export function LoginView() {
                 Already have an account?{' '}
                 <button
                   onClick={() => { setMode('signin'); setError(''); setMessage(''); }}
-                  className="text-indigo-600 hover:underline"
+                  className="text-accent hover:underline"
                 >
                   Sign in
                 </button>

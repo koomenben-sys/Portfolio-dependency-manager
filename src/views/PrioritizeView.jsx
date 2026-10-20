@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { GripVertical, ArrowUp, ArrowDown, Plus, Search, ListOrdered } from 'lucide-react';
+import { GripVertical, ArrowUp, ArrowDown, Plus, Search, ListOrdered, Check, Columns3 } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canRank, isPlanner, isAdmin } from '../data/repository';
 import { isLockedPhase, cyclePhase } from '../domain/model';
@@ -8,7 +8,7 @@ import { epicDeps, byId } from '../domain/plan';
 import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../domain/value';
 import { teamCapacity } from '../domain/capacity';
 import { useT } from '../i18n';
-import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip, CapacityLine, FollowStar } from '../components/plan/core';
+import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip, CapacityLine, FollowStar, Menu, MenuLabel, menuItem } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
@@ -19,6 +19,18 @@ import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 // dependency cell (L8, inside WorstIssue). Section 23: read-only once the quarter is Afgesloten (M4); "Gevolgd (n)"
 // at the top of the filter and a small star after followed titles (M8).
 const TOP_N = 10;
+// Kolomkeuze (section 24, D78): optional columns, per user per device. Title and rank always show.
+const COLS = [
+  { id: 'team', label: 'Team', on: true },
+  { id: 'value', label: 'Value', on: true, needsModel: true },
+  { id: 'depCount', label: 'Number of dependencies', on: false },
+  { id: 'deps', label: 'Dependencies', on: true },
+  { id: 'goal', label: 'Goal', on: false },
+];
+const COLS_KEY = 'kp.prioCols';
+const defaultCols = () => Object.fromEntries(COLS.map((c) => [c.id, c.on]));
+const readCols = () => { try { return { ...defaultCols(), ...JSON.parse(localStorage.getItem(COLS_KEY) || '{}') }; } catch { return defaultCols(); } };
+const writeCols = (v) => { try { localStorage.setItem(COLS_KEY, JSON.stringify(v)); } catch { /* private mode */ } };
 export function PrioritizeView() {
   const { state, actor, quarter, run } = usePlan();
   const t = useT();
@@ -31,6 +43,8 @@ export function PrioritizeView() {
   const [flashId, setFlashId] = useState(null);
   const [err, setErr] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [cols, setCols] = useState(readCols);
+  const toggleCol = (id) => setCols((c) => { const n = { ...c, [id]: !c[id] }; writeCols(n); return n; });
   const pendingRef = useRef(pending); pendingRef.current = pending;
   const runRef = useRef(run); runRef.current = run;
   const quarterRef = useRef(quarter); quarterRef.current = quarter;
@@ -42,6 +56,8 @@ export function PrioritizeView() {
   const teams = useMemo(() => byId(state.teams), [state.teams]);
   const themes = useMemo(() => byId(state.themes), [state.themes]);
   const model = state.settings.valueModel || 'none';
+  const show = (id) => !!cols[id] && (id !== 'value' || model !== 'none');
+  const nCols = 4 + COLS.filter((c) => show(c.id)).length; // drag, rank, title, reorder + optional
   const tbodyRef = useRef(null);
   const rectsRef = useRef(new Map());
   // FLIP: rows that changed vertical position since the last paint glide there instead of snapping.
@@ -139,9 +155,11 @@ export function PrioritizeView() {
               <MustChip must={effectiveMust(e, themes.get(e.themeId))} className="shrink-0" />
             </div>
           </td>
-          <td className="w-44 pr-3 text-label text-muted truncate">{teams.get(e.teamId)?.name}</td>
-          {model !== 'none' && <td className="w-14 pr-2"><ValueChip model={model} score={valueScore(model, e.value, p)} /></td>}
-          <td className="w-64 pr-3"><WorstIssue deps={deps} teams={teams} /></td>
+          {show('team') && <td className="w-44 pr-3 text-label text-muted truncate">{teams.get(e.teamId)?.name}</td>}
+          {show('value') && <td className="w-14 pr-2"><ValueChip model={model} score={valueScore(model, e.value, p)} /></td>}
+          {show('depCount') && <td className="w-16 pr-3 text-label text-muted tnum">{deps.length || ''}</td>}
+          {show('deps') && <td className="w-64 pr-3"><WorstIssue deps={deps} teams={teams} /></td>}
+          {show('goal') && <td className="w-44 pr-3 text-label text-muted truncate">{themes.get(e.themeId)?.name}</td>}
           <td className="w-20 pr-2">
             {mayRank && (inList ? (
               <span className={`inline-flex gap-0.5 transition-base ${searching ? 'invisible' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}>
@@ -152,7 +170,7 @@ export function PrioritizeView() {
           </td>
         </tr>
         {isMoved && (
-          <tr className="bg-accent-50"><td colSpan={model !== 'none' ? 7 : 6} className="pl-[76px] pr-4 pb-3 pt-1">
+          <tr className="bg-accent-50"><td colSpan={nCols} className="pl-[76px] pr-4 pb-3 pt-1">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-label text-accent-700 whitespace-nowrap tnum">{t('Moved to #{n}', { n: index + 1 })}</span>
               <InlineReason required={isLockedPhase(quarter.phase)} onSave={commit} onCancel={cancel} error={err} />
@@ -177,6 +195,15 @@ export function PrioritizeView() {
             <optgroup label={t('Teams')}>{state.teams.map((x) => <option key={x.id} value={`team:${x.id}`}>{x.name}</option>)}</optgroup>
             {goals.length > 0 && <optgroup label={t('Goals')}>{goals.map((x) => <option key={x.id} value={`goal:${x.id}`}>{x.name}</option>)}<option value="goal:none">{t('Without goal')}</option></optgroup>}
           </select>
+          <Menu ariaLabel={t('Columns')} width="w-56" button={({ ref, toggle, open, ...a }) => (
+            <button ref={ref} onClick={toggle} {...a} className={cls.secondary} data-tour="columns"><Columns3 size={14} aria-hidden="true" />{t('Columns')}</button>)}>
+            <MenuLabel>{t('Columns')}</MenuLabel>
+            {COLS.filter((c) => !c.needsModel || model !== 'none').map((c) => (
+              <button key={c.id} role="menuitemcheckbox" aria-checked={!!cols[c.id]} className={menuItem} onClick={() => toggleCol(c.id)}>
+                <span className="w-4 inline-flex justify-center">{cols[c.id] && <Check size={14} aria-hidden="true" />}</span>{t(c.label)}
+              </button>
+            ))}
+          </Menu>
           <label className="relative"><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-faint" aria-hidden="true" /><input type="search" className={`${cls.input} !w-52 !pl-7`} placeholder={t('Search')} aria-label={t('Search epics')} value={query} onChange={(e) => setQuery(e.target.value)} /></label>
           {mayAdd && <button className={cls.primary} onClick={() => setAdding(true)} data-tour="add-epic"><Plus size={14} aria-hidden="true" />{t('Epic')}</button>}
         </>
@@ -219,15 +246,17 @@ export function PrioritizeView() {
                 <th className="h-9 w-7" scope="col"><span className="sr-only">{t('Drag')}</span></th>
                 <th className="w-10 pr-2 font-medium" scope="col"><span className="inline-flex w-6 justify-center">#</span></th>
                 <th className="font-medium" scope="col">{t('Epic')}</th>
-                <th className="w-44 font-medium" scope="col">{t('Team')}</th>
-                {model !== 'none' && <th className="w-14 font-medium" scope="col">{t('Value')}</th>}
-                <th className="w-64 font-medium" scope="col">{t('Dependencies')}</th>
+                {show('team') && <th className="w-44 font-medium" scope="col">{t('Team')}</th>}
+                {show('value') && <th className="w-14 font-medium" scope="col">{t('Value')}</th>}
+                {show('depCount') && <th className="w-16 font-medium" scope="col" title={t('Number of dependencies')}>{t('Count')}</th>}
+                {show('deps') && <th className="w-64 font-medium" scope="col">{t('Dependencies')}</th>}
+                {show('goal') && <th className="w-44 font-medium" scope="col">{t('Goal')}</th>}
                 <th className="w-20" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
               </tr>
             </thead>
             <tbody ref={tbodyRef} className="divide-y divide-border">
               {visible.map((p) => renderRow(p, order.indexOf(p), true))}
-              {visible.length === 0 && <tr><td colSpan={model !== 'none' ? 7 : 6}><EmptyLine>{searching ? t('No match.') : t('Nothing ranked yet.')}</EmptyLine></td></tr>}
+              {visible.length === 0 && <tr><td colSpan={nCols}><EmptyLine>{searching ? t('No match.') : t('Nothing ranked yet.')}</EmptyLine></td></tr>}
             </tbody>
           </table>
           {unranked.length > 0 && (

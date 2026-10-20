@@ -32,13 +32,13 @@ export function MembersAdmin() {
   return (
     <Panel title={t('People and roles')} right={admin && <button className={btn.primary} onClick={() => setInviting(true)}>{t('Invite')}</button>}>
       <table className="w-full text-sm">
-        <thead className="text-xs text-gray-600 text-left"><tr><th className="py-1">{t('Name')}</th><th>{t('Role')}</th><th>{t('Team')}</th><th>{t('Can rank')}</th>{admin && <th><span className="sr-only">{t('Actions')}</span></th>}</tr></thead>
+        <thead className="text-xs text-muted text-left"><tr><th className="py-1">{t('Name')}</th><th>{t('Role')}</th><th>{t('Team')}</th><th>{t('Can rank')}</th>{admin && <th><span className="sr-only">{t('Actions')}</span></th>}</tr></thead>
         <tbody>
           {members.map((m) => {
             const self = m.id === actor.id;
             return (
               <tr key={m.id} className="border-t">
-                <td className="py-1 pr-2">{m.name}{m.email && m.email !== m.name && <span className="text-xs text-gray-500"> · {m.email}</span>}</td>
+                <td className="py-1 pr-2">{m.name}{m.email && m.email !== m.name && <span className="text-xs text-muted"> · {m.email}</span>}</td>
                 <td className="py-1 pr-2">{admin && !self ? (
                   <select aria-label={t('Role of {name}', { name: m.name })} className={`${input} !w-auto`} value={m.role}
                     onChange={(e) => change(m, { role: e.target.value, teamId: e.target.value === 'planner' ? (m.teamId || state.teams[0]?.id || null) : null })}>
@@ -56,8 +56,8 @@ export function MembersAdmin() {
             );
           })}
           {admin && pending.map((i) => (
-            <tr key={i.id} className="border-t text-gray-700">
-              <td className="py-1 pr-2">{i.displayName || i.email}{i.displayName && <span className="text-xs text-gray-500"> · {i.email}</span>} <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900">{t('Invited')}</span></td>
+            <tr key={i.id} className="border-t text-ink-2">
+              <td className="py-1 pr-2">{i.displayName || i.email}{i.displayName && <span className="text-xs text-muted"> · {i.email}</span>} <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900">{t('Invited')}</span></td>
               <td className="py-1 pr-2">{roleLabel(i.role)}</td>
               <td className="py-1 pr-2">{i.role === 'planner' ? teamName(i.teamId) : '–'}</td>
               <td className="py-1 pr-2">{i.canRank || i.role === 'admin' ? '✓' : '–'}</td>

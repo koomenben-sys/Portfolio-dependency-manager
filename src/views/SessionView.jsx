@@ -54,20 +54,20 @@ export function SessionView() {
       <ErrorNote error={err} />
 
       {/* Phase stepper */}
-      <Panel title={t('Phase')} right={admin && <span className="text-xs text-gray-500">{t('You are the facilitator')}</span>}>
+      <Panel title={t('Phase')} right={admin && <span className="text-xs text-muted">{t('You are the facilitator')}</span>}>
         <ol className="flex flex-wrap gap-1">
           {PHASES.map((p, i) => (
             <li key={p.id} className="flex items-center">
               <button disabled={!admin || i === idx || i > idx + 1} title={i > idx + 1 ? t('Phases advance one step at a time') : t(p.hint)} onClick={() => setPhase(p.id)}
                 aria-current={i === idx ? 'step' : undefined}
-                className={`px-3 py-1.5 rounded text-sm border ${i === idx ? 'bg-indigo-600 text-white border-indigo-600' : i < idx ? 'bg-indigo-50 text-indigo-800 border-indigo-200' : 'bg-white text-gray-600 border-gray-300'} ${admin && i !== idx ? 'hover:border-indigo-500' : ''} disabled:cursor-default`}>
+                className={`px-3 py-1.5 rounded text-sm border ${i === idx ? 'bg-accent text-white border-accent' : i < idx ? 'bg-accent-50 text-accent-700 border-accent-200' : 'bg-surface text-muted border-border-strong'} ${admin && i !== idx ? 'hover:border-accent' : ''} disabled:cursor-default`}>
                 {i < idx ? '✓ ' : i === idx ? '▶ ' : ''}{i + 1}. {t(p.label)}
               </button>
-              {i < PHASES.length - 1 && <span className="text-gray-300 mx-1">›</span>}
+              {i < PHASES.length - 1 && <span className="text-faint mx-1">›</span>}
             </li>
           ))}
         </ol>
-        <p className="text-sm text-gray-700 mt-2">{t(PHASES[idx].hint)}.{!admin && ` ${t('Only an admin (facilitator) can change the phase.')}`}{quarter.lockedAt && ` ${t('Baseline taken {time}.', { time: new Date(quarter.lockedAt).toLocaleString('nl-NL') })}`}</p>
+        <p className="text-sm text-ink-2 mt-2">{t(PHASES[idx].hint)}.{!admin && ` ${t('Only an admin (facilitator) can change the phase.')}`}{quarter.lockedAt && ` ${t('Baseline taken {time}.', { time: new Date(quarter.lockedAt).toLocaleString('nl-NL') })}`}</p>
         {admin && idx < PHASE_INDEX.locked && notReady.length > 0 && <p className="text-xs text-amber-900 mt-1">{t('Locking now needs an override reason: {n} team(s) not ready.', { n: notReady.length })}</p>}
       </Panel>
 
@@ -85,27 +85,27 @@ export function SessionView() {
         </Panel>
 
         {/* Confidence vote */}
-        <Panel title={t('Confidence vote (fist of five, 1 = no confidence, 5 = full confidence)')} right={<span className="text-xs text-gray-600 flex items-center gap-2">{t('{voted}/{total} teams voted', { voted: votes.length, total: state.teams.length })}{admin && !revealed && votes.length > 0 && <button className={btn.secondary} onClick={() => run('revealVotes', quarter.id)}>{t('Reveal votes')}</button>}</span>}>
-          {!revealed && <p className="text-xs text-gray-700 mb-2">{t("Votes stay hidden until the facilitator reveals them, so nobody anchors on earlier voters. You can see your own team's vote.")}</p>}
+        <Panel title={t('Confidence vote (fist of five, 1 = no confidence, 5 = full confidence)')} right={<span className="text-xs text-muted flex items-center gap-2">{t('{voted}/{total} teams voted', { voted: votes.length, total: state.teams.length })}{admin && !revealed && votes.length > 0 && <button className={btn.secondary} onClick={() => run('revealVotes', quarter.id)}>{t('Reveal votes')}</button>}</span>}>
+          {!revealed && <p className="text-xs text-ink-2 mb-2">{t("Votes stay hidden until the facilitator reveals them, so nobody anchors on earlier voters. You can see your own team's vote.")}</p>}
           <div className="flex items-end gap-2 h-20 mb-2" role="img" aria-label={revealed ? t('Vote distribution: {dist}', { dist: dist.map((n, i) => `${n} × ${i + 1}`).join(', ') }) : t('Votes hidden until revealed')}>
             {revealed && dist.map((n, i) => (
               <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
                 <div className={`w-full rounded-t ${i < 2 ? 'bg-red-400' : i === 2 ? 'bg-amber-400' : 'bg-emerald-500'}`} style={{ height: `${votes.length ? (n / votes.length) * 100 : 0}%`, minHeight: n ? 6 : 0 }} />
-                <div className="text-xs mt-1">{i + 1} <span className="text-gray-500">({n})</span></div>
+                <div className="text-xs mt-1">{i + 1} <span className="text-muted">({n})</span></div>
               </div>
             ))}
           </div>
           <ul className="text-xs space-y-0.5 mb-3">
             {votes.filter((v) => revealed || myTeams.has(v.teamId)).map((v) => { const tn = state.teams.find((x) => x.id === v.teamId)?.name; const stale = ready.find((r) => r.team.id === v.teamId)?.reasons.includes('Plan changed after the vote'); return (
-              <li key={v.id}><b>{tn}</b>: {v.vote}/5{v.reason && <span className="text-gray-700"> — {v.reason}</span>}{stale && <span className="text-amber-900"> · {t('plan changed since, re-vote advised')}</span>}
+              <li key={v.id}><b>{tn}</b>: {v.vote}/5{v.reason && <span className="text-ink-2"> — {v.reason}</span>}{stale && <span className="text-amber-900"> · {t('plan changed since, re-vote advised')}</span>}
                 {revealed && v.vote <= 2 && (admin || actor.role === 'planner') && !state.discussions.some((x) => x.status === 'open' && x.quarterId === quarter.id && x.reason.startsWith(`Low confidence ${tn}`)) && (
                   <button className={`${btn.ghost} ml-2`} onClick={() => run('raiseDiscussion', { quarterId: quarter.id, epicId: null, teamId: v.teamId, reason: `Low confidence ${tn} (vote ${v.vote}): ${v.reason}`, ownerName: actor.name, timeboxMin: 10 })}>{t('Add to discussion queue')}</button>
                 )}
               </li>); })}
-            {!revealed && votes.length > 0 && <li className="text-gray-600">{t('{n} vote(s) cast, hidden.', { n: votes.length })}</li>}
+            {!revealed && votes.length > 0 && <li className="text-muted">{t('{n} vote(s) cast, hidden.', { n: votes.length })}</li>}
           </ul>
           {phaseAllows(quarter.phase, 'vote') ? <VoteForm /> : <Empty>{t('Voting opens in the Vote phase; a re-vote is possible while locked.')}</Empty>}
-          {admin && <label className="flex items-center gap-2 text-xs mt-3 text-gray-600"><input type="checkbox" checked={state.settings.voteBlocksLock} onChange={(e) => run('updateSettings', { voteBlocksLock: e.target.checked })} /> {t('A vote of 2 or lower blocks locking (default: discussion trigger only)')}</label>}
+          {admin && <label className="flex items-center gap-2 text-xs mt-3 text-muted"><input type="checkbox" checked={state.settings.voteBlocksLock} onChange={(e) => run('updateSettings', { voteBlocksLock: e.target.checked })} /> {t('A vote of 2 or lower blocks locking (default: discussion trigger only)')}</label>}
         </Panel>
       </div>
 
@@ -116,9 +116,9 @@ export function SessionView() {
             {queue.map(({ d, plan }) => { const e = epicsById.get(d.epicId); const dep = state.dependencies.find((x) => x.id === d.depId); return (
               <li key={d.id} className="border rounded p-2 flex justify-between gap-3">
                 <div>
-                  <div className="text-xs text-gray-600 flex items-center gap-2"><RankBadge rank={plan?.rank} size="sm" />{e ? <button className="text-indigo-700 hover:underline" onClick={() => setOpenEpic(e.id)}>{e.refCode} {e.title}</button> : <span>{t('cross-cutting')}</span>}{dep && <span>· {dep.refCode} <ResponsePill value={dep.response} size="xs" /></span>}</div>
+                  <div className="text-xs text-muted flex items-center gap-2"><RankBadge rank={plan?.rank} size="sm" />{e ? <button className="text-accent-700 hover:underline" onClick={() => setOpenEpic(e.id)}>{e.refCode} {e.title}</button> : <span>{t('cross-cutting')}</span>}{dep && <span>· {dep.refCode} <ResponsePill value={dep.response} size="xs" /></span>}</div>
                   <div>{d.reason}</div>
-                  <div className="text-xs text-gray-500">{t('owner {name} · timebox {min} min', { name: d.ownerName, min: d.timeboxMin ?? '–' })}</div>
+                  <div className="text-xs text-muted">{t('owner {name} · timebox {min} min', { name: d.ownerName, min: d.timeboxMin ?? '–' })}</div>
                 </div>
                 {(admin || actor.role === 'planner') && <button className={btn.secondary} onClick={() => setResolving(d)}>{t('Resolve')}</button>}
               </li>); })}
@@ -129,7 +129,7 @@ export function SessionView() {
       {/* Diff since baseline */}
       <Panel title={t('Changed since baseline ({n})', { n: diff.length })}>
         {!quarter.baseline ? <Empty>{t('No baseline yet — one is stored when the quarter is locked.')}</Empty> : diff.length === 0 ? <Empty>{t('No changes since lock.')}</Empty> : (
-          <ul className="text-sm space-y-1">{diff.map((d, i) => <li key={i}><span className="text-xs uppercase text-gray-600 mr-2">{t(d.kind)}</span>{d.text}{d.reason ? <span className="italic text-gray-700"> — "{d.reason}"</span> : <span className="text-xs text-amber-900"> — {t('no reason recorded')}</span>}</li>)}</ul>
+          <ul className="text-sm space-y-1">{diff.map((d, i) => <li key={i}><span className="text-xs uppercase text-muted mr-2">{t(d.kind)}</span>{d.text}{d.reason ? <span className="italic text-ink-2"> — "{d.reason}"</span> : <span className="text-xs text-amber-900"> — {t('no reason recorded')}</span>}</li>)}</ul>
         )}
       </Panel>
 
@@ -156,7 +156,7 @@ function VoteForm() {
   return (
     <div className="flex flex-wrap items-end gap-2">
       <Field l={t('Team')}><select className={input} value={teamId} onChange={(e) => setTeamId(e.target.value)}>{teams.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
-      <Field l={t('Vote')}><div className="flex gap-1">{[1, 2, 3, 4, 5].map((n) => <button key={n} className={`${btn.secondary} !px-2 ${vote === n ? 'ring-2 ring-indigo-500' : ''}`} onClick={() => setVote(n)}>{n}</button>)}</div></Field>
+      <Field l={t('Vote')}><div className="flex gap-1">{[1, 2, 3, 4, 5].map((n) => <button key={n} className={`${btn.secondary} !px-2 ${vote === n ? 'ring-2 ring-accent' : ''}`} onClick={() => setVote(n)}>{n}</button>)}</div></Field>
       <div className="flex-1 min-w-[180px]"><Field l={vote <= 3 ? t('Reason (required at 3 or lower)') : t('Reason (optional)')}><input className={input} value={reason} onChange={(e) => setReason(e.target.value)} /></Field></div>
       <button className={btn.primary} onClick={async () => { const r = await run('castVote', teamId, quarter.id, vote, reason); setErr(r.ok ? null : r.error); if (r.ok) setReason(''); }}>{t('Vote')}</button>
       <div className="w-full"><ErrorNote error={err} /></div>
@@ -198,14 +198,14 @@ function PlanOfRecord({ onClose }) {
   return (
     <Modal title={`${t('Plan of record')} · ${quarterLabel(quarter)}`} onClose={onClose} wide>
       <div className="text-sm space-y-4 print:text-xs" id="plan-of-record">
-        <p className="text-xs text-gray-500">{t('Phase:')} {phaseLabel}{quarter.lockedAt && ` · ${t('locked {date}', { date: new Date(quarter.lockedAt).toLocaleDateString() })}`} · {t('printed {time}', { time: new Date().toLocaleString() })}</p>
+        <p className="text-xs text-muted">{t('Phase:')} {phaseLabel}{quarter.lockedAt && ` · ${t('locked {date}', { date: new Date(quarter.lockedAt).toLocaleDateString() })}`} · {t('printed {time}', { time: new Date().toLocaleString() })}</p>
         {state.teams.map((team) => {
           const plans = teamPlans(state, team.id, quarter.id);
           const load = teamLoad(state, team.id, quarter.id);
           const v = votes.find((x) => x.teamId === team.id);
           return (
             <section key={team.id}>
-              <h4 className="font-semibold">{team.name} <span className="font-normal text-gray-500">— {t('load {low}–{high} of {available} pw ({pct}%)', { low: load.totalLow, high: load.totalHigh, available: load.available, pct: load.pct })} · {t('confidence')} {v ? (quarter.votesRevealed || PHASE_INDEX[quarter.phase] >= PHASE_INDEX.locked ? `${v.vote}/5` : t('cast, hidden until reveal')) : '–'}</span></h4>
+              <h4 className="font-semibold">{team.name} <span className="font-normal text-muted">— {t('load {low}–{high} of {available} pw ({pct}%)', { low: load.totalLow, high: load.totalHigh, available: load.available, pct: load.pct })} · {t('confidence')} {v ? (quarter.votesRevealed || PHASE_INDEX[quarter.phase] >= PHASE_INDEX.locked ? `${v.vote}/5` : t('cast, hidden until reveal')) : '–'}</span></h4>
               <ul className="ml-4 list-disc">
                 {plans.map((p) => { const e = state.epics.find((x) => x.id === p.epicId); const deps = state.dependencies.filter((d) => d.epicId === e.id && d.quarterId === quarter.id); return (
                   <li key={p.id}>#{p.rank ?? '–'} {e.refCode} {e.title} — {t(COMMITMENT_META[p.commitment].label)}, {p.effortLow}–{p.effortHigh} pw

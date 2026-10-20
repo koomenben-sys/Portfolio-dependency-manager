@@ -271,7 +271,7 @@ function AdoImport() {
           <div className="grid grid-cols-3 gap-3">
             <div><h4 className="font-semibold">{t('New')} ({preview.created.length})</h4><ul className="text-xs">{preview.created.map((x) => <li key={x.externalId}>#{x.externalId} {x.title}</li>)}</ul></div>
             <div><h4 className="font-semibold">{t('Updated')} ({preview.updated.length})</h4><ul className="text-xs">{preview.updated.map(({ x, cur, titleChanged }) => <li key={x.externalId}>{cur.refCode} ← #{x.externalId}{titleChanged ? ` (${t('title → "{title}"', { title: x.title })})` : ''}</li>)}</ul></div>
-            <div><h4 className="font-semibold">{t('Without team')} ({preview.unmapped.length})</h4><ul className="text-xs">{preview.unmapped.map((x) => <li key={x.externalId}>#{x.externalId} {x.title} <span className="text-gray-500">({x.teamHint})</span></li>)}</ul></div>
+            <div><h4 className="font-semibold">{t('Without team')} ({preview.unmapped.length})</h4><ul className="text-xs">{preview.unmapped.map((x) => <li key={x.externalId}>#{x.externalId} {x.title} <span className="text-muted">({x.teamHint})</span></li>)}</ul></div>
           </div>
           <button className={btn.primary} onClick={async () => { const r = await run('importExternalEpics', external, mapping); if (r.ok) setResult(r.result); else setErr(r.error); }}>{t('Import {n} items', { n: preview.created.length + preview.updated.length })}</button>
           {result && (
