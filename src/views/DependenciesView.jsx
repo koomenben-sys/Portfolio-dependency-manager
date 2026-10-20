@@ -70,38 +70,43 @@ export function DependenciesView() {
           </label>
         </span>
       } />
-      <Tabs ariaLabel={t('Direction')} value={tab} onChange={(v) => { setTab(v); setFilter(null); }} items={[{ id: 'outgoing', label: t('We ask'), count: outgoing.length }, { id: 'incoming', label: t('Asked of us'), count: incoming.length }]} />
+      {/* Below xl: two tabs. From xl (section 24, D77): both directions side by side, each with its own heading, count and chips. */}
+      <div className="xl:hidden"><Tabs ariaLabel={t('Direction')} value={tab} onChange={(v) => { setTab(v); setFilter(null); }} items={[{ id: 'outgoing', label: t('We ask'), count: outgoing.length }, { id: 'incoming', label: t('Asked of us'), count: incoming.length }]} /></div>
       <ErrorLine error={err} />
 
       <div className="mt-4 flex items-center gap-3 flex-wrap min-h-7">
-        <CountChips deps={tab === 'outgoing' ? outgoing : incoming} value={filter} onChange={setFilter} />
+        <div className="xl:hidden"><CountChips deps={tab === 'outgoing' ? outgoing : incoming} value={filter} onChange={setFilter} /></div>
         {agreed && <FollowOnlyToggle on={followOnly} onChange={setFollowOnly} count={followedInQuarter} />}
         <CapacityLine cap={capacity} onEdit={mayWrite ? () => setCapDialog(true) : undefined} className="ml-auto" />
       </div>
 
-      {tab === 'outgoing' && (
-        <div className="mt-4 space-y-3" data-tour="outgoing">
-          {ourPlans.length === 0 && <div className={cls.card}><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'No epics for this team in this quarter.')}</EmptyLine></div>}
-          {withAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={asksOf(p).filter(inFilter)} teams={teams} mayWrite={mayWrite} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}
-          {withoutAsks.length > 0 && !filter && (
-            <Disclosure className="px-1" summary={withoutAsks.length === 1 ? t('1 epic without asks') : t('{n} epics without asks', { n: withoutAsks.length })}>
-              <div className="space-y-3">{withoutAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={[]} teams={teams} mayWrite={mayWrite} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}</div>
-            </Disclosure>
-          )}
-        </div>
-      )}
+      <div className="xl:grid xl:grid-cols-2 xl:gap-6 xl:items-start">
+        <section className={tab === 'outgoing' ? '' : 'hidden xl:block'} aria-label={t('We ask')}>
+          <ColumnHead label={t('We ask')} deps={outgoing} filter={filter} onFilter={setFilter} />
+          <div className="mt-4 space-y-3" data-tour="outgoing">
+            {ourPlans.length === 0 && <div className={cls.card}><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'No epics for this team in this quarter.')}</EmptyLine></div>}
+            {withAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={asksOf(p).filter(inFilter)} teams={teams} mayWrite={mayWrite} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}
+            {withoutAsks.length > 0 && !filter && (
+              <Disclosure className="px-1" summary={withoutAsks.length === 1 ? t('1 epic without asks') : t('{n} epics without asks', { n: withoutAsks.length })}>
+                <div className="space-y-3">{withoutAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={[]} teams={teams} mayWrite={mayWrite} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}</div>
+              </Disclosure>
+            )}
+          </div>
+        </section>
 
-      {tab === 'incoming' && (
-        <div className="mt-4" data-tour="incoming">
-          {!answersOpen && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
-          {incoming.length === 0 ? <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div> : (
-            <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
-              {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} maySignal={mayWrite} act={act} followed={followed.has(d.epicId)} onOpen={() => setOpenEpic(d.epicId)} />)}
-              {incomingSorted.length === 0 && <li><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'Nothing here.')}</EmptyLine></li>}
-            </ul>
-          )}
-        </div>
-      )}
+        <section className={tab === 'incoming' ? '' : 'hidden xl:block'} aria-label={t('Asked of us')}>
+          <ColumnHead label={t('Asked of us')} deps={incoming} filter={filter} onFilter={setFilter} />
+          <div className="mt-4" data-tour="incoming">
+            {!answersOpen && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
+            {incoming.length === 0 ? <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div> : (
+              <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
+                {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} maySignal={mayWrite} act={act} followed={followed.has(d.epicId)} onOpen={() => setOpenEpic(d.epicId)} />)}
+                {incomingSorted.length === 0 && <li><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'Nothing here.')}</EmptyLine></li>}
+              </ul>
+            )}
+          </div>
+        </section>
+      </div>
       {openEpic && <SimpleEpicPanel epicId={openEpic} onClose={() => setOpenEpic(null)} />}
       {capDialog && <CapacityDialog teamId={teamId} team={teams.get(teamId)} cap={capacity.cap} locked={locked} act={act} onClose={() => setCapDialog(false)} />}
     </div>
@@ -139,6 +144,16 @@ function CapacityDialog({ teamId, team, cap, locked, act, onClose }) {
         <div className="flex justify-end gap-2 pt-1"><button type="button" className={cls.secondary} onClick={onClose}>{t('Cancel')}</button><button type="submit" className={cls.primary}>{t('Save')}</button></div>
       </form>
     </Dialog>
+  );
+}
+
+// xl ledger heading: "Wij vragen 5" + the count chips of that direction (D77). Hidden below xl, where the tabs do this.
+function ColumnHead({ label, deps, filter, onFilter }) {
+  return (
+    <div className="hidden xl:flex items-center gap-3 h-9 border-b border-border">
+      <h2 className="inline-flex items-center gap-1.5 text-label font-medium text-ink">{label}<span className="tnum rounded-full px-1.5 h-5 min-w-5 inline-flex items-center justify-center text-micro font-semibold bg-surface-2 text-muted">{deps.length}</span></h2>
+      <CountChips deps={deps} value={filter} onChange={onFilter} />
+    </div>
   );
 }
 
