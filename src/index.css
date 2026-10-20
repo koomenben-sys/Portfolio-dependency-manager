@@ -3,40 +3,66 @@
 @tailwind utilities;
 
 /* ── Design tokens (docs/design.md section 19, D25). Everything themeable lives here. ───────────── */
+/* Two skins, chosen in Instellingen › Organisatie (settings.skin, App.jsx sets html[data-skin]): "Zakelijk" (default,
+   tokens below) and "Speels" (overrides further down). Same layout and behaviour; only tokens differ. */
 :root {
-  --color-canvas: #f8fafc;
-  --color-surface: #ffffff;
-  --color-surface-2: #f1f5f9;
-  --color-border: #e2e8f0;
-  --color-border-strong: #cbd5e1;
-  --color-ink: #0f172a;
-  --color-ink-2: #334155;
-  --color-muted: #5f6b80;   /* 4.9:1 on surface-2, 5.1:1 on canvas */
-  --color-faint: #94a3b8;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display-weight: 500;
+  --font-rank-weight: 600;
 
-  --color-accent-50: #ecfeff;
-  --color-accent-100: #cffafe;
-  --color-accent-200: #a5f3fc;
-  --color-accent-300: #67e8f9;
-  --color-accent-500: #0e7490;
-  --color-accent-600: #155e75;
-  --color-accent-700: #164e63;
+  --color-canvas: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #f3f6f5;
+  --color-border: #e2e8e6;
+  --color-border-strong: #8b9c95;
+  --color-ink: #1c302b;
+  --color-ink-2: #334542;
+  --color-muted: #52615d;   /* 6.1:1 on white */
+  --color-faint: #8b9c95;
+
+  --color-accent-50: #eaf2ef;
+  --color-accent-100: #d5e5e0;
+  --color-accent-200: #b5d0c9;
+  --color-accent-300: #86b3a9;
+  --color-accent-500: #155b57;
+  --color-accent-600: #0f4743;
+  --color-accent-700: #0d3b38;
   --color-accent-fg: #ffffff;
 
-  --color-ok-bg: #dcfce7;   --color-ok-fg: #166534;   --color-ok-border: #86efac;  --color-ok: #16a34a;
-  --color-warn-bg: #fef3c7; --color-warn-fg: #92400e; --color-warn-border: #fcd34d; --color-warn: #d97706;
-  --color-danger-bg: #fee2e2; --color-danger-fg: #991b1b; --color-danger-border: #fca5a5; --color-danger: #dc2626;
+  /* Rank chip (Prioriteren, pair rows): one neutral style for every rank. */
+  --color-rank-bg: #eaf2ef;
+  --color-rank-fg: #155b57;
+  --radius-rank: 2px;
+
+  /* Status colours stay semantic in both skins (WCAG AA on their tint). */
+  --color-ok-bg: #ddf2e6;   --color-ok-fg: #1e6b45;   --color-ok-border: #9ed7b7;  --color-ok: #1e8a52;
+  --color-warn-bg: #fbefd5; --color-warn-fg: #7a4f00; --color-warn-border: #ecc978; --color-warn: #b8780a;
+  --color-danger-bg: #fbe3e0; --color-danger-fg: #a3271e; --color-danger-border: #f0a9a3; --color-danger: #c73a30;
   --color-info-bg: #dbeafe; --color-info-fg: #1e40af; --color-info-border: #93c5fd; --color-info: #2563eb;
-  --color-neutral-bg: #f1f5f9; --color-neutral-fg: #334155; --color-neutral-border: #cbd5e1;
+  --color-neutral-bg: #e7ebf0; --color-neutral-fg: #3d4654; --color-neutral-border: #c3cad4;
 
-  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.06);
-  --shadow-md: 0 4px 12px rgb(15 23 42 / 0.08);
-  --shadow-lg: 0 16px 40px rgb(15 23 42 / 0.16);
+  /* Zakelijk: no resting shadows; panels are flat with a 1px top rule on tables. */
+  --shadow-sm: none;
+  --shadow-panel: none;
+  --shadow-md: 0 4px 12px rgb(28 48 43 / 0.08);
+  --shadow-lg: 0 16px 40px rgb(28 48 43 / 0.16);
+  --panel-border: 1px solid var(--color-border);
+  --table-top: 1px solid var(--color-border-strong);
 
-  --radius-control: 4px;
-  --radius-card: 6px;
-  --radius-panel: 8px;
-  --radius-modal: 12px;
+  --radius-control: 3px;
+  --radius-card: 3px;
+  --radius-panel: 0px;
+  --radius-row: 0px;
+  --radius-modal: 3px;
+
+  /* Active step in the main nav: accent text with a 2px underline. */
+  --nav-active-bg: transparent;
+  --nav-active-fg: var(--color-accent-500);
+  --nav-active-line: inset 0 -2px 0 var(--color-accent-500);
+  --nav-radius: 0px;
+  --nav-badge-bg: var(--color-accent-500);
+  --nav-badge-fg: #ffffff;
 
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --dur-fast: 150ms;
@@ -47,6 +73,57 @@
   --sidebar-rail-w: 64px;
   --view-header-h: 56px;
   --row-h: 44px;
+}
+
+/* Speels: grey page, white floating panels with a soft shadow, pill controls, near-black primary, Figtree + Bricolage. */
+:root[data-skin='speels'] {
+  --font-body: 'Figtree Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Bricolage Grotesque Variable', 'Figtree Variable', system-ui, sans-serif;
+  --font-display-weight: 700;
+  --font-rank-weight: 700;
+
+  --color-canvas: #e9ecef;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f3f5;
+  --color-border: #e3e6ea;
+  --color-border-strong: #c3c8d0;
+  --color-ink: #14171c;
+  --color-ink-2: #2f3540;
+  --color-muted: #59616e;   /* 5.3:1 on canvas, 5.9:1 on white */
+  --color-faint: #8a929e;
+
+  --color-accent-50: #f1f3f5;
+  --color-accent-100: #e3e6ea;
+  --color-accent-200: #c3c8d0;
+  --color-accent-300: #8a929e;
+  --color-accent-500: #14171c;
+  --color-accent-600: #2a2f37;
+  --color-accent-700: #14171c;
+  --color-accent-fg: #ffffff;
+
+  --color-rank-bg: #f1f3f5;
+  --color-rank-fg: #14171c;
+  --radius-rank: 12px;
+
+  --shadow-sm: 0 1px 2px rgb(20 23 28 / 0.08);
+  --shadow-panel: 0 1px 2px rgb(20 23 28 / 0.06);
+  --shadow-md: 0 4px 16px rgb(20 23 28 / 0.10);
+  --shadow-lg: 0 16px 40px rgb(20 23 28 / 0.18);
+  --panel-border: 1px solid transparent;
+  --table-top: 0;
+
+  --radius-control: 22px;
+  --radius-card: 14px;
+  --radius-panel: 24px;
+  --radius-row: 16px;
+  --radius-modal: 24px;
+
+  --nav-active-bg: #14171c;
+  --nav-active-fg: #ffffff;
+  --nav-active-line: none;
+  --nav-radius: 22px;
+  --nav-badge-bg: #ffffff;
+  --nav-badge-fg: #14171c;
 }
 
 /* Alternative accent for municipalities: neutral blue (Rijksoverheid's #154273 is reserved). */
@@ -66,8 +143,7 @@
 html { scroll-padding-top: calc(var(--view-header-h) + 16px); }
 body {
   margin: 0;
-  font-family: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  font-feature-settings: 'cv11', 'ss01';
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 20px;
   color: var(--color-ink);
@@ -75,7 +151,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.015em; }
+h1, h2, h3, h4 { font-family: var(--font-display); font-weight: var(--font-display-weight); letter-spacing: -0.015em; }
 .tnum { font-variant-numeric: tabular-nums; }
 code, kbd, .mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
 
@@ -88,6 +164,14 @@ code, kbd, .mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monosp
 }
 .focus-ring:focus-visible { outline: 2px solid var(--color-accent-500); outline-offset: 2px; }
 .focus-ring-inset:focus-visible { outline: 2px solid var(--color-accent-500); outline-offset: -2px; }
+
+/* ── Skin-driven pieces (tokens above) ──────────────────────────────────────────────────── */
+.panel { background: var(--color-surface); border: var(--panel-border); border-radius: var(--radius-panel); box-shadow: var(--shadow-panel); }
+.panel-table { border-top: var(--table-top); }
+.nav-step[aria-current='page'] { background: var(--nav-active-bg); color: var(--nav-active-fg); box-shadow: var(--nav-active-line); border-radius: var(--nav-radius); }
+.rank-no { background: var(--color-rank-bg); color: var(--color-rank-fg); border-radius: var(--radius-rank); font-family: var(--font-display); font-weight: var(--font-rank-weight); }
+/* Speels: rows without hairlines; the pill controls need a little more side padding. */
+:root[data-skin='speels'] .divide-border > :not([hidden]) ~ :not([hidden]) { border-color: transparent; }
 
 /* ── Utilities ────────────────────────────────────────────────────────────────────────── */
 /* 45° hatch for over-capacity segments: colour is never the only carrier. */
