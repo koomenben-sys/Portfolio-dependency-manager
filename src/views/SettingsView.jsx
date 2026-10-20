@@ -18,6 +18,9 @@ import { MembersAdmin } from '../components/plan/MembersAdmin';
 // value model) · Teams · Doelen & programma's · Kwartalen · Mensen & rollen · Import · Demo · Uitgebreide modules
 // (beta). The setup checklist shows only the three essentials, only while incomplete. Capacity and cadence appear
 // only when the extended modules are on.
+// Visual skin (section 24): same layout, only tokens differ (src/index.css). Stored in settings.skin / org_settings.profile.
+const SKINS = [['zakelijk', 'Business'], ['speels', 'Playful']];
+
 export function SettingsView() {
   const { state, actor, run, reset, dataSource } = usePlan();
   const t = useT();
@@ -54,6 +57,7 @@ export function SettingsView() {
             <label className="block"><span className={cls.label}>{t('Language')}</span><select className={cls.input} value={state.settings.language || 'nl'} onChange={(e) => act('updateSettings', { language: e.target.value })}>{LANGUAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
             <label className="block"><span className={cls.label}>{t('Value model')}</span><select className={cls.input} value={state.settings.valueModel || 'none'} disabled={!admin} onChange={(e) => act('updateSettings', { valueModel: e.target.value })}>{VALUE_MODELS.map((m) => <option key={m} value={m}>{t(VALUE_MODEL_LABEL[m])}</option>)}</select></label>
             <Steering act={act} admin={admin} />
+            <label className="block"><span className={cls.label}>{t('Skin')}</span><select className={cls.input} value={state.settings.skin || 'zakelijk'} disabled={!admin} onChange={(e) => act('updateSettings', { skin: e.target.value })}>{SKINS.map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}</select></label>
           </div>
           <SizeMap act={act} admin={admin} />
         </Section>
