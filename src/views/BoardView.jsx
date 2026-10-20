@@ -50,10 +50,10 @@ export function BoardView() {
         <button className={btn.ghost} onClick={() => setShowLegend(!showLegend)}>{showLegend ? t('Hide legend') : t('How to read this board')}</button>
       </div>
       {showLegend && (
-        <div className="bg-white border rounded-lg p-3 mb-4 text-sm space-y-1">
+        <div className="bg-surface border rounded-lg p-3 mb-4 text-sm space-y-1">
           <p>{t('Each column is a team. Epics are ordered by')} <b>{t('strategic rank')}</b> {t('(set top-down; 1 = most important). The')} <b>{t('cut line')}</b> {t("marks where the team's cumulative high estimate (own work plus accepted asks, in rank order) exceeds its available capacity: everything below it does not fit.")}</p>
           <CapacityLegend />
-          <p className="text-xs text-gray-600">{t("Card pills: commitment (the team's promise), asks (what this epic needs from other teams, coloured by the worst answer), § regulatory with days to deadline. Click a card for details, asks, check-ins and history.")}</p>
+          <p className="text-xs text-muted">{t("Card pills: commitment (the team's promise), asks (what this epic needs from other teams, coloured by the worst answer), § regulatory with days to deadline. Click a card for details, asks, check-ins and history.")}</p>
         </div>
       )}
 
@@ -71,14 +71,14 @@ export function BoardView() {
           const mayEdit = canWriteTeam(actor, team.id) && quarter.phase !== 'closed';
           const unanswered = incoming.filter((d) => d.response === 'proposed').length;
           return (
-            <div key={team.id} className="w-[270px] shrink-0 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="p-3 border-b border-gray-200 bg-white rounded-t-lg">
+            <div key={team.id} className="w-[270px] shrink-0 bg-surface-2 rounded-lg border border-border">
+              <div className="p-3 border-b border-border bg-surface rounded-t-lg">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold">{team.name}</h3>
-                  <button className="text-xs text-indigo-700 hover:underline" onClick={() => setShowAssumptions(team)}>{t('Capacity assumptions')}</button>
+                  <button className="text-xs text-accent-700 hover:underline" onClick={() => setShowAssumptions(team)}>{t('Capacity assumptions')}</button>
                 </div>
                 <div className="mt-2"><CapacityBar load={load} /></div>
-                <div className="text-xs text-gray-600 mt-1">{t('Own work {ol}–{oh} pw · asks from others {il}–{ih} pw', { ol: load.ownLow, oh: load.ownHigh, il: load.incLow, ih: load.incHigh })}{unanswered > 0 && <span className="text-amber-800"> · {t('{n} unanswered', { n: unanswered })}</span>}</div>
+                <div className="text-xs text-muted mt-1">{t('Own work {ol}–{oh} pw · asks from others {il}–{ih} pw', { ol: load.ownLow, oh: load.ownHigh, il: load.incLow, ih: load.incHigh })}{unanswered > 0 && <span className="text-amber-800"> · {t('{n} unanswered', { n: unanswered })}</span>}</div>
               </div>
               <div className="p-2 space-y-2">
                 {plans.length === 0 && <Empty>{Object.values(filters).some(Boolean) ? t('No epics match.') : t('No epics.')}</Empty>}
@@ -98,12 +98,12 @@ export function BoardView() {
                         </div>
                       )}
                       <button onClick={() => setOpenEpic(e.id)} aria-label={`${e.refCode} ${e.title}, ${p.rank != null ? t('rank {rank}', { rank: p.rank }) : t('unranked')}, ${t(COMMITMENT_META[p.commitment]?.label || p.commitment)}`}
-                        className={`w-full text-left bg-white rounded border shadow-sm hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${below.has(e.id) ? 'border-red-200' : 'border-gray-200'} ${dense ? 'p-1.5' : 'p-2'}`}>
+                        className={`w-full text-left bg-surface rounded border shadow-sm hover:border-accent-300 focus:outline-none focus:ring-2 focus:ring-accent ${below.has(e.id) ? 'border-red-200' : 'border-border'} ${dense ? 'p-1.5' : 'p-2'}`}>
                         <div className="flex items-start gap-2">
                           <RankBadge rank={p.rank} size="sm" />
                           <div className="min-w-0 flex-1">
-                            <div className={`font-medium leading-tight ${dense ? 'text-xs' : 'text-sm'} ${p.commitment === 'not_committed' ? 'line-through text-gray-600' : ''}`}>{e.title}</div>
-                            <div className="text-xs text-gray-600">{e.refCode}{e.externalSource && ' · ADO'} · {p.effortLow}–{p.effortHigh} pw{theme ? ` · ${theme.name}` : ` · ${t('unaligned')}`}</div>
+                            <div className={`font-medium leading-tight ${dense ? 'text-xs' : 'text-sm'} ${p.commitment === 'not_committed' ? 'line-through text-muted' : ''}`}>{e.title}</div>
+                            <div className="text-xs text-muted">{e.refCode}{e.externalSource && ' · ADO'} · {p.effortLow}–{p.effortHigh} pw{theme ? ` · ${theme.name}` : ` · ${t('unaligned')}`}</div>
                           </div>
                         </div>
                         {!dense && (
@@ -113,14 +113,14 @@ export function BoardView() {
                             {e.regulatory && <span className={`text-xs px-1.5 rounded border ${below.has(e.id) ? 'bg-red-50 text-red-800 border-red-300 font-semibold' : 'bg-purple-50 text-purple-800 border-purple-200'}`} title={`${e.regulation || t('Regulatory')} · ${t('deadline {date}', { date: fmtDate(e.regulatoryDeadline) })}`}>§ {e.regulation ? e.regulation.split(' ')[0] : t('reg.')} {daysUntil(e.regulatoryDeadline)}d{below.has(e.id) ? ` · ${t('below cut line')}` : ''}</span>}
                             {openDisc && <span className="text-xs px-1.5 rounded bg-amber-100 text-amber-900 border border-amber-300">? {t('on discussion queue')}</span>}
                             {changed && <span className="text-xs px-1.5 rounded bg-amber-50 text-amber-900 border border-amber-200">{t('changed since lock')}</span>}
-                            {ci && <span className="text-xs text-gray-600">· {t('check-in')} {t(CONFIDENCE_META[ci.confidence]?.label || ci.confidence).toLowerCase()}</span>}
+                            {ci && <span className="text-xs text-muted">· {t('check-in')} {t(CONFIDENCE_META[ci.confidence]?.label || ci.confidence).toLowerCase()}</span>}
                           </div>
                         )}
                       </button>
                     </React.Fragment>
                   );
                 })}
-                {mayEdit && <button className="w-full text-xs text-indigo-700 hover:underline py-1" onClick={() => setAddFor(team)}>{t('+ Add epic')}</button>}
+                {mayEdit && <button className="w-full text-xs text-accent-700 hover:underline py-1" onClick={() => setAddFor(team)}>{t('+ Add epic')}</button>}
               </div>
             </div>
           );
@@ -174,7 +174,7 @@ function AssumptionsModal({ team, onClose }) {
   const plans = teamPlans(state, team.id, quarter.id).filter((p) => p.commitment !== 'not_committed');
   return (
     <Modal title={`${team.name} · ${t('capacity')} ${quarterLabel(quarter)}`} onClose={onClose}>
-      <p className="text-xs text-gray-600 mb-3">{t('available = (headcount × weeks − absence weeks) × focus factor × (1 − reserve%). Reserve covers run / on-call / support (KTLO). Absences are team totals, never per person. Load counts the high estimate; the bar also shows the low end.')}</p>
+      <p className="text-xs text-muted mb-3">{t('available = (headcount × weeks − absence weeks) × focus factor × (1 − reserve%). Reserve covers run / on-call / support (KTLO). Absences are team totals, never per person. Load counts the high estimate; the bar also shows the low end.')}</p>
       <div className="grid grid-cols-2 gap-3">
         <Field l={t('Headcount')}><input type="number" step="0.5" className={input} value={form.headcount} disabled={!mayEdit} onChange={set('headcount')} /></Field>
         <Field l={t('Weeks in quarter')}><input type="number" className={input} value={form.weeks} disabled={!mayEdit} onChange={set('weeks')} /></Field>

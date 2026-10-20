@@ -19,12 +19,12 @@ export function AnswerModal({ dep, onClose }) {
   const sim = simulateAsk(state, dep, { response, grantedLow: granted.low === '' ? null : Number(granted.low), grantedHigh: granted.high === '' ? null : Number(granted.high) });
   return (
     <Modal title={t('Answer {ref}', { ref: dep.refCode })} onClose={onClose}>
-      <p className="text-sm mb-1"><b>{epic?.refCode} {epic?.title}</b> {t('asks:')} {dep.ask} <span className="text-gray-600">({dep.effortLow}–{dep.effortHigh} pw{dep.neededBy ? `, ${t('needed by {date}', { date: new Date(dep.neededBy).toLocaleDateString('nl-NL') })}` : ''})</span></p>
-      {dep.ifDeclined && <p className="text-xs text-gray-600 mb-1">{t('If declined:')} {dep.ifDeclined}</p>}
-      <p className="text-xs text-gray-600 mb-3">{t('Contact:')} {dep.requesterName || epic?.ownerName || '–'} · {t("With this answer your team's ranked load becomes {total} of {available} pw", { total: sim.total, available: sim.available })}{sim.item ? (sim.fits ? <span className="text-emerald-700"> — {t('the ask fits at rank {rank} (cum. {cum})', { rank: sim.item.rank ?? '–', cum: sim.cum })}</span> : <span className="text-red-700 font-medium"> — {t('the ask lands below the cut line (cum. {cum})', { cum: sim.cum })}</span>) : ''}{sim.pushed.length > 0 && <span className="text-amber-900"> — {t('pushes {refs} below the cut line', { refs: sim.pushed.map((id) => state.epics.find((e) => e.id === id)?.refCode).join(', ') })}</span>}</p>
+      <p className="text-sm mb-1"><b>{epic?.refCode} {epic?.title}</b> {t('asks:')} {dep.ask} <span className="text-muted">({dep.effortLow}–{dep.effortHigh} pw{dep.neededBy ? `, ${t('needed by {date}', { date: new Date(dep.neededBy).toLocaleDateString('nl-NL') })}` : ''})</span></p>
+      {dep.ifDeclined && <p className="text-xs text-muted mb-1">{t('If declined:')} {dep.ifDeclined}</p>}
+      <p className="text-xs text-muted mb-3">{t('Contact:')} {dep.requesterName || epic?.ownerName || '–'} · {t("With this answer your team's ranked load becomes {total} of {available} pw", { total: sim.total, available: sim.available })}{sim.item ? (sim.fits ? <span className="text-emerald-700"> — {t('the ask fits at rank {rank} (cum. {cum})', { rank: sim.item.rank ?? '–', cum: sim.cum })}</span> : <span className="text-red-700 font-medium"> — {t('the ask lands below the cut line (cum. {cum})', { cum: sim.cum })}</span>) : ''}{sim.pushed.length > 0 && <span className="text-amber-900"> — {t('pushes {refs} below the cut line', { refs: sim.pushed.map((id) => state.epics.find((e) => e.id === id)?.refCode).join(', ') })}</span>}</p>
       <div className="flex flex-wrap gap-2 mb-3" role="radiogroup" aria-label={t('Answer')}>
         {['accepted', 'partial', 'deferred', 'declined', 'needs_priority_call'].map((r) => (
-          <button key={r} role="radio" aria-checked={response === r} className={`${btn.secondary} ${response === r ? 'ring-2 ring-indigo-500' : ''}`} onClick={() => setResponse(r)}>{RESPONSE_META[r].icon} {t(RESPONSE_META[r].label)}</button>
+          <button key={r} role="radio" aria-checked={response === r} className={`${btn.secondary} ${response === r ? 'ring-2 ring-accent' : ''}`} onClick={() => setResponse(r)}>{RESPONSE_META[r].icon} {t(RESPONSE_META[r].label)}</button>
         ))}
       </div>
       {response === 'partial' && (

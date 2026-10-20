@@ -42,16 +42,16 @@ export function EpicPanel({ epicId, onClose }) {
   };
 
   return (
-    <aside role="dialog" aria-modal="false" aria-label={`${epic.refCode} ${epic.title}`} className="fixed right-0 top-0 h-full w-[520px] max-w-[95vw] bg-white shadow-2xl border-l border-gray-200 z-30 overflow-y-auto">
-      <header className="sticky top-0 bg-white border-b px-4 py-3 flex items-start justify-between gap-2">
+    <aside role="dialog" aria-modal="false" aria-label={`${epic.refCode} ${epic.title}`} className="fixed right-0 top-0 h-full w-[520px] max-w-[95vw] bg-surface shadow-2xl border-l border-border z-30 overflow-y-auto">
+      <header className="sticky top-0 bg-surface border-b px-4 py-3 flex items-start justify-between gap-2">
         <div>
-          <div className="text-xs font-mono text-gray-500">{epic.refCode} · {team?.name}{epic.externalSource && <> · <a className="text-indigo-700 hover:underline" href={epic.externalUrl} target="_blank" rel="noreferrer">{t('Open in Azure DevOps')} ↗</a></>}</div>
+          <div className="text-xs font-mono text-muted">{epic.refCode} · {team?.name}{epic.externalSource && <> · <a className="text-accent-700 hover:underline" href={epic.externalUrl} target="_blank" rel="noreferrer">{t('Open in Azure DevOps')} ↗</a></>}</div>
           {mayEdit && !epic.externalSource ? (
-            <input className="text-lg font-semibold w-full border-b border-transparent focus:border-indigo-400 focus:outline-none" defaultValue={epic.title} onBlur={(e) => e.target.value !== epic.title && saveEpic({ title: e.target.value })} />
+            <input className="text-lg font-semibold w-full border-b border-transparent focus:border-accent-300 focus:outline-none" defaultValue={epic.title} onBlur={(e) => e.target.value !== epic.title && saveEpic({ title: e.target.value })} />
           ) : <h2 className="text-lg font-semibold">{epic.title}</h2>}
-          {epic.externalSource && <p className="text-xs text-gray-600">{t('Title and state come from Azure DevOps (read-only)')}{epic.externalState ? `, ${t('state there: {state}', { state: epic.externalState })}` : ''}{epic.externalSyncedAt ? `, ${t('last synced {date}', { date: fmtDate(epic.externalSyncedAt) })}` : `, ${t('not synced yet')}`}. {t('Rank, effort, commitment and asks live only here.')}</p>}
+          {epic.externalSource && <p className="text-xs text-muted">{t('Title and state come from Azure DevOps (read-only)')}{epic.externalState ? `, ${t('state there: {state}', { state: epic.externalState })}` : ''}{epic.externalSyncedAt ? `, ${t('last synced {date}', { date: fmtDate(epic.externalSyncedAt) })}` : `, ${t('not synced yet')}`}. {t('Rank, effort, commitment and asks live only here.')}</p>}
         </div>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-xl leading-none" aria-label={t('Close')}>×</button>
+        <button onClick={onClose} className="text-muted hover:text-ink text-xl leading-none" aria-label={t('Close')}>×</button>
       </header>
 
       <div className="p-4 space-y-5">
@@ -137,15 +137,15 @@ export function EpicPanel({ epicId, onClose }) {
                 return (
                   <li key={d.id} className="border rounded p-2 text-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-gray-500">{d.refCode} → {prov?.name}</span>
+                      <span className="font-mono text-xs text-muted">{d.refCode} → {prov?.name}</span>
                       <ResponsePill value={d.response} />
                     </div>
-                    <div>{d.ask} <span className="text-gray-500">({d.effortLow}–{d.effortHigh} pw)</span></div>
-                    {d.respondedAt && <div className="text-xs text-gray-600 mt-1">{t('Answered {date}', { date: fmtDate(d.respondedAt) })}{(() => { const ev = state.events.filter((x) => x.entityId === d.id && x.action === 'dependency_answered').sort((a, b) => b.at.localeCompare(a.at))[0]; return ev?.actorName ? ` ${t('by {name}', { name: ev.actorName })}` : ''; })()}{['declined', 'deferred', 'needs_priority_call'].includes(d.response) && (d.acknowledgedAt ? ` · ${t('acknowledged')}` : mayEdit ? <> · <button className="text-indigo-700 hover:underline" onClick={() => run('acknowledgeDependency', d.id)}>{t('Acknowledge')}</button></> : '')}</div>}
-                    {d.responseReason && <div className="text-xs text-gray-700 mt-1">{t('Answer:')} {d.responseReason}{d.deferredToQuarterId && ` (${t('to {quarter}', { quarter: quarterLabel(state.quarters.find((q) => q.id === d.deferredToQuarterId)) })})`}</div>}
+                    <div>{d.ask} <span className="text-muted">({d.effortLow}–{d.effortHigh} pw)</span></div>
+                    {d.respondedAt && <div className="text-xs text-muted mt-1">{t('Answered {date}', { date: fmtDate(d.respondedAt) })}{(() => { const ev = state.events.filter((x) => x.entityId === d.id && x.action === 'dependency_answered').sort((a, b) => b.at.localeCompare(a.at))[0]; return ev?.actorName ? ` ${t('by {name}', { name: ev.actorName })}` : ''; })()}{['declined', 'deferred', 'needs_priority_call'].includes(d.response) && (d.acknowledgedAt ? ` · ${t('acknowledged')}` : mayEdit ? <> · <button className="text-accent-700 hover:underline" onClick={() => run('acknowledgeDependency', d.id)}>{t('Acknowledge')}</button></> : '')}</div>}
+                    {d.responseReason && <div className="text-xs text-ink-2 mt-1">{t('Answer:')} {d.responseReason}{d.deferredToQuarterId && ` (${t('to {quarter}', { quarter: quarterLabel(state.quarters.find((q) => q.id === d.deferredToQuarterId)) })})`}</div>}
                     {timingConflict(state, d) && <div className="text-xs text-red-700 mt-1">▲ {t("Timing conflict: needed after the epic's planned quarter")}</div>}
-                    {d.response === 'proposed' && <div className="text-xs text-gray-500 mt-1">{t('No answer yet')} · {t('{n} days', { n: daysSince(d.createdAt) })}</div>}
-                    {d.neededBy && <div className="text-xs text-gray-600">{t('Needed by {date}', { date: fmtDate(d.neededBy) })}</div>}
+                    {d.response === 'proposed' && <div className="text-xs text-muted mt-1">{t('No answer yet')} · {t('{n} days', { n: daysSince(d.createdAt) })}</div>}
+                    {d.neededBy && <div className="text-xs text-muted">{t('Needed by {date}', { date: fmtDate(d.neededBy) })}</div>}
                     {d.response === 'partial' && d.grantedHigh != null && <div className="text-xs text-lime-800">{t('Granted {gl}–{gh} pw of {el}–{eh}', { gl: d.grantedLow, gh: d.grantedHigh, el: d.effortLow, eh: d.effortHigh })}</div>}
                     {mayEdit && <div className="flex gap-3 mt-1"><button className={btn.ghost} onClick={() => setEditAsk(d)}>{t('Edit ask')}</button><button className={btn.danger} onClick={() => setRemoveAsk(d)}>{t('Remove ask')}</button></div>}
                   </li>
@@ -153,7 +153,7 @@ export function EpicPanel({ epicId, onClose }) {
               })}
             </ul>
           )}
-          {incoming.length > 0 && <p className="text-xs text-gray-500 mt-2">{t('Team {team} also has {n} incoming ask(s) this quarter — see Dependencies.', { team: team?.name, n: incoming.length })}</p>}
+          {incoming.length > 0 && <p className="text-xs text-muted mt-2">{t('Team {team} also has {n} incoming ask(s) this quarter — see Dependencies.', { team: team?.name, n: incoming.length })}</p>}
         </section>
 
         {/* Check-ins */}
@@ -165,7 +165,7 @@ export function EpicPanel({ epicId, onClose }) {
           {!ci ? <Empty>{t('No check-in yet.')}</Empty> : (
             <ul className="space-y-1 text-sm">
               {state.checkIns.filter((c) => c.epicId === epic.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5).map((c) => (
-                <li key={c.id} className="flex gap-2"><ConfidenceMark value={c.confidence} /><span className="text-gray-500 text-xs">{t('{n}d ago', { n: daysSince(c.createdAt) })} · {c.authorName}</span><span>{c.note}</span></li>
+                <li key={c.id} className="flex gap-2"><ConfidenceMark value={c.confidence} /><span className="text-muted text-xs">{t('{n}d ago', { n: daysSince(c.createdAt) })} · {c.authorName}</span><span>{c.note}</span></li>
               ))}
             </ul>
           )}
@@ -175,9 +175,9 @@ export function EpicPanel({ epicId, onClose }) {
         <section>
           <h3 className="font-semibold text-sm mb-2">{t('History')}</h3>
           {history.length === 0 ? <Empty>{t('No changes recorded.')}</Empty> : (
-            <ul className="space-y-1 text-xs text-gray-700">
+            <ul className="space-y-1 text-xs text-ink-2">
               {history.slice(0, 12).map((e) => (
-                <li key={e.id}><span className="text-gray-600">{fmtDate(e.at)} · {e.actorName || t('system')}</span> — {describeEvent(e, t)}{e.reason && <span className="italic"> — "{e.reason}"</span>}</li>
+                <li key={e.id}><span className="text-muted">{fmtDate(e.at)} · {e.actorName || t('system')}</span> — {describeEvent(e, t)}{e.reason && <span className="italic"> — "{e.reason}"</span>}</li>
               ))}
             </ul>
           )}
@@ -209,7 +209,7 @@ function CheckInForm({ epic, onClose }) {
   return (
     <Modal title={t('Check-in: {title}', { title: epic.title })} onClose={onClose}>
       <div className="flex gap-2 mb-3">
-        {CONFIDENCE.map((c) => <button key={c} className={`${btn.secondary} ${confidence === c ? 'ring-2 ring-indigo-500' : ''}`} onClick={() => setConfidence(c)}>{t(CONFIDENCE_META[c].label)}</button>)}
+        {CONFIDENCE.map((c) => <button key={c} className={`${btn.secondary} ${confidence === c ? 'ring-2 ring-accent' : ''}`} onClick={() => setConfidence(c)}>{t(CONFIDENCE_META[c].label)}</button>)}
       </div>
       <input className={input} placeholder={t('One line (optional)')} value={note} onChange={(e) => setNote(e.target.value)} />
       <ErrorNote error={err} />

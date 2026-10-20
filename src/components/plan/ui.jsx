@@ -26,7 +26,7 @@ export const ConfidenceMark = ({ value }) => {
 export const RankBadge = ({ rank, size = 'md' }) => {
   const t = useT();
   const dim = size === 'sm' ? 'w-6 h-6 text-xs' : 'w-7 h-7 text-xs';
-  const cls = rank == null ? 'bg-gray-200 text-gray-600' : rank <= 10 ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-800 border border-indigo-400';
+  const cls = rank == null ? 'bg-neutral-bg text-muted' : rank <= 10 ? 'bg-accent text-white' : 'bg-surface text-accent-700 border border-accent-300';
   return <span className={`shrink-0 rounded font-bold flex items-center justify-center ${dim} ${cls}`} title={rank == null ? t('Unranked') : t('Strategic rank {rank}', { rank })}>{rank ?? '–'}</span>;
 };
 
@@ -41,9 +41,9 @@ export function CapacityBar({ load, compact = false }) {
     <div className="w-full">
       <div className="flex items-center justify-between text-xs mb-1 gap-2">
         <span className={`font-semibold ${band.text}`}><span aria-hidden="true">{band.icon}</span> {text}</span>
-        {!compact && <span className="text-gray-600 whitespace-nowrap">{t('{low}–{high} of {available} pw', { low: load.totalLow, high: load.totalHigh, available: load.available })}</span>}
+        {!compact && <span className="text-muted whitespace-nowrap">{t('{low}–{high} of {available} pw', { low: load.totalLow, high: load.totalHigh, available: load.available })}</span>}
       </div>
-      <div className="h-2 w-full rounded bg-gray-200 overflow-hidden relative" role="img" aria-label={t('Load {low} to {high} percent of capacity, {band}', { low: load.pctLow, high: load.pct, band: t(band.label) })}>
+      <div className="h-2 w-full rounded bg-neutral-bg overflow-hidden relative" role="img" aria-label={t('Load {low} to {high} percent of capacity, {band}', { low: load.pctLow, high: load.pct, band: t(band.label) })}>
         <div className={`h-2 ${band.bar} opacity-50 absolute left-0 top-0`} style={{ width: `${widthHigh}%` }} />
         <div className={`h-2 ${band.bar} absolute left-0 top-0`} style={{ width: `${widthLow}%` }} />
       </div>
@@ -55,7 +55,7 @@ export function CapacityBar({ load, compact = false }) {
 export const CapacityLegend = () => {
   const t = useT();
   return (
-    <p className="text-xs text-gray-600">
+    <p className="text-xs text-muted">
       {t('Load range = low–high effort of own work plus accepted asks from other teams, against available capacity (headcount × weeks × focus factor − absence, minus reserve).')}
       {' '}{t('Bands:')} <span className="text-emerald-700 font-medium">{t('OK')} ≤ 80%</span>, <span className="text-amber-700 font-medium">{t('Tight')} ≤ 100%</span>, <span className="text-red-700 font-medium">{t('Over capacity')} &gt; 100%</span>. {t('Over capacity warns, it never blocks.')}
     </p>
@@ -64,10 +64,10 @@ export const CapacityLegend = () => {
 
 export function Panel({ title, right, children, className = '' }) {
   return (
-    <section className={`bg-white rounded-lg border border-gray-200 shadow-sm ${className}`}>
+    <section className={`bg-surface rounded-lg border border-border shadow-sm ${className}`}>
       {(title || right) && (
-        <header className="flex items-center justify-between px-4 py-2 border-b border-gray-100 gap-2">
-          <h3 className="font-semibold text-sm text-gray-800">{title}</h3>
+        <header className="flex items-center justify-between px-4 py-2 border-b border-border gap-2">
+          <h3 className="font-semibold text-sm text-ink">{title}</h3>
           {right}
         </header>
       )}
@@ -77,26 +77,26 @@ export function Panel({ title, right, children, className = '' }) {
 }
 
 export function Kpi({ label, value, sub, tone = 'neutral', onClick }) {
-  const tones = { neutral: ['text-gray-900', ''], good: ['text-emerald-700', '✓'], warn: ['text-amber-700', '!'], bad: ['text-red-700', '▲'] };
+  const tones = { neutral: ['text-ink', ''], good: ['text-emerald-700', '✓'], warn: ['text-amber-700', '!'], bad: ['text-red-700', '▲'] };
   const [cls, icon] = tones[tone];
   const Tag = onClick ? 'button' : 'div';
   return (
-    <Tag onClick={onClick} className={`bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-left ${onClick ? 'hover:border-indigo-400' : ''}`}>
-      <div className="text-xs text-gray-600 uppercase tracking-wide">{label}</div>
+    <Tag onClick={onClick} className={`bg-surface rounded-lg border border-border shadow-sm p-4 text-left ${onClick ? 'hover:border-accent-300' : ''}`}>
+      <div className="text-xs text-muted uppercase tracking-wide">{label}</div>
       <div className={`text-2xl font-bold mt-1 ${cls}`}>{icon && <span aria-hidden="true" className="text-base mr-1">{icon}</span>}{value}</div>
-      {sub && <div className="text-xs text-gray-600 mt-1">{sub}</div>}
+      {sub && <div className="text-xs text-muted mt-1">{sub}</div>}
     </Tag>
   );
 }
 
 export const btn = {
-  primary: 'bg-indigo-600 text-white text-sm px-3 py-1.5 rounded hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed',
-  secondary: 'bg-white border border-gray-300 text-sm px-3 py-1.5 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed',
-  ghost: 'text-sm text-indigo-700 hover:underline disabled:opacity-40',
+  primary: 'bg-accent text-white text-sm px-3 py-1.5 rounded hover:bg-accent-600 disabled:opacity-40 disabled:cursor-not-allowed',
+  secondary: 'bg-surface border border-border-strong text-sm px-3 py-1.5 rounded hover:bg-surface-2 disabled:opacity-40 disabled:cursor-not-allowed',
+  ghost: 'text-sm text-accent-700 hover:underline disabled:opacity-40',
   danger: 'text-sm text-red-700 hover:underline',
 };
-export const input = 'border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full';
-export const label = 'block text-xs font-medium text-gray-700 mb-1';
+export const input = 'border border-border-strong rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-accent w-full';
+export const label = 'block text-xs font-medium text-ink-2 mb-1';
 
 export function Field({ l, children }) { return <label className="block"><span className={label}>{l}</span>{children}</label>; }
 
@@ -127,10 +127,10 @@ export function Modal({ title, onClose, children, wide = false }) {
   }, []);
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : t('Dialog')} className={`bg-white rounded-lg shadow-xl ${wide ? 'w-[760px]' : 'w-[480px]'} max-w-[95vw] max-h-[90vh] overflow-auto`} onClick={(e) => e.stopPropagation()}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : t('Dialog')} className={`bg-surface rounded-lg shadow-xl ${wide ? 'w-[760px]' : 'w-[480px]'} max-w-[95vw] max-h-[90vh] overflow-auto`} onClick={(e) => e.stopPropagation()}>
         <header className="flex items-center justify-between px-4 py-3 border-b">
           <h3 className="font-semibold">{title}</h3>
-          <button className="text-gray-500 hover:text-gray-800 text-xl leading-none" onClick={onClose} aria-label={t('Close')}>×</button>
+          <button className="text-muted hover:text-ink text-xl leading-none" onClick={onClose} aria-label={t('Close')}>×</button>
         </header>
         <div className="p-4">{children}</div>
       </div>
@@ -145,7 +145,7 @@ export function ReasonPrompt({ title, hint, onSubmit, onClose, submitLabel }) {
   const [err, setErr] = useState(null);
   return (
     <Modal title={title} onClose={onClose}>
-      {hint && <p className="text-sm text-gray-700 mb-2">{hint}</p>}
+      {hint && <p className="text-sm text-ink-2 mb-2">{hint}</p>}
       <textarea className={input} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('Reason (required)')} aria-label={t('Reason')} />
       <ErrorNote error={err} />
       <div className="flex justify-end gap-2 mt-3">
@@ -156,5 +156,5 @@ export function ReasonPrompt({ title, hint, onSubmit, onClose, submitLabel }) {
   );
 }
 
-export const Empty = ({ children }) => <p className="text-sm text-gray-600 italic">{children}</p>;
+export const Empty = ({ children }) => <p className="text-sm text-muted italic">{children}</p>;
 export const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('nl-NL') : '–');

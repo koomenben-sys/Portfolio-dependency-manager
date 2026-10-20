@@ -30,7 +30,7 @@ export function DependencyForm({ epic, existing = null, onDone }) {
         <Field l={t('Effort low (person-weeks)')}><input type="number" min="0" step="0.5" className={input} value={form.effortLow} onChange={set('effortLow')} placeholder={t('e.g. 2')} /></Field>
         <Field l={t('Effort high (person-weeks)')}><input type="number" min="0" step="0.5" className={input} value={form.effortHigh} onChange={set('effortHigh')} placeholder={t('e.g. 3')} /></Field>
         <Field l={t('Needed by (optional date within the quarter)')}><input type="date" className={input} value={form.neededBy} onChange={set('neededBy')} /></Field>
-        <div className="text-xs text-gray-600 self-end pb-1">{t('Contact:')} {epic.ownerName || t('epic owner not set')}</div>
+        <div className="text-xs text-muted self-end pb-1">{t('Contact:')} {epic.ownerName || t('epic owner not set')}</div>
       </div>
       <Field l={t('What do we need? (required)')}><textarea className={input} rows={2} value={form.ask} onChange={set('ask')} /></Field>
       <Field l={t('What happens if they say no? (optional, helps the provider decide)')}><input className={input} value={form.ifDeclined} onChange={set('ifDeclined')} /></Field>

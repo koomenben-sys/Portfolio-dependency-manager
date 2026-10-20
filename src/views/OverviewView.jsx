@@ -19,8 +19,8 @@ export function OverviewView() {
   return (
     <div className="space-y-6">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-xl font-bold">{t('Overview')} · {quarterLabel(quarter)} <span className="text-sm font-normal text-gray-500">({phaseLabel})</span></h2>
-        <span className="text-xs text-gray-600 flex items-center gap-3">{t('Data as of {time}', { time: o.asOf ? new Date(o.asOf).toLocaleString('nl-NL') : '–' })} <button className={`${btn.secondary} print:hidden`} onClick={() => window.print()}>{t('Print / PDF')}</button></span>
+        <h2 className="text-xl font-bold">{t('Overview')} · {quarterLabel(quarter)} <span className="text-sm font-normal text-muted">({phaseLabel})</span></h2>
+        <span className="text-xs text-muted flex items-center gap-3">{t('Data as of {time}', { time: o.asOf ? new Date(o.asOf).toLocaleString('nl-NL') : '–' })} <button className={`${btn.secondary} print:hidden`} onClick={() => window.print()}>{t('Print / PDF')}</button></span>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -36,16 +36,16 @@ export function OverviewView() {
         <Panel title={t('Red flags — what needs a decision')} className="xl:col-span-2">
           {o.flags.length === 0 ? <Empty>{t('No red flags.')}</Empty> : (
             <table className="w-full text-sm">
-              <thead className="text-xs text-gray-600 text-left"><tr><th className="py-1">{t('Item (highest severity first)')}</th><th>{t('Why it needs a decision')}</th><th>{t('Owner')}</th><th>{t('Since last change (days)')}</th></tr></thead>
+              <thead className="text-xs text-muted text-left"><tr><th className="py-1">{t('Item (highest severity first)')}</th><th>{t('Why it needs a decision')}</th><th>{t('Owner')}</th><th>{t('Since last change (days)')}</th></tr></thead>
               <tbody>{o.flags.map((f) => (
                 <tr key={f.key} className="border-t align-top">
                   <td className="py-1.5 pr-2"><button className="text-left hover:underline font-medium" onClick={() => f.epicId && setOpenEpic(f.epicId)}>{f.label}</button></td>
                   <td className="py-1.5 pr-2">
                     <div className="flex flex-wrap gap-1 mb-0.5">{f.kinds.map((k, i) => <span key={i} className={`text-xs px-1.5 py-0.5 rounded border ${f.severity >= 4 ? 'bg-red-50 text-red-800 border-red-200' : f.severity === 3 ? 'bg-orange-50 text-orange-800 border-orange-200' : 'bg-amber-50 text-amber-900 border-amber-200'}`}>▲ {t(k)}</span>)}</div>
-                    <ul className="text-xs text-gray-700">{f.texts.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                    <ul className="text-xs text-ink-2">{f.texts.map((x, i) => <li key={i}>{x}</li>)}</ul>
                   </td>
                   <td className="py-1.5 pr-2 whitespace-nowrap">{f.owner || '–'}</td>
-                  <td className="py-1.5 text-xs text-gray-600 whitespace-nowrap">{f.age ?? '–'}</td>
+                  <td className="py-1.5 text-xs text-muted whitespace-nowrap">{f.age ?? '–'}</td>
                 </tr>))}</tbody>
             </table>
           )}
@@ -56,10 +56,10 @@ export function OverviewView() {
             {o.themeRows.map((r) => (
               <li key={r.theme.id} className="flex justify-between gap-2">
                 <span className="truncate">{r.uncovered ? <span className="text-red-700" title={t('No committed epic')}>▲ </span> : <span className="text-emerald-700">✓ </span>}{r.theme.name}</span>
-                <span className="text-xs text-gray-600 whitespace-nowrap">{t('{committed}/{epics} committed · {weeks} pw', { committed: r.committed, epics: r.epics, weeks: r.weeks })}</span>
+                <span className="text-xs text-muted whitespace-nowrap">{t('{committed}/{epics} committed · {weeks} pw', { committed: r.committed, epics: r.epics, weeks: r.weeks })}</span>
               </li>
             ))}
-            <li className="flex justify-between gap-2 border-t pt-1.5 text-gray-600"><span>{t('Unaligned (no theme)')}</span><span className="text-xs">{t('{n} epics', { n: o.unaligned })}</span></li>
+            <li className="flex justify-between gap-2 border-t pt-1.5 text-muted"><span>{t('Unaligned (no theme)')}</span><span className="text-xs">{t('{n} epics', { n: o.unaligned })}</span></li>
           </ul>
         </Panel>
       </div>
@@ -67,7 +67,7 @@ export function OverviewView() {
       <Panel title={t('Regulatory register — what we must deliver and whether it fits')}>
         {o.regulatoryRows.length === 0 ? <Empty>{t('No regulatory epics this quarter.')}</Empty> : (
           <table className="w-full text-sm">
-            <thead className="text-xs text-gray-600 text-left"><tr><th className="py-1">{t('Regulation')}</th><th>{t('Epic')}</th><th>{t('Team')}</th><th>{t('Deadline')}</th><th>{t('Rank')}</th><th>{t('Commitment')}</th><th>{t('Fits capacity?')}</th><th>{t('Owner')}</th></tr></thead>
+            <thead className="text-xs text-muted text-left"><tr><th className="py-1">{t('Regulation')}</th><th>{t('Epic')}</th><th>{t('Team')}</th><th>{t('Deadline')}</th><th>{t('Rank')}</th><th>{t('Commitment')}</th><th>{t('Fits capacity?')}</th><th>{t('Owner')}</th></tr></thead>
             <tbody>{o.regulatoryRows.map((r) => (
               <tr key={r.epicId} className="border-t">
                 <td className="py-1.5 pr-2 font-medium">{r.regulation || '–'}</td>
@@ -83,11 +83,11 @@ export function OverviewView() {
         )}
       </Panel>
 
-      <Panel title={t('Teams — load and freshness')} right={<details className="text-xs"><summary className="cursor-pointer text-indigo-700">{t('How are these numbers built?')}</summary><div className="mt-1 max-w-md"><CapacityLegend /></div></details>}>
+      <Panel title={t('Teams — load and freshness')} right={<details className="text-xs"><summary className="cursor-pointer text-accent-700">{t('How are these numbers built?')}</summary><div className="mt-1 max-w-md"><CapacityLegend /></div></details>}>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           {o.loads.map((l) => { const f = o.teamFreshness.find((x) => x.team.id === l.team.id); return (
             <div key={l.team.id} className="border rounded p-2">
-              <div className="flex justify-between text-sm"><b>{l.team.name}</b><span className={`text-xs ${f.stale ? 'text-red-700' : 'text-gray-600'}`}>{f.stale ? `▲ ${t('stale')} · ` : ''}{f.days == null ? t('updated never') : t('updated {n} days ago', { n: f.days })}</span></div>
+              <div className="flex justify-between text-sm"><b>{l.team.name}</b><span className={`text-xs ${f.stale ? 'text-red-700' : 'text-muted'}`}>{f.stale ? `▲ ${t('stale')} · ` : ''}{f.days == null ? t('updated never') : t('updated {n} days ago', { n: f.days })}</span></div>
               <div className="mt-1"><CapacityBar load={l} compact /></div>
             </div>); })}
         </div>
