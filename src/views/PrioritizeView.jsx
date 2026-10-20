@@ -2,20 +2,22 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { GripVertical, ArrowUp, ArrowDown, Plus, Search, ListOrdered } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canRank, isPlanner, isAdmin } from '../data/repository';
-import { isLockedPhase } from '../domain/model';
+import { isLockedPhase, cyclePhase } from '../domain/model';
+import { followsOf } from '../domain/follows';
 import { epicDeps, byId } from '../domain/plan';
 import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../domain/value';
 import { teamCapacity } from '../domain/capacity';
 import { useT } from '../i18n';
-import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip, CapacityLine } from '../components/plan/core';
+import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip, CapacityLine, FollowStar } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
 // Screen 1 — Prioriteren (docs/design.md section 19, D26/D28; Release A section 21, D42/D43). One ranked table; drag
 // or use the arrow buttons to reorder; the moved row shows an inline optional reason; unranked epics sit in a collapsed
 // group. Above the table one strategy line (top-10 per goal) that filters; one filter select for teams and goals.
-// Release B (section 22): a compact capacity line when filtered to one team (L3), a muted "gewijzigd" marker after
-// Plan vastzetten (L6), and the worst signal in the dependency cell (L8, inside WorstIssue).
+// Release B (section 22): a compact capacity line when filtered to one team (L3) and the worst signal in the
+// dependency cell (L8, inside WorstIssue). Section 23: read-only once the quarter is Afgesloten (M4); "Gevolgd (n)"
+// at the top of the filter and a small star after followed titles (M8).
 const TOP_N = 10;
 export function PrioritizeView() {
   const { state, actor, quarter, run } = usePlan();
@@ -63,14 +65,18 @@ export function PrioritizeView() {
   const order = pending ? pending.order.map((id) => plansQ.find((p) => p.id === id)).filter(Boolean) : rankedBase;
   const orderIds = new Set(order.map((p) => p.id));
   const unranked = plansQ.filter((p) => !orderIds.has(p.id));
-  const mayRank = canRank(actor) && quarter.phase !== 'closed';
-  const mayAdd = isPlanner(actor) && quarter.phase !== 'closed';
+  const closed = quarter.phase === 'closed'; // Afgesloten: no drag, no arrows, no "+ Epic" (M4)
+  const mayRank = canRank(actor) && !closed;
+  const mayAdd = isPlanner(actor) && !closed;
+  const followed = followsOf(state, actor.id);
+  const followedN = plansQ.filter((p) => followed.has(p.epicId)).length;
   // Searching or filtering (team or goal) hides rows, so the visible order is no longer 1..n: reordering pauses.
   const searching = query.trim().length > 0 || filter !== '';
   const canDrag = mayRank && !searching;
   const [fKind, fId] = filter.split(':');
   const match = (p) => {
     const e = epics.get(p.epicId);
+    if (fKind === 'followed' && !followed.has(p.epicId)) return false;
     if (fKind === 'team' && e?.teamId !== fId) return false;
     if (fKind === 'goal' && (fId === 'none' ? !!e?.themeId && themes.has(e.themeId) : e?.themeId !== fId)) return false;
     return !query.trim() || `${e?.refCode} ${e?.title} ${teams.get(e?.teamId)?.name} ${themes.get(e?.themeId)?.name || ''}`.toLowerCase().includes(query.trim().toLowerCase());
@@ -129,6 +135,7 @@ export function PrioritizeView() {
           <td className="pr-3 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-body text-ink truncate">{e.title}</span>
+              <FollowStar on={followed.has(e.id)} />
               <MustChip must={effectiveMust(e, themes.get(e.themeId))} className="shrink-0" />
             </div>
           </td>
@@ -166,6 +173,7 @@ export function PrioritizeView() {
           <label className="sr-only" htmlFor="prio-filter">{t('Filter')}</label>
           <select id="prio-filter" className={`${cls.input} !w-auto max-w-[220px]`} value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="">{t('All')}</option>
+            <option value="followed:me">{t('Followed ({n})', { n: followedN })}</option>
             <optgroup label={t('Teams')}>{state.teams.map((x) => <option key={x.id} value={`team:${x.id}`}>{x.name}</option>)}</optgroup>
             {goals.length > 0 && <optgroup label={t('Goals')}>{goals.map((x) => <option key={x.id} value={`goal:${x.id}`}>{x.name}</option>)}<option value="goal:none">{t('Without goal')}</option></optgroup>}
           </select>
@@ -174,7 +182,7 @@ export function PrioritizeView() {
         </>
       } />
 
-      {goals.length > 0 && strategy.top > 0 && (() => {
+      {goals.length > 0 && strategy.top > 0 && cyclePhase(quarter.phase) === 'Planning' && (() => {
         // Iteration 1 (item 1): goals with epics in the top N first ("Klantcontact 5"), empty goals muted at the end.
         const goalBtn = (id, label, n, muted) => {
           const active = filter === `goal:${id}`;

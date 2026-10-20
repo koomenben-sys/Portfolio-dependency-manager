@@ -23,6 +23,8 @@
 //   closeQuarter(actor, quarterId, reason='')          (admin; locked/active -> closed)
 //   setSignal(actor, depId, signal, note='') / confirmSignal(actor, depId)   (provider team, committed asks only; D55)
 //   setDelivered(actor, planId, bool) / carryOver(actor, planId)            (epic team; carryOver is idempotent; D56)
+//   followEpic(actor, epicId) / unfollowEpic(actor, epicId)   (any member, own rows only; state.follows = own epic ids
+//     in Supabase, { [actorId]: epicId[] } in the mock; domain/follows.js reads both; D67/D68)
 //   updateSettings also carries sizeMap { S:[lo,hi], ... } and cadence { mode: 'exception'|'sprint', weeks }
 //   upsertTeam / deleteTeam / upsertQuarter
 //   upsertTheme(actor, { id?, name, type: 'goal'|'program', must, mustDeadline, archived }) / deleteTheme   (rank permission; D40)

@@ -40,16 +40,19 @@ An enterprise planning tool for scarce team capacity and cross-team dependencies
 
 ```
 src/
-  domain/      model.js (statuses, phases), capacity.js (available/load/cut line), plan.js (selectors)
+  domain/      model.js (statuses, phases, cyclePhase + STEPS per phase), capacity.js (available/load/cut line), plan.js (selectors),
+               rhythm.js (sizes, signals, Voortgang selectors, closeRows), follows.js (Volgen)
   data/        repository.js (contract + permission helpers), mockRepository.js, supabaseRepository.js, seed.js
   context/     PlanContext.jsx (state, actor, quarter, run()), AuthContext.jsx
-  views/       core: PrioritizeView, DependenciesView, AlignView, SettingsView, LoginView
+  views/       core: PrioritizeView, DependenciesView (also step 2 "Afgestemd"), AlignView, ProgressView (Voortgang), ResultView (Resultaat),
+               QuarterResultView (tussenstand), SettingsView, LoginView
                beta (settings.modules): OverviewView, BoardView, DependenciesView.legacy, SessionView, InQuarterView, AttentionView
-  components/plan/  core.jsx (calm primitives: StatusChip, RankNo, DepSummary, Tabs, InlineReason, AnswerControl, Menu, Dialog),
+  components/plan/  core.jsx (calm primitives: StatusChip, RankNo, DepSummary, Tabs, InlineReason, AnswerControl, Menu, Dialog, FollowStar),
+               CycleActions.jsx (lock / close dialogs; the phase word is plain text, steps follow cyclePhase: design.md section 23),
                SimpleEpicPanel.jsx, OnboardingWizard.jsx (3 steps), TourPanel.jsx + tourScenarios.js (3 tours),
                legacy for beta views: ui.jsx, EpicPanel.jsx, DependencyForm.jsx, AnswerModal.jsx, SetupPanel.jsx
   integrations/azureDevOps/  mapper.js, client.js, mock.js
-db/migrations/ 001_core … 008_realtime   db/tests/ rls_test.sql, run_pglite.mjs, 005_review_round2, 006_live_test (run in order; all re-runnable)
+db/migrations/ 001_core … 011_follows   db/tests/ rls_test.sql, run_pglite.mjs (run in order; all re-runnable)
 ```
 
 ### Adding a feature (pattern)

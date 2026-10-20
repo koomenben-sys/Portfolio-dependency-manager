@@ -1,9 +1,9 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown, Flag, TriangleAlert, OctagonX, Pencil } from 'lucide-react';
+import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown, Flag, TriangleAlert, OctagonX, Pencil, Star } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { ASK_META, COMMITMENT_META } from '../../domain/model';
 import { SIMPLE_META, fmtMonth } from '../../domain/value';
-import { SIZES, SIGNALS, SIGNAL_META, BOTTLENECK_META, signalOf, worstSignal, fmtEffort } from '../../domain/rhythm';
+import { SIZES, SIGNALS, SIGNAL_META, BOTTLENECK_META, signalOf, worstSignal, fmtEffort, isPostLock } from '../../domain/rhythm';
 import { useT } from '../../i18n';
 
 // Calm primitives for the three core screens (docs/design.md section 19). Tokens come from src/index.css;
@@ -214,6 +214,42 @@ export function CapacityLine({ cap, onEdit, compact = false, className = '' }) {
     </span>
   );
 }
+// ── Section 23 primitives (Volgen, M8; "na vastzetten", M3) ───────────────────
+// Small filled star after a followed epic's title in lists; nothing when not followed.
+export function FollowStar({ on, className = '' }) {
+  const t = useT();
+  if (!on) return null;
+  return <Star size={11} fill="currentColor" strokeWidth={0} className={`text-accent shrink-0 ${className}`} aria-label={t('Followed')} role="img" />;
+}
+// Header toggle "Volgen" / "Gevolgd" in the epic panel (aria-pressed).
+export function FollowButton({ on, onToggle, disabled = false }) {
+  const t = useT();
+  return (
+    <button type="button" aria-pressed={on} disabled={disabled} onClick={onToggle} title={on ? t('Unfollow') : t('Follow')}
+      className={`inline-flex items-center gap-1 h-7 px-1.5 rounded-control text-caption font-medium transition-base focus-ring disabled:opacity-40 ${on ? 'text-accent-700 bg-accent-50' : 'text-muted hover:text-ink hover:bg-surface-2'}`}>
+      <Star size={13} fill={on ? 'currentColor' : 'none'} strokeWidth={on ? 0 : 2} aria-hidden="true" />{on ? t('Followed') : t('Follow')}
+    </button>
+  );
+}
+// "Alleen gevolgd" filter toggle (Afgestemd, Voortgang); `count` is the number of followed epics in the quarter.
+export function FollowOnlyToggle({ on, onChange, count, className = '' }) {
+  const t = useT();
+  if (!on && count === 0) return null; // nothing followed yet: no toggle (iteration 1)
+  return (
+    <button type="button" aria-pressed={on} onClick={() => onChange(!on)}
+      className={`inline-flex items-center gap-1 h-7 px-2 rounded-full text-caption font-medium tnum transition-base focus-ring ${on ? 'bg-accent-50 text-accent-700' : 'bg-surface-2 text-muted hover:text-ink'} ${className}`}>
+      <Star size={11} fill={on ? 'currentColor' : 'none'} strokeWidth={on ? 0 : 2} aria-hidden="true" />{t('Followed only')}{count != null && <span>({count})</span>}
+    </button>
+  );
+}
+// Muted "na vastzetten" after an ask created after the quarter was locked (M3).
+export { isPostLock };
+export function PostLockMark({ dep, quarter, className = '' }) {
+  const t = useT();
+  if (!isPostLock(dep, quarter)) return null;
+  return <span className={`inline-flex items-center rounded-full px-1.5 h-5 text-micro font-semibold whitespace-nowrap bg-surface-2 text-muted ${className}`}>{t('after lock')}</span>;
+}
+
 // Confirm dialog with an optional one-line reason (Plan vastzetten, Kwartaal afsluiten).
 export function ConfirmDialog({ title, line, confirmLabel, onConfirm, onClose, withReason = true, error }) {
   const t = useT();

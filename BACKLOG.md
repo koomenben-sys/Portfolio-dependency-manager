@@ -89,3 +89,6 @@ Bron: `docs/research/persona-interviews-2026-10-18.md`. Kern blijft: drie scherm
 - PMO: predictability per team per quarter as export with a trend over quarters.
 - Team lead: a copyable session summary (what was agreed) for Teams / Slack.
 - Owner to revisit: predictability % per team visible to all (works-council sensitivity).
+
+## Refinement: dependencies like the Feb build (owner, 2026-10-19)
+Proposals and Feb-vs-today comparison: `docs/research/dependency-refinement-2026-10-19.md`. Suggested order: (1) two-field ask form + (4) quiet rows before Uitvoeren, then (3) asks editable in the epic panel, then (2) provider sizes the ask (schema), (5) matrix per epic last. Needs Ben's answers to the three open questions first.

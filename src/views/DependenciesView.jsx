@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canWriteTeam } from '../data/repository';
-import { isLockedPhase, REASON_REQUIRED, ASK_META } from '../domain/model';
+import { isLockedPhase, REASON_REQUIRED, ASK_META, cyclePhase } from '../domain/model';
+import { followsOf, readFollowOnly, writeFollowOnly } from '../domain/follows';
 import { teamCapacity } from '../domain/capacity';
 import { planFor, phaseAllows, byId } from '../domain/plan';
 import { CERTAINTIES, CERTAINTY_META, sizeRange, signalOf, needsConfirmation } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, ErrorLine, Disclosure, Dialog, toneClass, normAsk, SizePicker, SizeText, SignalChip, SignalControl, SignalIcon, CapacityLine } from '../components/plan/core';
+import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, ErrorLine, Disclosure, Dialog, toneClass, normAsk, SizePicker, SizeText, SignalChip, SignalControl, SignalIcon, CapacityLine, FollowStar, FollowOnlyToggle, PostLockMark } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 import { useTourNudge } from '../components/plan/TourPanel';
@@ -17,6 +18,8 @@ import { useTourNudge } from '../components/plan/TourPanel';
 // "Aan ons gevraagd": asks to this team ordered by the requesting epic's rank, answered with one click.
 // Release B (section 22): the team's capacity line + a four-field dialog (L2/L3), size and certainty on the ask
 // form (L1/L4), the provider's signal on committed asks in "Aan ons gevraagd" and the read-only signal in "Wij vragen" (L7/L8).
+// Section 23 (M3): the same screen is step 2 "Afgestemd" once the quarter runs — asks added after the lock carry a
+// small "na vastzetten" label, an "Alleen gevolgd" toggle filters on followed epics (M8), and a closed quarter is read-only.
 const COUNT_ORDER = ['declined', 'needs_priority_call', 'proposed', 'accepted'];
 
 export function DependenciesView() {
@@ -31,15 +34,22 @@ export function DependenciesView() {
   const [openEpic, setOpenEpic] = useState(null);
   const [capDialog, setCapDialog] = useState(false);
   const [err, setErr] = useState(null);
+  const [followOnly, setFollowOnlyState] = useState(() => readFollowOnly(actor.id));
+  useEffect(() => { setFollowOnlyState(readFollowOnly(actor.id)); }, [actor.id]);
   if (!quarter) return <NoQuarter />;
+  const agreed = cyclePhase(quarter.phase) !== 'Planning'; // step 2 "Afgestemd" (M3)
+  const followed = followsOf(state, actor.id);
+  const setFollowOnly = (on) => { setFollowOnlyState(on); writeFollowOnly(actor.id, on); };
   const epics = byId(state.epics); const teams = byId(state.teams);
   const deps = state.dependencies.filter((d) => d.quarterId === quarter.id);
   const outgoing = deps.filter((d) => d.requesterTeamId === teamId);
   const incoming = deps.filter((d) => d.providerTeamId === teamId);
-  const inFilter = (d) => !filter || normAsk(d.response) === filter;
+  const followOk = (epicId) => !(agreed && followOnly) || followed.has(epicId);
+  const inFilter = (d) => (!filter || normAsk(d.response) === filter) && followOk(d.epicId);
   const rankOf = (d) => planFor(state, d.epicId, quarter.id)?.rank ?? 1e9;
   const incomingSorted = [...incoming].filter(inFilter).sort((a, b) => rankOf(a) - rankOf(b) || a.createdAt.localeCompare(b.createdAt));
-  const ourPlans = state.plans.filter((p) => p.quarterId === quarter.id && epics.get(p.epicId)?.teamId === teamId).sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
+  const ourPlans = state.plans.filter((p) => p.quarterId === quarter.id && epics.get(p.epicId)?.teamId === teamId && followOk(p.epicId)).sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
+  const followedInQuarter = state.plans.filter((p) => p.quarterId === quarter.id && followed.has(p.epicId)).length;
   const asksOf = (p) => outgoing.filter((d) => d.epicId === p.epicId);
   const withAsks = ourPlans.filter((p) => asksOf(p).some(inFilter));
   const withoutAsks = ourPlans.filter((p) => asksOf(p).length === 0);
@@ -53,7 +63,7 @@ export function DependenciesView() {
 
   return (
     <div data-tour="dependencies">
-      <ViewHeader title={t('Dependencies')} meta={
+      <ViewHeader title={t(agreed ? 'Agreed' : 'Dependencies')} meta={
         <span className="inline-flex items-center gap-2 text-title text-muted"><span aria-hidden="true">·</span>
           <label><span className="sr-only">{t('Team')}</span>
             <select className="h-8 pl-1 pr-6 rounded-control bg-transparent text-title font-semibold text-ink hover:bg-surface-2 focus-ring cursor-pointer" value={teamId} onChange={(e) => { setTeamId(e.target.value); setFilter(null); }} data-tour="team-select">{state.teams.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
@@ -65,16 +75,17 @@ export function DependenciesView() {
 
       <div className="mt-4 flex items-center gap-3 flex-wrap min-h-7">
         <CountChips deps={tab === 'outgoing' ? outgoing : incoming} value={filter} onChange={setFilter} />
+        {agreed && <FollowOnlyToggle on={followOnly} onChange={setFollowOnly} count={followedInQuarter} />}
         <CapacityLine cap={capacity} onEdit={mayWrite ? () => setCapDialog(true) : undefined} className="ml-auto" />
       </div>
 
       {tab === 'outgoing' && (
         <div className="mt-4 space-y-3" data-tour="outgoing">
-          {ourPlans.length === 0 && <div className={cls.card}><EmptyLine>{t('No epics for this team in this quarter.')}</EmptyLine></div>}
-          {withAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={asksOf(p).filter(inFilter)} teams={teams} mayWrite={mayWrite} locked={locked} act={act} onOpen={() => setOpenEpic(p.epicId)} />)}
+          {ourPlans.length === 0 && <div className={cls.card}><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'No epics for this team in this quarter.')}</EmptyLine></div>}
+          {withAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={asksOf(p).filter(inFilter)} teams={teams} mayWrite={mayWrite} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}
           {withoutAsks.length > 0 && !filter && (
             <Disclosure className="px-1" summary={withoutAsks.length === 1 ? t('1 epic without asks') : t('{n} epics without asks', { n: withoutAsks.length })}>
-              <div className="space-y-3">{withoutAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={[]} teams={teams} mayWrite={mayWrite} locked={locked} act={act} onOpen={() => setOpenEpic(p.epicId)} />)}</div>
+              <div className="space-y-3">{withoutAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={[]} teams={teams} mayWrite={mayWrite} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}</div>
             </Disclosure>
           )}
         </div>
@@ -85,8 +96,8 @@ export function DependenciesView() {
           {!answersOpen && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
           {incoming.length === 0 ? <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div> : (
             <ul className={`${cls.card} divide-y divide-border`}>
-              {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} maySignal={mayWrite} act={act} onOpen={() => setOpenEpic(d.epicId)} />)}
-              {incomingSorted.length === 0 && <li><EmptyLine>{t('Nothing here.')}</EmptyLine></li>}
+              {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} maySignal={mayWrite} act={act} followed={followed.has(d.epicId)} onOpen={() => setOpenEpic(d.epicId)} />)}
+              {incomingSorted.length === 0 && <li><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'Nothing here.')}</EmptyLine></li>}
             </ul>
           )}
         </div>
@@ -151,7 +162,7 @@ function CountChips({ deps, value, onChange }) {
 }
 
 // One of our epics with its asks and the inline "+ Verzoek" row.
-function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, onOpen }) {
+function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, followed, onOpen }) {
   const { state, quarter } = usePlan();
   const t = useT();
   const [adding, setAdding] = useState(false);
@@ -162,7 +173,7 @@ function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, onOpen }) {
     <section className={cls.card} aria-label={epic.title}>
       <header className="flex items-center gap-3 px-3 h-11 border-b border-border">
         <RankNo rank={plan.rank} size="sm" />
-        <button className="min-w-0 flex-1 text-left text-body font-medium truncate hover:underline focus-ring rounded-control" onClick={onOpen}>{epic.title}</button>
+        <button className="min-w-0 flex-1 text-left text-body font-medium truncate hover:underline focus-ring rounded-control" onClick={onOpen}>{epic.title}<FollowStar on={followed} className="inline ml-1.5 -mt-0.5" /></button>
         {mayWrite && !adding && <button className={cls.ghost} onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" />{t('Ask')}</button>}
       </header>
       <ul className="divide-y divide-border">
@@ -171,6 +182,7 @@ function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, onOpen }) {
             <div className="flex items-center gap-3 min-h-8">
               <span className="w-40 shrink-0 text-label text-muted truncate">{teams.get(d.providerTeamId)?.name}</span>
               <span className="flex-1 min-w-0 text-body truncate">{d.ask}{(d.size || d.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={d.size} low={d.effortLow} high={d.effortHigh} /></span>}{d.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</span>
+              <PostLockMark dep={d} quarter={quarter} />
               <SignalChip dep={d} />
               <StatusChip response={d.response} />
               {mayWrite && removing !== d.id && <button className={`${cls.icon} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} aria-label={`${t('Remove ask')} ${d.refCode}`} onClick={() => setRemoving(d.id)}><Trash2 size={14} /></button>}
@@ -224,7 +236,7 @@ function NewAskRow({ epic, quarter, others, locked, act, onDone }) {
 
 // An ask to our team: rank · requesting team · what · for epic · Toezeggen / Bespreken / Kan niet.
 // Only "Kan niet" opens an inline reason (item 10); the other two answer in one click.
-function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, onOpen }) {
+function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, followed, onOpen }) {
   const { state, quarter } = usePlan();
   const t = useT();
   const [reasonFor, setReasonFor] = useState(null); // response awaiting an inline reason
@@ -252,8 +264,9 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, onOpen 
         <span className="w-40 shrink-0 text-label text-muted truncate">{team?.name}</span>
         <div className="flex-1 min-w-[200px]">
           <div id={labelId} className="text-body">{dep.ask}{(dep.size || dep.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={dep.size} low={dep.effortLow} high={dep.effortHigh} /></span>}{dep.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</div>
-          <div className="text-caption text-muted truncate">{t('for')} <button className="hover:underline text-accent focus-ring rounded-control" onClick={onOpen}>{epic?.title}</button></div>
+          <div className="text-caption text-muted truncate">{t('for')} <button className="hover:underline text-accent focus-ring rounded-control" onClick={onOpen}>{epic?.title}</button><FollowStar on={followed} className="inline ml-1" /></div>
         </div>
+        <PostLockMark dep={dep} quarter={quarter} />
         {committed && maySignal && signal === 'on_track' && !sigOpen && noteFor == null && !confirmDue && (
           <button type="button" className={`${cls.quiet} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} onClick={() => setSigOpen(true)} aria-label={`${t('Signal')}: ${t('On track')}`}><SignalIcon signal="on_track" />{t('Signal')}</button>
         )}

@@ -69,7 +69,23 @@ export const REASON_REQUIRED = new Set(['declined', 'deferred']);
 export const needsTalk = (response) => response === 'declined' || response === 'needs_priority_call';
 
 // Release A (D46): the four-step cycle shown next to the quarter selector, mapped onto the eight phases.
-export const CYCLE = { prep: 'Prepare', draft: 'Prepare', negotiate: 'Prepare', review: 'Prepare', vote: 'Event', locked: 'Execute', active: 'Execute', closed: 'Closing' };
-export const cyclePhase = (phase) => CYCLE[phase] || 'Prepare';
+// Section 23 (D63, M1): three cycle phases read from the eight stored ones. Event folds into Planning (the quarter
+// session is a moment; "Plan vastzetten" ends it). The steps in the nav follow this word (App.jsx, D64).
+export const CYCLE = { prep: 'Planning', draft: 'Planning', negotiate: 'Planning', review: 'Planning', vote: 'Planning', locked: 'Execution', active: 'Execution', closed: 'Closed' };
+export const cyclePhase = (phase) => CYCLE[phase] || 'Planning';
+// Step ids per cycle phase (M2). Step 1 keeps its name; 2 and 3 change meaning with the phase.
+export const STEPS = {
+  Planning: ['prioriteren', 'afhankelijkheden', 'afstemmen'],
+  Execution: ['prioriteren', 'afgestemd', 'voortgang'],
+  Closed: ['prioriteren', 'afgestemd', 'resultaat'],
+};
+export const STEP_LABEL = { prioriteren: 'Prioritise', afhankelijkheden: 'Dependencies', afgestemd: 'Agreed', afstemmen: 'Align', voortgang: 'Progress', resultaat: 'Result' };
+const STEP_NO = { prioriteren: 0, afhankelijkheden: 1, afgestemd: 1, afstemmen: 2, voortgang: 2, resultaat: 2, afsluiten: 2 };
+// A step hash that does not belong to the quarter's phase opens that phase's step with the same number (M2, M6).
+export function stepForPhase(viewId, phase) {
+  const n = STEP_NO[viewId];
+  if (n == null) return viewId;
+  return STEPS[cyclePhase(phase)][n];
+}
 
 export const quarterLabel = (q) => (q ? `${q.year} Q${q.q}` : '');

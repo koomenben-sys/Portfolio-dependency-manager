@@ -3,15 +3,15 @@ import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid } 
 import { PlanProvider, usePlan } from './context/PlanContext';
 import { useAuth } from './context/AuthContext';
 import { DATA_SOURCE, isAdmin } from './data/repository';
-import { quarterLabel, PHASES } from './domain/model';
+import { quarterLabel, PHASES, cyclePhase, STEPS, STEP_LABEL, stepForPhase } from './domain/model';
 import { LoginView } from './views/LoginView';
 import { PrioritizeView } from './views/PrioritizeView';
 import { DependenciesView } from './views/DependenciesView';
 import { AlignView } from './views/AlignView';
 import { SettingsView } from './views/SettingsView';
 import { QuarterResultView } from './views/QuarterResultView';
-import { CloseView } from './views/CloseView';
-import { CyclePhaseWord } from './components/plan/CycleActions';
+import { ProgressView } from './views/ProgressView';
+import { ResultView } from './views/ResultView';
 import { OverviewView } from './views/OverviewView';
 import { BoardView } from './views/BoardView';
 import { DependenciesViewLegacy } from './views/DependenciesView.legacy';
@@ -26,12 +26,17 @@ import { Menu, MenuLabel, MenuSep, menuItem, cls } from './components/plan/core'
 import { LiveIndicator } from './components/plan/LiveIndicator';
 import { useT, LANGUAGES } from './i18n';
 
-// The product is three numbered screens (docs/design.md section 19, D26). Everything else sits behind
-// settings.modules ("Uitgebreid (beta)", D27) or in the account menu.
+// The product is three numbered steps (docs/design.md section 19, D26). What step 2 and 3 are depends on the
+// cycle phase of the selected quarter (section 23, D64): Planning = Prioriteren · Afhankelijkheden · Afstemmen,
+// Uitvoering = Prioriteren · Afgestemd · Voortgang, Afgesloten = Prioriteren · Afgestemd · Resultaat.
+// Everything else sits behind settings.modules ("Uitgebreid (beta)", D27) or in the account menu.
 const CORE = [
-  { id: 'prioriteren', label: 'Prioritise', View: PrioritizeView },
-  { id: 'afhankelijkheden', label: 'Dependencies', View: DependenciesView },
-  { id: 'afstemmen', label: 'Align', View: AlignView },
+  { id: 'prioriteren', label: STEP_LABEL.prioriteren, View: PrioritizeView },
+  { id: 'afhankelijkheden', label: STEP_LABEL.afhankelijkheden, View: DependenciesView },
+  { id: 'afgestemd', label: STEP_LABEL.afgestemd, View: DependenciesView },
+  { id: 'afstemmen', label: STEP_LABEL.afstemmen, View: AlignView },
+  { id: 'voortgang', label: STEP_LABEL.voortgang, View: ProgressView },
+  { id: 'resultaat', label: STEP_LABEL.resultaat, View: ResultView },
 ];
 const EXTENDED = [
   { id: 'overzicht', label: 'Overview', View: OverviewView },
@@ -42,11 +47,18 @@ const EXTENDED = [
   { id: 'aandacht', label: 'My attention', View: AttentionView },
 ];
 const SETTINGS = { id: 'instellingen', label: 'Settings', View: SettingsView };
-// Reachable by URL or a button, never listed in the nav (Release A, D45; Release B, D56).
-const HIDDEN = [{ id: 'kwartaalresultaat', label: 'Quarter result', View: QuarterResultView }, { id: 'afsluiten', label: 'Closing', View: CloseView }];
+// Reachable by URL or a button, never listed in the nav (Release A, D45): the tussenstand during Planning.
+const HIDDEN = [{ id: 'kwartaalresultaat', label: 'Quarter result', View: QuarterResultView }];
 const ALL = [...CORE, ...EXTENDED, SETTINGS, ...HIDDEN];
-const VIEW_IDS = new Set(ALL.map((v) => v.id));
+const VIEW_IDS = new Set([...ALL.map((v) => v.id), 'afsluiten']);
 const viewFromHash = () => { const h = window.location.hash.replace('#', ''); return VIEW_IDS.has(h) ? h : 'prioriteren'; };
+// Old routes (M6): #afsluiten and #kwartaalresultaat redirect to the phase's step 3 unless the quarter is still
+// in Planning, where #kwartaalresultaat stays the tussenstand opened from Afstemmen.
+function resolveView(id, quarter) {
+  if (!quarter) return id === 'afsluiten' ? 'resultaat' : id;
+  if (id === 'kwartaalresultaat') return cyclePhase(quarter.phase) === 'Planning' ? id : stepForPhase('resultaat', quarter.phase);
+  return stepForPhase(id, quarter.phase);
+}
 
 // Mock mode: no login, persona switcher. Supabase mode: existing auth flow, membership becomes the actor.
 export default function App() {
@@ -77,12 +89,17 @@ function ShellInner({ ctx, onSignOut }) {
   const [view, setViewState] = useState(viewFromHash);
   const setView = (id) => { if (!VIEW_IDS.has(id)) return; setViewState(id); window.location.hash = id; };
   useEffect(() => { const on = () => setViewState(viewFromHash()); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
+  // Keep the URL honest: a step hash that does not belong to the quarter's phase is replaced by the step shown (M2).
+  useEffect(() => { if (!quarter) return; const r = resolveView(view, quarter); if (r !== view) { window.history.replaceState(null, '', `#${r}`); setViewState(r); } }, [view, quarter?.id, quarter?.phase]);
   useEffect(() => { document.documentElement.lang = state?.settings?.language || 'nl'; }, [state?.settings?.language]);
   if (error) return <div className="p-8 text-danger-fg">{t('Could not load data')}: {error}</div>;
   if (!state) return <Loading />;
   const modules = !!state.settings.modules;
   const needsSetup = !state.settings.setupComplete && isAdmin(actor) && !skipWizard;
-  const current = ALL.find((v) => v.id === view) || CORE[0];
+  const phase = quarter ? cyclePhase(quarter.phase) : 'Planning';
+  const steps = STEPS[phase];
+  const resolved = resolveView(view, quarter);
+  const current = ALL.find((v) => v.id === resolved) || CORE[0];
   const reachable = current === SETTINGS || CORE.includes(current) || HIDDEN.includes(current) || modules;
   const Current = reachable ? current.View : CORE[0].View;
   const initials = (actor.name || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
@@ -97,8 +114,9 @@ function ShellInner({ ctx, onSignOut }) {
             <span className="font-semibold text-body hidden sm:inline">Kwartaalplan</span>
           </button>
           <nav aria-label={t('Main')} className="flex items-center gap-1" data-tour="nav">
-            {CORE.map((v, i) => {
-              const active = view === v.id;
+            {steps.map((id, i) => {
+              const v = CORE.find((x) => x.id === id);
+              const active = resolved === v.id;
               return (
                 <button key={v.id} aria-current={active ? 'page' : undefined} onClick={() => setView(v.id)} data-tour={`nav-${v.id}`}
                   className={`inline-flex items-center gap-2 h-8 px-2.5 rounded-control text-label transition-base focus-ring ${active ? 'text-ink font-medium' : 'text-muted hover:text-ink hover:bg-surface-2'}`}>
@@ -117,7 +135,7 @@ function ShellInner({ ctx, onSignOut }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            <CyclePhaseWord quarter={quarter} setView={setView} />
+            {quarter && <span className="hidden md:inline-flex items-center h-8 px-2 text-caption text-muted whitespace-nowrap" title={t('Cycle phase')} data-tour="cycle">{t(phase)}</span>}
             {dataSource === 'mock' && <span className="hidden md:inline-flex items-center h-6 px-2 rounded-full bg-surface-2 text-micro font-semibold uppercase tracking-wide text-muted" title={t('Fictional data, stored in this browser')}>Demo</span>}
             {dataSource !== 'mock' && <LiveIndicator />}
             <label className="flex items-center gap-1.5 text-label text-muted">
@@ -170,7 +188,7 @@ function ShellInner({ ctx, onSignOut }) {
         </div>
       </header>
       <main id="main" className="px-6 py-6 max-w-[1200px] mx-auto">
-        {needsSetup ? <OnboardingWizard onDone={(target) => { setSkipWizard(true); setView(target || 'prioriteren'); }} /> : <Current key={view} />}
+        {needsSetup ? <OnboardingWizard onDone={(target) => { setSkipWizard(true); setView(target || 'prioriteren'); }} /> : <Current key={`${resolved}-${quarterId}`} />}
       </main>
       {tour && <TourPanel scenarioId={tour} onClose={() => setTour(null)} setView={setView} />}
     </div>
