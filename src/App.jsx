@@ -92,6 +92,8 @@ function ShellInner({ ctx, onSignOut }) {
   // Keep the URL honest: a step hash that does not belong to the quarter's phase is replaced by the step shown (M2).
   useEffect(() => { if (!quarter) return; const r = resolveView(view, quarter); if (r !== view) { window.history.replaceState(null, '', `#${r}`); setViewState(r); } }, [view, quarter?.id, quarter?.phase]);
   useEffect(() => { document.documentElement.lang = state?.settings?.language || 'nl'; }, [state?.settings?.language]);
+  // Skin (Zakelijk | Speels) is an organisation setting; the tokens live in src/index.css under html[data-skin].
+  useEffect(() => { document.documentElement.dataset.skin = state?.settings?.skin || 'zakelijk'; }, [state?.settings?.skin]);
   if (error) return <div className="p-8 text-danger-fg">{t('Could not load data')}: {error}</div>;
   if (!state) return <Loading />;
   const modules = !!state.settings.modules;
@@ -110,8 +112,8 @@ function ShellInner({ ctx, onSignOut }) {
       <header className="bg-surface border-b border-border sticky top-0 z-header" data-print="hide">
         <div className="h-14 px-4 flex items-center gap-4">
           <button className="flex items-center gap-2 h-8 px-1 -ml-1 rounded-control focus-ring" onClick={() => setView('prioriteren')} aria-label="Kwartaalplan">
-            <span className="w-6 h-6 rounded-control bg-accent text-accent-fg font-semibold text-caption flex items-center justify-center" aria-hidden="true">K</span>
-            <span className="font-semibold text-body hidden sm:inline">Kwartaalplan</span>
+            <span className="w-6 h-6 rounded-rank bg-accent text-accent-fg font-semibold text-caption flex items-center justify-center" aria-hidden="true">K</span>
+            <span className="font-display font-[var(--font-display-weight)] text-body hidden sm:inline">Kwartaalplan</span>
           </button>
           <nav aria-label={t('Main')} className="flex items-center gap-1" data-tour="nav">
             {steps.map((id, i) => {
@@ -119,8 +121,8 @@ function ShellInner({ ctx, onSignOut }) {
               const active = resolved === v.id;
               return (
                 <button key={v.id} aria-current={active ? 'page' : undefined} onClick={() => setView(v.id)} data-tour={`nav-${v.id}`}
-                  className={`inline-flex items-center gap-2 h-8 px-2.5 rounded-control text-label transition-base focus-ring ${active ? 'text-ink font-medium' : 'text-muted hover:text-ink hover:bg-surface-2'}`}>
-                  <span className={`tnum w-5 h-5 rounded-full text-micro font-semibold inline-flex items-center justify-center transition-base ${active ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted'}`} aria-hidden="true">{i + 1}</span>{t(v.label)}
+                  className={`nav-step inline-flex items-center gap-2 h-8 px-2.5 rounded-control text-label transition-base focus-ring ${active ? 'font-medium' : 'text-muted hover:text-ink hover:bg-surface-2'}`}>
+                  <span className={`tnum w-5 h-5 rounded-full text-micro font-semibold inline-flex items-center justify-center transition-base ${active ? 'bg-[var(--nav-badge-bg)] text-[var(--nav-badge-fg)]' : 'bg-surface-2 text-muted'}`} aria-hidden="true">{i + 1}</span>{t(v.label)}
                 </button>
               );
             })}
@@ -148,7 +150,7 @@ function ShellInner({ ctx, onSignOut }) {
             <button className={`${cls.icon} w-8 h-8 ${view === 'instellingen' ? 'bg-surface-2 text-ink' : ''}`} aria-label={t('Settings')} title={t('Settings')} aria-current={view === 'instellingen' ? 'page' : undefined} onClick={() => setView('instellingen')}><Settings size={16} /></button>
             <Menu ariaLabel={t('Account')} width="w-72" button={({ ref, toggle, open, ...a }) => (
               <button ref={ref} onClick={toggle} {...a} className="inline-flex items-center gap-2 h-8 pl-1 pr-2 rounded-control hover:bg-surface-2 focus-ring" data-tour="account">
-                <span className="w-6 h-6 rounded-full bg-accent-100 text-accent-700 text-micro font-semibold inline-flex items-center justify-center" aria-hidden="true">{initials}</span>
+                <span className="w-6 h-6 rounded-rank bg-rank-bg text-rank-fg text-micro font-semibold inline-flex items-center justify-center" aria-hidden="true">{initials}</span>
                 <span className="hidden lg:inline text-label text-ink max-w-[160px] truncate">{actor.name}</span>
                 <ChevronDown size={12} className="text-muted" aria-hidden="true" />
               </button>)}>

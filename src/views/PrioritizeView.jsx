@@ -129,7 +129,7 @@ export function PrioritizeView() {
           }}
           className={`group relative h-row cursor-pointer transition-base focus-ring-inset ${dragging ? 'opacity-40' : ''} ${overId === p.id && dragId !== p.id ? 'shadow-[inset_0_2px_0_0_var(--color-accent-500)]' : ''} ${flashId === p.id ? 'anim-flash' : isMoved ? 'bg-accent-50' : 'hover:bg-surface-2'}`}>
           <td className="w-7 pl-2">
-            {canDrag && inList ? <span title={t('Drag, or Alt+↑/↓')}><GripVertical size={14} className="text-faint group-hover:text-muted" aria-hidden="true" /></span> : null}
+            {canDrag && inList ? <span title={t('Drag, or Alt+↑/↓')}><GripVertical size={14} className="text-muted group-hover:text-ink" aria-hidden="true" /></span> : null}
           </td>
           <td className="w-10 pr-2"><RankNo rank={inList ? index + 1 : null} size="sm" /></td>
           <td className="pr-3 min-w-0">
@@ -212,7 +212,7 @@ export function PrioritizeView() {
       {plansQ.length === 0 ? (
         <div className={cls.card}><EmptyLine action={mayAdd && <button className={cls.primary} onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" />{t('Epic')}</button>}>{t('No epics in this quarter yet.')}</EmptyLine></div>
       ) : (
-        <div className={`${cls.card} overflow-hidden`}>
+        <div className={`${cls.card} panel-table overflow-hidden`}>
           <table className="w-full text-body" aria-label={t('Ranked epics')}>
             <thead>
               <tr className="text-caption text-muted text-left border-b border-border">
@@ -231,7 +231,7 @@ export function PrioritizeView() {
             </tbody>
           </table>
           {unranked.length > 0 && (
-            <div className="border-t border-border px-3 py-2 bg-canvas">
+            <div className="border-t border-border px-3 py-2 bg-surface-2">
               <Disclosure summary={<>{t('Not prioritised yet')} <span className="tnum">({unranked.length})</span></>}>
                 <table className="w-full text-body" aria-label={t('Not prioritised yet')}>
                   <tbody className="divide-y divide-border">{visibleUnranked.map((p, i) => renderRow(p, i, false))}</tbody>
