@@ -124,7 +124,7 @@ function ShellInner({ ctx, onSignOut }) {
             <span className="w-6 h-6 rounded-rank bg-accent text-accent-fg font-semibold text-caption flex items-center justify-center" aria-hidden="true">K</span>
             <span className="font-display font-[var(--font-display-weight)] text-body hidden sm:inline">Kwartaalplan</span>
           </button>
-          <nav aria-label={t('Main')} className="flex items-center gap-1 min-w-0 overflow-x-auto" data-tour="nav">
+          <nav aria-label={t('Main')} className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none" data-tour="nav">
             {steps.map((id, i) => {
               const v = CORE.find((x) => x.id === id);
               const active = resolved === v.id;
@@ -199,7 +199,7 @@ function ShellInner({ ctx, onSignOut }) {
           </div>
         </div>
       </header>
-      <main id="main" className="px-6 py-6 max-w-[1200px] mx-auto">
+      <main id="main" className="px-6 py-6 max-w-[1440px] mx-auto">
         {needsSetup ? <OnboardingWizard onDone={(target) => { setSkipWizard(true); setView(target || 'prioriteren'); }} /> : <Current key={`${resolved}-${quarterId}`} />}
       </main>
       {tour && <TourPanel scenarioId={tour} onClose={() => setTour(null)} setView={setView} />}
