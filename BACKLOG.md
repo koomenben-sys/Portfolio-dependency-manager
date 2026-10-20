@@ -33,6 +33,7 @@ Bron: `docs/research/persona-interviews-2026-10-18.md`. Kern blijft: drie scherm
 ## P2 — waarde en verkoopbaarheid
 | Item | Waarom | Bron |
 |---|---|---|
+| Sessiemodus voor live PI's: gesprekken in rondes van X minuten op het scherm, lijst werkt live bij; dezelfde lay-out als escalatiescherm voor de directie (water bij de wijn, knopen doorhakken) | Facilitator en directie sturen het event vanaf één scherm | eigenaar 2026-10-20, design C · Tafel |
 | Echte Azure DevOps-koppeling via Edge Function (PAT/OAuth in Vault), import-mapping opslaan | Geen dubbele invoer; nu alleen mock en lokaal | D21–D22 |
 | Verzoek koppelen aan werkitem van het leverende team (en optioneel child-item aanmaken in ADO) | Anders wordt een geaccepteerd verzoek alsnog overgetypt | PO r2 |
 | Meerdere gelijktijdige sessies per tribe/ART (`scope_label` op kwartaal) | Organisaties boven ~10 teams plannen in clusters | directeur r3, §17.4 |
