@@ -119,8 +119,8 @@ function ShellInner({ ctx, onSignOut }) {
     <div className="min-h-screen bg-canvas text-ink">
       <a href="#main" className="skip-link sr-only-focusable">{t('Skip to content')}</a>
       <header className="bg-surface border-b border-border sticky top-0 z-header" data-print="hide">
-        <div className="h-14 px-4 flex items-center gap-4">
-          <button className="flex items-center gap-2 h-8 px-1 -ml-1 rounded-control focus-ring" onClick={() => setView('prioriteren')} aria-label="Kwartaalplan">
+        <div className="h-14 px-4 flex md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
+          <button className="flex items-center gap-2 h-8 px-1 -ml-1 rounded-control focus-ring justify-self-start" onClick={() => setView('prioriteren')} aria-label="Kwartaalplan">
             <span className="w-6 h-6 rounded-rank bg-accent text-accent-fg font-semibold text-caption flex items-center justify-center" aria-hidden="true">K</span>
             <span className="font-display font-[var(--font-display-weight)] text-body hidden sm:inline">Kwartaalplan</span>
           </button>
@@ -145,7 +145,7 @@ function ShellInner({ ctx, onSignOut }) {
             )}
           </nav>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto md:ml-0 md:justify-self-end min-w-0 flex items-center gap-2">
             {quarter && <span className="hidden md:inline-flex items-center h-8 px-2 text-caption text-muted whitespace-nowrap" title={t('Cycle phase')} data-tour="cycle">{t(phase)}</span>}
             {dataSource === 'mock' && <span className="hidden md:inline-flex items-center h-6 px-2 rounded-full bg-surface-2 text-micro font-semibold uppercase tracking-wide text-muted" title={t('Fictional data, stored in this browser')}>Demo</span>}
             {dataSource !== 'mock' && <LiveIndicator />}
