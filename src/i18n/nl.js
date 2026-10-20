@@ -1046,4 +1046,7 @@ export const nl = {
   'Delivered per team': 'Geleverd per team',
   // Skins follow-ups (section 24)
   'Presentation mode': 'Presentatiemodus',
+  'Columns': 'Kolommen',
+  'Number of dependencies': 'Aantal afhankelijkheden',
+  'Count': 'Aantal',
 };
