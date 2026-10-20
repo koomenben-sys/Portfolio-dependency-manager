@@ -21,6 +21,7 @@ _Updated by Claude at the end of each session._
 - **Release A:** goals/programmes (themes), value model per org, OnePager tab, Kwartaalresultaat (`#kwartaalresultaat`). Migration 009. `docs/design.md` section 21 (D40-D48), `docs/acceptance.md` section K.
 - **Release B:** T-shirt sizes with org mapping, team-level capacity (no per-person data, NL holidays automatic), certainty on asks, automatic bottleneck chips, Plan vastzetten + "gewijzigd", commitment signals + Op uitzondering / Sprintkadans, Afsluiten (`#afsluiten`, via the phase word). Migration 010. `docs/design.md` section 22 (D50-D61), `docs/acceptance.md` section L.
 - **Read first:** `docs/design.md` sections 19-22, `docs/acceptance.md` sections J-L.
+- **Skins (PR #24) and follow-ups (`claude/skins-followups`, `docs/design.md` section 24, D75-D79):** `settings.skin` (Zakelijk | Speels) sets `html[data-skin]`; tokens in `src/index.css`. Presentatiemodus (header button, `localStorage` `kp.present`, `html[data-present]`), Afhankelijkheden side by side from xl, Kolommen menu on Prioriteren (`kp.prioCols`), content column 1440px.
 - **Data layer:** `src/data/repository.js` contract; `MockRepository` (default, localStorage) and `SupabaseRepository` (live-tested 2026-10-17, see `docs/design.md` section 16 "Supabase mode"). Views never call Supabase directly. Start Supabase mode locally with `VITE_DATA_SOURCE=supabase npm run dev` (launch config `mvp-supabase`, port 5175).
 - **P1 invites / RLS tests / realtime (branch `claude/p1-invites-rls-realtime`, `docs/design.md` section 18):** migrations 007 (invitations, `accept_invitations()`, member/ask/plan guards) and 008 (realtime publication); `MembersAdmin.jsx`, `LiveIndicator.jsx`; `db/tests/rls_test.sql` (run in the SQL editor) and `npm run test:rls` (PGlite, local). Owner still has to run 007, 008 and the test, and add the redirect URL in Supabase Auth.
 - **Open follow-ups:** live test of invites and realtime with a second account, sign-in-link option on the login screen, SSO/EU hosting, Vitest, Edge Function for the real ADO sync. Full list: `BACKLOG.md`.
@@ -44,6 +45,8 @@ src/
                rhythm.js (sizes, signals, Voortgang selectors, closeRows), follows.js (Volgen)
   data/        repository.js (contract + permission helpers), mockRepository.js, supabaseRepository.js, seed.js
   context/     PlanContext.jsx (state, actor, quarter, run()), AuthContext.jsx
+  App.jsx      shell: steps per phase, header (presentatiemodus toggle), sets html[data-skin] from settings.skin and html[data-present]
+  index.css    design tokens per skin (Zakelijk default, [data-skin='speels']), presentatiemodus zoom
   views/       core: PrioritizeView, DependenciesView (also step 2 "Afgestemd"), AlignView, ProgressView (Voortgang), ResultView (Resultaat),
                QuarterResultView (tussenstand), SettingsView, LoginView
                beta (settings.modules): OverviewView, BoardView, DependenciesView.legacy, SessionView, InQuarterView, AttentionView

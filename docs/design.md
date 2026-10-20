@@ -634,3 +634,20 @@ A Supabase live test of `followEpic` / 011 (SQL is never run from here; the owne
 
 ### Iteration 1 (2026-10-19, director 8/7, team lead 7/7 on screenshots)
 - **D74 — Less in execution.** The "Top 10 per doel" line shows only during Planning; "Alleen gevolgd" appears once you follow something; the result table lists only goals with epics in the quarter (no 0/0 rows; "Zonder doel" only when it has epics); Resultaat shows no delivered counts (in line with D62). Not changed, for the owner: both personas again asked to drop the per-pair "Besproken" checkbox and the Open / Toegezegd tiles on Afstemmen (owner-approved core UI), and the director misses a cross-team early-warning overview (backlog).
+
+## 24. Skins and display follow-ups (2026-10-20)
+
+Two visual skins on one layout (PR #24) plus the owner-approved follow-ups (branch `claude/skins-followups`). Nothing here changes behaviour or data; only tokens, layout width and per-device preferences.
+
+### Decisions
+- **D75 — Skins are tokens, not components.** `src/index.css` holds every themeable value as a CSS variable on `:root` (Zakelijk, default) and overrides them under `:root[data-skin='speels']` (grey canvas, floating white panels, pill controls, Figtree + Bricolage). `tailwind.config.js` maps the token classes (`bg-surface`, `bg-surface-2`, `bg-canvas`, `border-border`, `text-ink`, `text-ink-2`, `text-muted`, `text-faint`, `bg-accent` / `text-accent-*`, status tones, `rounded-*`, shadows). The skin is an organisation setting (`settings.skin`, Instellingen › Organisatie, `org_settings.profile` in Supabase); `App.jsx` sets `html[data-skin]`. The beta views and their legacy components use the same token classes (no `gray-*` / `indigo-*` left), so they follow the skin without a layout change.
+- **D76 — Presentatiemodus is personal and per device.** One icon button in the header (`aria-pressed`) sets `html[data-present]`; `body { zoom: 1.25 }` scales the whole app for the beamer in both skins without touching tokens or breakpoints. Stored in `localStorage` (`kp.present`, try/catch), never in org settings; not applied in print. No global shortcut.
+- **D77 — Afhankelijkheden side by side from xl.** At ≥ 1280px "Wij vragen" and "Aan ons gevraagd" are two columns, each with its own heading, count and answer chips (`ColumnHead`); below xl the tabs stay. The capacity line sits above both. Same list components, same answering and asking.
+- **D78 — Kolomkeuze on Prioriteren.** A "Kolommen" menu (`menuitemcheckbox`) shows or hides Team, Waarde (only with an active value model), Aantal afhankelijkheden (asks on the epic this quarter), Afhankelijkheden and Doel. Title and rank always show. Defaults are what was shown before; the choice is per user per device (`localStorage` `kp.prioCols`, try/catch).
+- **D79 — Content column 1440px.** `#main` grew from 1200px to 1440px so the core screens use a wide display; tables and rows stretch (`w-full`), the side-by-side columns fill it, and text lines stay readable inside their panels. The header nav hides its scrollbar when it has to scroll (presentatiemodus on a narrow beamer).
+
+### Verified
+`npm run build`; `npm run test:rls` (111 checks, two runs). Browser (demo, port 5176) in both skins: Prioriteren with the Kolommen menu (Aantal and Doel on), Afhankelijkheden at 1440 / 1920 / 2560px (two columns) and 375px (tabs), presentatiemodus on Afstemmen, LoginView (Supabase mode, port 5177), Overzicht and Bord (beta). No console errors.
+
+### Left out on purpose
+A skin per user (owner: organisation-wide); a presentatiemodus shortcut; column choice stored in the organisation; the beta views' own radii and shadows (mechanical colour mapping only).
