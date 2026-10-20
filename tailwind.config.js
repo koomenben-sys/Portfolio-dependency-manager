@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
-// Colours map to CSS variables in src/index.css so a tenant theme ([data-theme]) swaps them without a rebuild (D25).
+// Colours, radii, shadows and fonts map to CSS variables in src/index.css so a tenant theme ([data-theme]) or a skin
+// ([data-skin], Instellingen › Organisatie) swaps them without a rebuild (D25).
 export default {
   content: [
     "./index.html",
@@ -8,7 +9,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Inter Variable"', 'Inter', 'system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
+        sans: ['var(--font-body)'],
+        display: ['var(--font-display)'],
       },
       colors: {
         canvas: 'var(--color-canvas)',
@@ -26,15 +28,19 @@ export default {
         danger: { DEFAULT: 'var(--color-danger)', bg: 'var(--color-danger-bg)', fg: 'var(--color-danger-fg)', border: 'var(--color-danger-border)' },
         info: { DEFAULT: 'var(--color-info)', bg: 'var(--color-info-bg)', fg: 'var(--color-info-fg)', border: 'var(--color-info-border)' },
         neutral: { bg: 'var(--color-neutral-bg)', fg: 'var(--color-neutral-fg)', border: 'var(--color-neutral-border)' },
+        rank: { bg: 'var(--color-rank-bg)', fg: 'var(--color-rank-fg)' },
       },
       borderRadius: {
         control: 'var(--radius-control)',
         card: 'var(--radius-card)',
         panel: 'var(--radius-panel)',
+        row: 'var(--radius-row)',
+        rank: 'var(--radius-rank)',
         modal: 'var(--radius-modal)',
       },
       boxShadow: {
         sm: 'var(--shadow-sm)',
+        panel: 'var(--shadow-panel)',
         md: 'var(--shadow-md)',
         lg: 'var(--shadow-lg)',
       },

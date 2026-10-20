@@ -82,10 +82,10 @@ export function AlignView() {
               return (
                 <li key={p.key}>
                   <details ref={(el) => { if (el) detailRefs.current.set(p.key, el); else detailRefs.current.delete(p.key); }} className="group" open={(i === 0 && p.problem) || !!pairFocus}>
-                    <summary className="list-none cursor-pointer select-none flex items-center gap-3 px-3 h-11 hover:bg-surface-2 focus-ring-inset">
+                    <summary className="list-none cursor-pointer select-none flex items-center gap-3 px-3 h-11 rounded-row hover:bg-surface-2 focus-ring-inset">
                       <ChevronDown size={14} className="text-muted transition-transform group-open:rotate-180 shrink-0" aria-hidden="true" />
                       <RankNo rank={p.top === 1e9 ? null : p.top} size="sm" />
-                      <span className={`text-body flex items-center gap-1.5 min-w-0 ${quiet ? 'text-ink-2' : 'font-medium text-ink'}`}><span className="truncate">{teams.get(p.req)?.name}</span><ArrowRight size={13} className="text-muted shrink-0" aria-hidden="true" /><span className="truncate">{teams.get(p.prov)?.name}</span></span>
+                      <span className={`text-body flex items-center gap-1.5 min-w-0 ${quiet ? 'text-ink-2' : 'font-medium text-ink'}`}><span className="sm:truncate">{teams.get(p.req)?.name}</span><ArrowRight size={13} className="text-muted shrink-0" aria-hidden="true" /><span className="sm:truncate">{teams.get(p.prov)?.name}</span></span>
                       <span className="ml-auto flex items-center gap-2">
                         <BottleneckChip kind={p.bottleneck} />
                         <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 h-5 text-micro font-semibold tnum ${quiet && !LOUD.has(p.worst) ? 'bg-surface-2 text-muted' : toneClass(ASK_META[p.worst].tone)}`} aria-label={`${worstN} ${t(ASK_META[p.worst].label)}`}>{worstN}<AskIcon response={p.worst} size={10} /></span>
@@ -96,7 +96,7 @@ export function AlignView() {
                         </button>
                       </span>
                     </summary>
-                    <ul className="border-t border-border divide-y divide-border bg-canvas anim-fade-in">
+                    <ul className="border-t border-border divide-y divide-border bg-surface-2 anim-fade-in">
                       {p.deps.map((d) => <PairAsk key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} bottleneck={bottleneck.get(d.id)} mayAnswer={mayAnswerDep(d)} act={act} onOpen={() => setOpenEpic(d.epicId)} />)}
                     </ul>
                   </details>

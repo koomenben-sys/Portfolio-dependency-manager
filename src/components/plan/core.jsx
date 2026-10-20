@@ -6,8 +6,9 @@ import { SIMPLE_META, fmtMonth } from '../../domain/value';
 import { SIZES, SIGNALS, SIGNAL_META, BOTTLENECK_META, signalOf, worstSignal, fmtEffort, isPostLock } from '../../domain/rhythm';
 import { useT } from '../../i18n';
 
-// Calm primitives for the three core screens (docs/design.md section 19). Tokens come from src/index.css;
-// one accent, 1px borders, no resting shadows, every control >= 24px, focus ring from :focus-visible.
+// Calm primitives for the three core screens (docs/design.md section 19). Tokens come from src/index.css and differ
+// per skin (Zakelijk: flat, 1px borders, no resting shadows; Speels: floating panels, pills). Every control >= 24px,
+// focus ring from :focus-visible.
 
 export const cls = {
   primary: 'inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-control bg-accent text-accent-fg text-label font-medium hover:bg-accent-600 disabled:opacity-40 disabled:cursor-not-allowed transition-base whitespace-nowrap',
@@ -17,7 +18,7 @@ export const cls = {
   icon: 'inline-flex items-center justify-center w-7 h-7 rounded-control text-muted hover:text-ink hover:bg-surface-2 disabled:opacity-40 transition-base',
   input: 'h-8 px-2 rounded-control border border-border-strong bg-surface text-body text-ink placeholder:text-faint focus:border-accent w-full disabled:bg-surface-2 disabled:text-muted',
   textarea: 'px-2 py-1.5 rounded-control border border-border-strong bg-surface text-body text-ink placeholder:text-faint focus:border-accent w-full',
-  card: 'bg-surface border border-border rounded-panel',
+  card: 'panel',
   label: 'block text-caption font-medium text-muted mb-1',
 };
 
@@ -82,8 +83,8 @@ export function ValueChip({ model, score }) {
 export function RankNo({ rank, size = 'md' }) {
   const t = useT();
   const dim = size === 'sm' ? 'w-6 h-6 text-caption' : 'w-7 h-7 text-label';
-  const look = rank == null ? 'bg-surface-2 text-faint' : 'bg-surface-2 text-ink-2';
-  return <span className={`shrink-0 rounded-control font-medium tnum inline-flex items-center justify-center ${dim} ${look}`} aria-label={rank == null ? t('Unranked') : t('Strategic rank {rank}', { rank })}>{rank ?? '–'}</span>;
+  const look = rank == null ? 'bg-surface-2 text-faint rounded-rank' : 'rank-no';
+  return <span className={`shrink-0 tnum inline-flex items-center justify-center ${dim} ${look}`} aria-label={rank == null ? t('Unranked') : t('Strategic rank {rank}', { rank })}>{rank ?? '–'}</span>;
 }
 
 // Four core states; older partial/deferred data folds into the nearest one (D31).
@@ -377,7 +378,7 @@ export function Menu({ button, children, align = 'right', ariaLabel, width = 'w-
     <div ref={wrap} className="relative">
       {button({ ref: trig, open, toggle: () => setOpen((o) => !o), 'aria-haspopup': 'menu', 'aria-expanded': open })}
       {open && (
-        <div role="menu" aria-label={ariaLabel} className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 ${width} bg-surface border border-border rounded-panel shadow-md p-1 z-50 anim-pop`} onClick={(e) => { if (e.target.closest('[data-close]')) setOpen(false); }}>
+        <div role="menu" aria-label={ariaLabel} className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 ${width} bg-surface border border-border rounded-card shadow-md p-1 z-50 anim-pop`} onClick={(e) => { if (e.target.closest('[data-close]')) setOpen(false); }}>
           {typeof children === 'function' ? children({ close: () => setOpen(false) }) : children}
         </div>
       )}

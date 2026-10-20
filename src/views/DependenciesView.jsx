@@ -95,7 +95,7 @@ export function DependenciesView() {
         <div className="mt-4" data-tour="incoming">
           {!answersOpen && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
           {incoming.length === 0 ? <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div> : (
-            <ul className={`${cls.card} divide-y divide-border`}>
+            <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
               {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} maySignal={mayWrite} act={act} followed={followed.has(d.epicId)} onOpen={() => setOpenEpic(d.epicId)} />)}
               {incomingSorted.length === 0 && <li><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'Nothing here.')}</EmptyLine></li>}
             </ul>
@@ -173,15 +173,15 @@ function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, followed, on
     <section className={cls.card} aria-label={epic.title}>
       <header className="flex items-center gap-3 px-3 h-11 border-b border-border">
         <RankNo rank={plan.rank} size="sm" />
-        <button className="min-w-0 flex-1 text-left text-body font-medium truncate hover:underline focus-ring rounded-control" onClick={onOpen}>{epic.title}<FollowStar on={followed} className="inline ml-1.5 -mt-0.5" /></button>
+        <button className="min-w-0 flex-1 text-left text-body font-medium sm:truncate hover:underline focus-ring rounded-control" onClick={onOpen}>{epic.title}<FollowStar on={followed} className="inline ml-1.5 -mt-0.5" /></button>
         {mayWrite && !adding && <button className={cls.ghost} onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" />{t('Ask')}</button>}
       </header>
       <ul className="divide-y divide-border">
         {asks.map((d) => (
           <li key={d.id} className="group px-3 py-2">
             <div className="flex items-center gap-3 min-h-8">
-              <span className="w-40 shrink-0 text-label text-muted truncate">{teams.get(d.providerTeamId)?.name}</span>
-              <span className="flex-1 min-w-0 text-body truncate">{d.ask}{(d.size || d.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={d.size} low={d.effortLow} high={d.effortHigh} /></span>}{d.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</span>
+              <span className="w-28 sm:w-40 shrink-0 text-label text-muted sm:truncate">{teams.get(d.providerTeamId)?.name}</span>
+              <span className="flex-1 min-w-0 text-body sm:truncate">{d.ask}{(d.size || d.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={d.size} low={d.effortLow} high={d.effortHigh} /></span>}{d.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</span>
               <PostLockMark dep={d} quarter={quarter} />
               <SignalChip dep={d} />
               <StatusChip response={d.response} />
@@ -220,7 +220,7 @@ function NewAskRow({ epic, quarter, others, locked, act, onDone }) {
     if (r.ok) onDone();
   };
   return (
-    <form onSubmit={submit} className="px-3 py-2 border-t border-border bg-canvas flex items-center gap-2 flex-wrap anim-fade-in">
+    <form onSubmit={submit} className="px-3 py-2 border-t border-border bg-surface-2 rounded-b-panel flex items-center gap-2 flex-wrap anim-fade-in">
       <select className={`${cls.input} !w-40`} value={providerTeamId} onChange={(e) => setProviderTeamId(e.target.value)} aria-label={t('Team we need')}>{others.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
       <input autoFocus className={`${cls.input} flex-1 min-w-[200px]`} placeholder={t('What do we need?')} aria-label={t('What do we need?')} value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') onDone(); }} />
       <SizePicker value={size} onPick={setSize} />
@@ -258,10 +258,10 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, followe
   };
   const labelId = `ask-${dep.id}`;
   return (
-    <li className="group px-3 py-2">
+    <li className="group px-3 py-2 rounded-row">
       <div className="flex items-center gap-3 min-h-9 flex-wrap md:flex-nowrap">
         <RankNo rank={rank} size="sm" />
-        <span className="w-40 shrink-0 text-label text-muted truncate">{team?.name}</span>
+        <span className="w-28 sm:w-40 shrink-0 text-label text-muted sm:truncate">{team?.name}</span>
         <div className="flex-1 min-w-[200px]">
           <div id={labelId} className="text-body">{dep.ask}{(dep.size || dep.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={dep.size} low={dep.effortLow} high={dep.effortHigh} /></span>}{dep.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</div>
           <div className="text-caption text-muted truncate">{t('for')} <button className="hover:underline text-accent focus-ring rounded-control" onClick={onOpen}>{epic?.title}</button><FollowStar on={followed} className="inline ml-1" /></div>

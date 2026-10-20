@@ -39,7 +39,7 @@ const REALTIME_DEBOUNCE_MS = 400;
 const EVENT_ACTIONS = { epic_plans_removed: 'plan_removed', dependencies_removed: 'dependency_removed' };
 const DEFAULT_SETTINGS = {
   language: 'nl', orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5,
-  voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false, valueModel: 'none',
+  voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false, valueModel: 'none', skin: 'zakelijk',
   sizeMap: { ...DEFAULT_SIZE_MAP }, cadence: { ...DEFAULT_CADENCE },
 };
 // Postgres error texts that users should not have to decode.

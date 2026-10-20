@@ -215,7 +215,7 @@ const state = {
   follows: {}, // Volgen (D67): per persona; the demo user follows nothing by default
   members: PERSONAS,
   settings: { language: 'nl', setupComplete: true, orgName: 'Oranje Verzekeringen', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5, voteBlocksLock: false,
-    capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false, valueModel: 'simple',
+    capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false, valueModel: 'simple', skin: 'zakelijk',
     sizeMap: { S: [1, 2], M: [2, 4], L: [4, 8], XL: [8, 13] }, cadence: { mode: 'exception', weeks: 2 } },
 };
 // Q3 was locked and closed: its baseline is the committed set Afsluiten measures against (D56).
