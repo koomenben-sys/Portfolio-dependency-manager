@@ -18,7 +18,7 @@
   --color-border-strong: #8b9c95;
   --color-ink: #1c302b;
   --color-ink-2: #334542;
-  --color-muted: #52615d;   /* 6.1:1 on white */
+  --color-muted: #45524e;   /* 7.9:1 on white (persona test: secondary text too light) */
   --color-faint: #8b9c95;
 
   --color-accent-50: #eaf2ef;
@@ -89,7 +89,7 @@
   --color-border-strong: #c3c8d0;
   --color-ink: #14171c;
   --color-ink-2: #2f3540;
-  --color-muted: #59616e;   /* 5.3:1 on canvas, 5.9:1 on white */
+  --color-muted: #48505c;   /* 6.6:1 on canvas, 8.0:1 on white */
   --color-faint: #8a929e;
 
   --color-accent-50: #f1f3f5;
@@ -106,10 +106,10 @@
   --radius-rank: 12px;
 
   --shadow-sm: 0 1px 2px rgb(20 23 28 / 0.08);
-  --shadow-panel: 0 1px 2px rgb(20 23 28 / 0.06);
+  --shadow-panel: 0 1px 3px rgb(20 23 28 / 0.08);
   --shadow-md: 0 4px 16px rgb(20 23 28 / 0.10);
   --shadow-lg: 0 16px 40px rgb(20 23 28 / 0.18);
-  --panel-border: 1px solid transparent;
+  --panel-border: 1px solid rgb(20 23 28 / 0.08);   /* panels stay visible on a washed-out beamer */
   --table-top: 0;
 
   --radius-control: 22px;

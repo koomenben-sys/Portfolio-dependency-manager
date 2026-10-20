@@ -115,14 +115,14 @@ function ShellInner({ ctx, onSignOut }) {
             <span className="w-6 h-6 rounded-rank bg-accent text-accent-fg font-semibold text-caption flex items-center justify-center" aria-hidden="true">K</span>
             <span className="font-display font-[var(--font-display-weight)] text-body hidden sm:inline">Kwartaalplan</span>
           </button>
-          <nav aria-label={t('Main')} className="flex items-center gap-1" data-tour="nav">
+          <nav aria-label={t('Main')} className="flex items-center gap-1 min-w-0 overflow-x-auto" data-tour="nav">
             {steps.map((id, i) => {
               const v = CORE.find((x) => x.id === id);
               const active = resolved === v.id;
               return (
                 <button key={v.id} aria-current={active ? 'page' : undefined} onClick={() => setView(v.id)} data-tour={`nav-${v.id}`}
-                  className={`nav-step inline-flex items-center gap-2 h-8 px-2.5 rounded-control text-label transition-base focus-ring ${active ? 'font-medium' : 'text-muted hover:text-ink hover:bg-surface-2'}`}>
-                  <span className={`tnum w-5 h-5 rounded-full text-micro font-semibold inline-flex items-center justify-center transition-base ${active ? 'bg-[var(--nav-badge-bg)] text-[var(--nav-badge-fg)]' : 'bg-surface-2 text-muted'}`} aria-hidden="true">{i + 1}</span>{t(v.label)}
+                  className={`nav-step inline-flex shrink-0 whitespace-nowrap items-center gap-2 h-8 px-2.5 rounded-control text-label focus-ring ${active ? 'font-medium' : 'text-muted hover:text-ink hover:bg-surface-2'}`}>
+                  <span className={`tnum w-5 h-5 rounded-full text-micro font-semibold inline-flex items-center justify-center ${active ? 'bg-[var(--nav-badge-bg)] text-[var(--nav-badge-fg)]' : 'bg-surface-2 text-muted'}`} aria-hidden="true">{i + 1}</span>{t(v.label)}
                 </button>
               );
             })}
