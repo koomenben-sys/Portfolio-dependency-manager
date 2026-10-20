@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid } from 'lucide-react';
+import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid, Presentation } from 'lucide-react';
 import { PlanProvider, usePlan } from './context/PlanContext';
 import { useAuth } from './context/AuthContext';
 import { DATA_SOURCE, isAdmin } from './data/repository';
@@ -75,6 +75,12 @@ function SupabaseGate() {
 
 const Loading = () => <div className="min-h-screen flex items-center justify-center text-muted">…</div>;
 
+// Presentatiemodus (section 24, D76): larger type for the beamer. Personal and per device (localStorage), never an
+// organisation setting; src/index.css scales the page under html[data-present].
+const PRESENT_KEY = 'kp.present';
+const readPresent = () => { try { return localStorage.getItem(PRESENT_KEY) === '1'; } catch { return false; } };
+const writePresent = (on) => { try { localStorage.setItem(PRESENT_KEY, on ? '1' : '0'); } catch { /* private mode */ } };
+
 function Shell({ onSignOut }) {
   const ctx = usePlan();
   if (!ctx) return <Loading />;
@@ -94,6 +100,9 @@ function ShellInner({ ctx, onSignOut }) {
   useEffect(() => { document.documentElement.lang = state?.settings?.language || 'nl'; }, [state?.settings?.language]);
   // Skin (Zakelijk | Speels) is an organisation setting; the tokens live in src/index.css under html[data-skin].
   useEffect(() => { document.documentElement.dataset.skin = state?.settings?.skin || 'zakelijk'; }, [state?.settings?.skin]);
+  const [present, setPresent] = useState(readPresent);
+  useEffect(() => { if (present) document.documentElement.dataset.present = '1'; else delete document.documentElement.dataset.present; }, [present]);
+  const togglePresent = () => setPresent((p) => { writePresent(!p); return !p; });
   if (error) return <div className="p-8 text-danger-fg">{t('Could not load data')}: {error}</div>;
   if (!state) return <Loading />;
   const modules = !!state.settings.modules;
@@ -147,6 +156,7 @@ function ShellInner({ ctx, onSignOut }) {
                 {state.quarters.map((q) => <option key={q.id} value={q.id}>{quarterLabel(q)}{modules ? ` · ${t(PHASES.find((p) => p.id === q.phase)?.label || q.phase)}` : ''}</option>)}
               </select>
             </label>
+            <button className={`${cls.icon} w-8 h-8 ${present ? 'bg-accent-50 text-accent-700' : ''}`} aria-label={t('Presentation mode')} title={t('Presentation mode')} aria-pressed={present} onClick={togglePresent}><Presentation size={16} /></button>
             <button className={`${cls.icon} w-8 h-8 ${view === 'instellingen' ? 'bg-surface-2 text-ink' : ''}`} aria-label={t('Settings')} title={t('Settings')} aria-current={view === 'instellingen' ? 'page' : undefined} onClick={() => setView('instellingen')}><Settings size={16} /></button>
             <Menu ariaLabel={t('Account')} width="w-72" button={({ ref, toggle, open, ...a }) => (
               <button ref={ref} onClick={toggle} {...a} className="inline-flex items-center gap-2 h-8 pl-1 pr-2 rounded-control hover:bg-surface-2 focus-ring" data-tour="account">

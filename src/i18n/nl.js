@@ -1044,4 +1044,6 @@ export const nl = {
   'What is blocking?': 'Wat blokkeert?',
   'Carry over to {q}': 'Doorschuiven naar {q}',
   'Delivered per team': 'Geleverd per team',
+  // Skins follow-ups (section 24)
+  'Presentation mode': 'Presentatiemodus',
 };

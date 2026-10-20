@@ -139,6 +139,10 @@
 
 :root[data-density='compact'] { --row-h: 36px; }
 
+/* Presentatiemodus (section 24, D76): one toggle in the header scales the whole app for the beamer. `zoom` keeps
+   every token, breakpoint and layout intact in both skins; the sticky header scales along. Not applied in print. */
+@media screen { :root[data-present] body { zoom: 1.25; } }
+
 /* ── Base typography ──────────────────────────────────────────────────────────────────── */
 html { scroll-padding-top: calc(var(--view-header-h) + 16px); }
 body {
