@@ -8,7 +8,7 @@ import { teamCapacity } from '../domain/capacity';
 import { planFor, phaseAllows, byId } from '../domain/plan';
 import { CERTAINTIES, CERTAINTY_META, sizeRange } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, quarterMeta, fmtDay, ErrorLine, Disclosure, Dialog, toneClass, normAsk, SizePicker, FollowStar, FollowOnlyToggle, PostLockMark } from '../components/plan/core';
+import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, quarterMeta, fmtDay, ErrorLine, Disclosure, Dialog, toneClass, normAsk, SizePicker, SizeCell, FollowStar, FollowOnlyToggle, PostLockMark } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 import { useTourNudge } from '../components/plan/TourPanel';
@@ -251,8 +251,9 @@ function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, followed, on
           <li key={d.id} className="group px-3 py-2">
             <div className="flex items-center gap-3 min-h-9 flex-wrap md:flex-nowrap">
               <span className="w-28 sm:w-40 shrink-0 text-label text-muted sm:truncate">{teams.get(d.providerTeamId)?.name}</span>
-              <span className="flex-1 min-w-[160px] text-body sm:truncate">{d.ask}{d.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</span>
+              <span className="flex-1 min-w-[160px] text-body">{d.ask}{d.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</span>
               <PostLockMark dep={d} quarter={quarter} />
+              <SizeCell size={d.size} low={d.effortLow} high={d.effortHigh} settings={state.settings} />
               <span className="w-28 shrink-0 inline-flex"><StatusChip response={d.response} /></span>
               {mayWrite && removing !== d.id && <button className={`${cls.icon} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} aria-label={`${t('Remove ask')} ${d.refCode}`} onClick={() => setRemoving(d.id)}><Trash2 size={14} /></button>}
             </div>
@@ -306,7 +307,7 @@ function NewAskRow({ epic, quarter, others, locked, act, onDone }) {
 // An ask to our team: rank · requesting team · what · for epic · Toezeggen / Bespreken / Kan niet.
 // Only "Kan niet" opens an inline reason (item 10); the other two answer in one click. Read-only: the answer chip.
 function IncomingRow({ dep, epic, rank, team, mayAnswer, act, followed, onOpen }) {
-  const { quarter } = usePlan();
+  const { state, quarter } = usePlan();
   const t = useT();
   const [reasonFor, setReasonFor] = useState(null); // response awaiting an inline reason
   const pick = async (response) => {
@@ -326,6 +327,7 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, act, followed, onOpen }
           <div className="text-caption text-muted truncate">{t('for')} <button className="hover:underline text-accent focus-ring rounded-control" onClick={onOpen}>{epic?.title}</button><FollowStar on={followed} className="inline ml-1" /></div>
         </div>
         <PostLockMark dep={dep} quarter={quarter} />
+        <SizeCell size={dep.size} low={dep.effortLow} high={dep.effortHigh} settings={state.settings} />
         {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <span className="w-28 shrink-0 inline-flex"><StatusChip response={dep.response} /></span>}
         {mayAnswer && (dep.response === 'partial' || dep.response === 'deferred') && <StatusChip response={dep.response} />}
       </div>

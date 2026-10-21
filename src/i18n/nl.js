@@ -942,7 +942,7 @@ export const nl = {
   'Number of epics': 'Aantal epics',
   'Sum of the value scores': 'Som van de waardescores',
   // Release B — Capaciteit & ritme (docs/design.md section 22)
-  'Size': 'Grootte',
+  'Size': 'Maat',
   'Job sizes (pw)': 'Jobgroottes (pw)',
   'low': 'laag',
   'high': 'hoog',
@@ -1064,4 +1064,5 @@ export const nl = {
   '1 vacancy': '1 vacature',
   '{n} vacancies': '{n} vacatures',
   'tight from 80%': 'krap vanaf 80%',
+  'No size': 'Geen maat',
 };

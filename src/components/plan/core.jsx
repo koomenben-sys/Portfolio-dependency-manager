@@ -3,7 +3,7 @@ import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown, Flag, 
 import { createPortal } from 'react-dom';
 import { ASK_META, COMMITMENT_META, isLockedPhase } from '../../domain/model';
 import { SIMPLE_META, fmtMonth } from '../../domain/value';
-import { SIZES, SIGNALS, SIGNAL_META, BOTTLENECK_META, signalOf, worstSignal, fmtEffort, isPostLock } from '../../domain/rhythm';
+import { SIZES, SIGNALS, SIGNAL_META, BOTTLENECK_META, signalOf, worstSignal, fmtEffort, isPostLock, sizeMapOf } from '../../domain/rhythm';
 import { useT } from '../../i18n';
 
 // Calm primitives for the three core screens (docs/design.md section 19). Tokens come from src/index.css and differ
@@ -152,6 +152,27 @@ export function SizePicker({ value, onPick, disabled = false, ariaLabel, size = 
 export function SizeText({ size, low, high, className = '' }) {
   if (!size && !(high > 0)) return <span className={`text-faint ${className}`}>–</span>;
   return <span className={`tnum whitespace-nowrap ${className}`}>{size && <span className="font-medium">{size} · </span>}{fmtEffort(low || 0, high || 0)} pw</span>;
+}
+
+// Size column, variant C (section 26, D87): a bar scaled to the upper estimate (against the organisation's largest
+// size), the letter and the pw range in three fixed-width cells, so bars, letters and numbers line up across rows.
+// Numbers without a size: bar + "–"; nothing estimated: an empty cell of the same width.
+export const SIZE_CELL_W = 'w-[148px]';
+export function SizeCell({ size, low, high, settings, className = '' }) {
+  const t = useT();
+  const map = sizeMapOf(settings);
+  const max = Math.max(...Object.values(map).map((r) => Number(r[1]) || 0), 1);
+  const hi = Number(high) || 0;
+  const has = !!size || hi > 0;
+  const pct = has ? Math.max(4, Math.min(100, Math.round((hi / max) * 100))) : 0;
+  const label = has ? `${t('Size')} ${size || '–'} · ${fmtEffort(low || 0, hi)} pw` : t('No size');
+  return (
+    <span className={`${SIZE_CELL_W} shrink-0 grid grid-cols-[52px_20px_1fr] items-center gap-2 tnum ${className}`} title={has ? label : undefined} aria-label={label} role="img">
+      <span aria-hidden="true" className="h-2 rounded-control bg-surface-2 overflow-hidden">{has && <span className="block h-full rounded-control bg-accent" style={{ width: `${pct}%` }} />}</span>
+      <span className="text-label font-semibold text-ink text-center">{has ? size || '–' : ''}</span>
+      <span className="text-caption text-muted whitespace-nowrap">{has ? `${fmtEffort(low || 0, hi)} pw` : ''}</span>
+    </span>
+  );
 }
 
 const SIGNAL_ICON = { on_track: Check, at_risk: TriangleAlert, wont_make: OctagonX };
