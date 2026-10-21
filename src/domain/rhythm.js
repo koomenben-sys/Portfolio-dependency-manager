@@ -139,11 +139,32 @@ export function quarterWeek(quarter, settings, now = Date.now()) {
   const week = Math.floor((now - start.getTime()) / (7 * DAY)) + 1;
   return { week: Math.max(1, Math.min(total, week)), total };
 }
-// Open impediments (kind 'impediment'; risks stay beta) whose epic is planned in the quarter, oldest first.
-export function openImpediments(state, quarterId) {
+// Open impediments (kind 'impediment'; risks stay beta) whose epic is planned in the quarter: not Opgelost
+// (open or in_progress), escalated ones first, then oldest first (section 27, D93).
+export function openImpediments(state, quarterId, now = Date.now()) {
   const planned = new Set(state.plans.filter((p) => p.quarterId === quarterId).map((p) => p.epicId));
-  return state.impediments.filter((i) => i.status === 'open' && (i.kind || 'impediment') === 'impediment' && planned.has(i.epicId)).sort((a, b) => a.raisedAt.localeCompare(b.raisedAt));
+  return state.impediments
+    .filter((i) => i.status !== 'resolved' && (i.kind || 'impediment') === 'impediment' && planned.has(i.epicId))
+    .sort((a, b) => (isEscalated(b, state.settings, now) - isEscalated(a, state.settings, now)) || a.raisedAt.localeCompare(b.raisedAt));
 }
+// ── Impediments (section 27, D92/D93) ────────────────────────────────────────
+// Status Open · In behandeling · Opgelost; who may change it is decided in data/repository.js (canChangeImpediment).
+export const IMPEDIMENT_STATUSES = ['open', 'in_progress', 'resolved'];
+export const IMPEDIMENT_STATUS_META = { open: { label: 'Open', tone: 'neutral' }, in_progress: { label: 'In progress', tone: 'info' }, resolved: { label: 'Resolved', tone: 'ok' } };
+export function checkImpedimentStatus(s, Err = Error) {
+  if (!IMPEDIMENT_STATUSES.includes(s)) throw new Err('Unknown impediment status');
+  return s;
+}
+// Escalation threshold in days: an organisation setting (Instellingen), default 7.
+export const DEFAULT_ESCALATION_DAYS = 7;
+export const escalationDays = (settings) => { const n = Number(settings?.impedimentEscalationDays); return Number.isInteger(n) && n >= 1 ? n : DEFAULT_ESCALATION_DAYS; };
+export function checkEscalationDays(n, Err = Error) {
+  const v = Number(n);
+  if (!(Number.isInteger(v) && v >= 1 && v <= 365)) throw new Err('Escalation is 1 to 365 days');
+  return v;
+}
+// Not Opgelost and older than the threshold: shown red with an "Escalatie" chip and sorted to the top.
+export const isEscalated = (imp, settings, now = Date.now()) => imp.status !== 'resolved' && (now - new Date(imp.raisedAt).getTime()) / DAY > escalationDays(settings);
 // Asks created after the quarter was locked ("na vastzetten", M3/M5).
 export const isPostLock = (dep, quarter) => !!(quarter?.lockedAt && dep?.createdAt && dep.createdAt > quarter.lockedAt);
 

@@ -1070,4 +1070,17 @@ export const nl = {
   'No size': 'Geen maat',
   'Our commitments': 'Onze toezeggingen',
   'No commitments.': 'Geen toezeggingen.',
+  // Voortgang feedback (section 27)
+  'In progress': 'In behandeling',
+  'Reporter': 'Melder',
+  'Action holder': 'Actiehouder',
+  'Escalation': 'Escalatie',
+  'Escalation after (days)': 'Escalatie na (dagen)',
+  'Escalation is 1 to 365 days': 'Escalatie is 1 tot 365 dagen',
+  'Unknown impediment status': 'Onbekende status',
+  'Only an admin can change the reporter': 'Alleen een beheerder kan de melder wijzigen',
+  'Only the reporter, the action holder, the epic team or an admin can change the status': 'Alleen de melder, de actiehouder, het team van de epic of een beheerder kan de status wijzigen',
+  'Edit impediment': 'Impediment bewerken',
+  'Edit': 'Bewerken',
+  'Note': 'Toelichting',
 };

@@ -15,8 +15,8 @@ import { supabase } from '../lib/supabase';
 import { buildBaseline, readiness, phaseAllows, ASKS_FIXED, ANSWERS_FIXED } from '../domain/plan';
 import { PHASE_INDEX, isLockedPhase, REASON_REQUIRED } from '../domain/model';
 import { checkTheme, isHttpUrl } from '../domain/value';
-import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, nextQuarter } from '../domain/rhythm';
-import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange, checkCapacity } from './repository';
+import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, DEFAULT_ESCALATION_DAYS, checkImpedimentStatus, checkEscalationDays, nextQuarter } from '../domain/rhythm';
+import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, canChangeImpediment, normaliseEmail, checkRole, checkMemberChange, checkCapacity } from './repository';
 
 const snake = (s) => s.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
 const camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -40,7 +40,7 @@ const EVENT_ACTIONS = { epic_plans_removed: 'plan_removed', dependencies_removed
 const DEFAULT_SETTINGS = {
   language: 'nl', orgName: '', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5,
   voteBlocksLock: false, capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false, valueModel: 'none', skin: 'zakelijk',
-  sizeMap: { ...DEFAULT_SIZE_MAP }, cadence: { ...DEFAULT_CADENCE },
+  sizeMap: { ...DEFAULT_SIZE_MAP }, cadence: { ...DEFAULT_CADENCE }, impedimentEscalationDays: DEFAULT_ESCALATION_DAYS,
 };
 // Postgres error texts that users should not have to decode.
 function friendly(message) {
@@ -165,7 +165,7 @@ export class SupabaseRepository {
       votes: votes.map((v) => ({ id: `${v.teamId}:${v.quarterId}`, ...v })),
       discussions: discussions.map((d) => ({ ...d, depId: d.dependencyId })).sort(byCreated('createdAt')),
       checkIns: checkIns.map((c) => ({ ...c, authorName: names.get(c.authorId) || '' })).sort(byCreated('createdAt')),
-      impediments: impediments.map((i) => ({ ...i, depId: i.dependencyId })).sort(byCreated('raisedAt')),
+      impediments: impediments.map((i) => ({ ...i, depId: i.dependencyId, reporterId: i.reporterId ?? null, actionOwnerId: i.actionOwnerId ?? null, actionOwnerName: i.actionOwnerName || '' })).sort(byCreated('raisedAt')),
       events: events
         .map((e) => ({ ...e, id: String(e.id), actorName: e.actorId ? (names.get(e.actorId) || 'former member') : '', action: EVENT_ACTIONS[e.action] || e.action }))
         .sort((a, b) => a.at.localeCompare(b.at)),
@@ -540,30 +540,55 @@ export class SupabaseRepository {
     this._throw((await supabase.from('check_ins').insert({ ...toRow(fields, await this._org()), author_id: actor.id })).error);
     return this.load();
   }
+  // Section 27 (D92): same rules as the mock; impediment_guard() (013) enforces them again in SQL.
   async upsertImpediment(actor, imp) {
     if (!isPlanner(actor)) throw new PermissionError('Viewers cannot raise impediments');
     const { id, depId, ...fields } = imp;
+    if (fields.status !== undefined) checkImpedimentStatus(fields.status, ValidationError);
+    if (fields.actionOwnerName !== undefined) fields.actionOwnerName = trim(fields.actionOwnerName);
+    if (fields.ownerName !== undefined) fields.ownerName = trim(fields.ownerName);
     const org = await this._org();
     if (id) {
+      const existing = await this._row('impediments', id, 'impediment');
       if (fields.title !== undefined && !fields.title?.trim()) throw new ValidationError('Title is required');
+      if ((fields.ownerName !== undefined && fields.ownerName !== existing.ownerName) || (fields.reporterId !== undefined && fields.reporterId !== existing.reporterId)) {
+        if (!isAdmin(actor)) throw new PermissionError('Only an admin can change the reporter');
+      }
+      const statusChanged = fields.status !== undefined && fields.status !== existing.status;
+      const holderChanged = (fields.actionOwnerId !== undefined && (fields.actionOwnerId || null) !== (existing.actionOwnerId || null)) || (fields.actionOwnerName !== undefined && fields.actionOwnerName !== (existing.actionOwnerName || ''));
+      if (statusChanged || holderChanged) {
+        const epic = existing.epicId ? await this._epic(existing.epicId) : null;
+        if (!canChangeImpediment(actor, existing, epic)) throw new PermissionError('Only the reporter, the action holder, the epic team or an admin can change the status');
+      }
+      if (statusChanged) {
+        fields.resolvedAt = fields.status === 'resolved' ? now() : null;
+        if (existing.kind === 'risk') fields.roam = fields.status === 'resolved' ? 'resolved' : existing.roam;
+      }
       const row = toRow(fields, org); delete row.org_id;
       if (depId !== undefined) row.dependency_id = depId;
-      if (Object.keys(row).length) this._throw((await supabase.from('impediments').update(row).eq('id', id)).error);
+      if (Object.keys(row).length) {
+        const { data, error } = await supabase.from('impediments').update(row).eq('id', id).select('id');
+        this._throw(error);
+        if (!data?.length) throw new PermissionError('Not allowed for your role or team');
+      }
+      if (statusChanged) {
+        const { data: plan } = await supabase.from('epic_plans').select('quarter_id').eq('org_id', org).eq('epic_id', existing.epicId).limit(1).maybeSingle();
+        await this._event(actor, 'impediment_status_changed', 'impediments', id, plan?.quarter_id || null, '', { status: existing.status }, { status: fields.status });
+      }
     } else {
       if (!fields.title?.trim()) throw new ValidationError('Title is required');
       if (!fields.epicId && !depId) throw new ValidationError('Link the impediment to an epic');
-      const row = { ...toRow({ kind: 'impediment', ownerName: actor.name, ...fields }, org), dependency_id: depId || null, ref_code: await this._ref('impediment') };
+      const row = { ...toRow({ kind: 'impediment', ownerName: actor.name, reporterId: actor.id, actionOwnerId: null, actionOwnerName: '', ...fields }, org), dependency_id: depId || null, ref_code: await this._ref('impediment') };
       if (row.kind !== 'risk') row.roam = null;
       this._throw((await supabase.from('impediments').insert(row)).error);
     }
     return this.load();
   }
-  async resolveImpediment(actor, id) {
+  async setImpedimentStatus(actor, id, status) {
     if (!isPlanner(actor)) throw new PermissionError('Viewers cannot resolve impediments');
-    const i = await this._row('impediments', id, 'impediment');
-    this._throw((await supabase.from('impediments').update({ status: 'resolved', resolved_at: now(), roam: i.kind === 'risk' ? 'resolved' : null }).eq('id', id)).error);
-    return this.load();
+    return this.upsertImpediment(actor, { id, status: checkImpedimentStatus(status, ValidationError) });
   }
+  async resolveImpediment(actor, id) { return this.setImpedimentStatus(actor, id, 'resolved'); }
 
   // ── Volgen (section 23, D67): own rows only, enforced again by the 011 policies ──
   async followEpic(actor, epicId) {
@@ -640,6 +665,7 @@ export class SupabaseRepository {
     if (!isAdmin(actor)) throw new PermissionError('Admin only');
     if (patch.sizeMap !== undefined) patch = { ...patch, sizeMap: checkSizeMap(patch.sizeMap, ValidationError) };
     if (patch.cadence !== undefined) patch = { ...patch, cadence: checkCadence(patch.cadence, ValidationError) };
+    if (patch.impedimentEscalationDays !== undefined) patch = { ...patch, impedimentEscalationDays: checkEscalationDays(patch.impedimentEscalationDays, ValidationError) };
     const org = await this._org();
     const next = { ...this.settings, ...patch };
     const { staleDays, voteBlocksLock, personalLanguage, ...profile } = next;

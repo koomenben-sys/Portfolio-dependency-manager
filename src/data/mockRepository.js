@@ -3,10 +3,10 @@ import { seedState } from './seed';
 import { buildBaseline, readiness, phaseAllows, ASKS_FIXED, ANSWERS_FIXED } from '../domain/plan';
 import { PHASES, isLockedPhase, REASON_REQUIRED } from '../domain/model';
 import { checkTheme, isHttpUrl } from '../domain/value';
-import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, nextQuarter } from '../domain/rhythm';
-import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange, checkCapacity } from './repository';
+import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, DEFAULT_ESCALATION_DAYS, checkImpedimentStatus, checkEscalationDays, nextQuarter } from '../domain/rhythm';
+import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, canChangeImpediment, normaliseEmail, checkRole, checkMemberChange, checkCapacity } from './repository';
 
-const KEY = 'kwartaalplan.mock.v7'; // v7: section 26 seed (every team both ways, sizes, capacity per quarter); v6: section 25 seed (Uitvoering asks, signals, owners); v5 section 23; v4 Release B; v3 Release A; v2 the 2026-10-17 reset
+const KEY = 'kwartaalplan.mock.v8'; // v8: section 27 seed (impediments with Melder / Actiehouder / status); v7: section 26 seed (every team both ways, sizes, capacity per quarter); v6: section 25 seed (Uitvoering asks, signals, owners); v5 section 23; v4 Release B; v3 Release A; v2 the 2026-10-17 reset
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const now = () => new Date().toISOString();
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -40,11 +40,13 @@ export class MockRepository {
     this.state.dependencies.forEach((d) => { d.size ??= null; d.certainty ||= 'medium'; d.signal ||= 'on_track'; d.signalNote ||= ''; d.signalAt ??= null; d.confirmedAt ??= null; });
     this.state.settings.sizeMap ||= { ...DEFAULT_SIZE_MAP };
     this.state.settings.cadence ||= { ...DEFAULT_CADENCE };
+    this.state.settings.impedimentEscalationDays ??= DEFAULT_ESCALATION_DAYS;
+    this.state.impediments.forEach((i) => { i.reporterId ??= null; i.actionOwnerId ??= null; i.actionOwnerName ||= ''; });
     if (!this.state.follows || Array.isArray(this.state.follows)) this.state.follows = {};
   }
   async reset() {
     this.state = { invitations: [], ...seedState() };
-    this.counters = { epic: 33, dependency: 39, impediment: 6 };
+    this.counters = { epic: 33, dependency: 39, impediment: 7 };
     return this._persist();
   }
   // Blank organisation for the onboarding wizard (demo mode). Keeps the language choice.
@@ -411,22 +413,44 @@ export class MockRepository {
     this.state.checkIns.push({ id: uid(), note: '', authorName: actor.name, createdAt: now(), ...checkIn });
     return this._persist();
   }
+  // Section 27 (D92): Melder = ownerName / reporterId (set to the raiser; admin may change), Actiehouder =
+  // actionOwnerId / actionOwnerName (free text or a member); status open | in_progress | resolved. Status and action
+  // holder follow canChangeImpediment(); a status change leaves an impediment_status_changed event row.
   async upsertImpediment(actor, imp) {
     if (!isPlanner(actor)) throw new PermissionError('Viewers cannot raise impediments');
     const existing = imp.id && this.state.impediments.find((x) => x.id === imp.id);
     if ((!existing || imp.title !== undefined) && !imp.title?.trim()) throw new ValidationError('Title is required');
     if (!existing && !imp.epicId && !imp.depId) throw new ValidationError('Link the impediment to an epic');
-    if (existing) Object.assign(existing, imp);
-    else this.state.impediments.push({ id: uid(), refCode: this._ref('impediment'), kind: 'impediment', ownerName: actor.name, status: 'open', roam: null, raisedAt: now(), resolvedAt: null, depId: null, ...imp });
+    if (imp.status !== undefined) checkImpedimentStatus(imp.status, ValidationError);
+    const patch = { ...imp };
+    if (patch.actionOwnerName !== undefined) patch.actionOwnerName = String(patch.actionOwnerName || '').trim();
+    if (patch.ownerName !== undefined) patch.ownerName = String(patch.ownerName || '').trim();
+    if (existing) {
+      const epic = this.state.epics.find((e) => e.id === (patch.epicId ?? existing.epicId));
+      if ((patch.ownerName !== undefined && patch.ownerName !== existing.ownerName) || (patch.reporterId !== undefined && patch.reporterId !== existing.reporterId)) {
+        if (!isAdmin(actor)) throw new PermissionError('Only an admin can change the reporter');
+      }
+      const statusChanged = patch.status !== undefined && patch.status !== existing.status;
+      const holderChanged = (patch.actionOwnerId !== undefined && (patch.actionOwnerId || null) !== (existing.actionOwnerId || null)) || (patch.actionOwnerName !== undefined && patch.actionOwnerName !== (existing.actionOwnerName || ''));
+      if ((statusChanged || holderChanged) && !canChangeImpediment(actor, existing, epic)) throw new PermissionError('Only the reporter, the action holder, the epic team or an admin can change the status');
+      if (statusChanged) {
+        const q = this.state.plans.find((p) => p.epicId === existing.epicId)?.quarterId || null;
+        this._event(actor, 'impediment_status_changed', 'impediments', existing.id, q, '', { status: existing.status }, { status: patch.status });
+        patch.resolvedAt = patch.status === 'resolved' ? now() : null;
+        if (existing.kind === 'risk') patch.roam = patch.status === 'resolved' ? 'resolved' : existing.roam;
+      }
+      Object.assign(existing, patch);
+    } else {
+      this.state.impediments.push({ id: uid(), refCode: this._ref('impediment'), kind: 'impediment', ownerName: actor.name, reporterId: actor.id, actionOwnerId: null, actionOwnerName: '', status: 'open', roam: null, raisedAt: now(), resolvedAt: null, depId: null, ...patch });
+    }
     return this._persist();
   }
-  async resolveImpediment(actor, id) {
+  async setImpedimentStatus(actor, id, status) {
     if (!isPlanner(actor)) throw new PermissionError('Viewers cannot resolve impediments');
-    const i = this.state.impediments.find((x) => x.id === id);
-    if (!i) throw new ValidationError('Unknown impediment');
-    Object.assign(i, { status: 'resolved', resolvedAt: now(), roam: i.kind === 'risk' ? 'resolved' : null });
-    return this._persist();
+    if (!this.state.impediments.some((x) => x.id === id)) throw new ValidationError('Unknown impediment');
+    return this.upsertImpediment(actor, { id, status: checkImpedimentStatus(status, ValidationError) });
   }
+  async resolveImpediment(actor, id) { return this.setImpedimentStatus(actor, id, 'resolved'); }
 
   // ── Volgen (section 23, D67): personal, per actor, no event rows ──────────────
   async followEpic(actor, epicId) {
@@ -502,6 +526,7 @@ export class MockRepository {
     if (!onlyLanguage && !isAdmin(actor)) throw new PermissionError('Admin only');
     if (patch.sizeMap !== undefined) patch = { ...patch, sizeMap: checkSizeMap(patch.sizeMap, ValidationError) };
     if (patch.cadence !== undefined) patch = { ...patch, cadence: checkCadence(patch.cadence, ValidationError) };
+    if (patch.impedimentEscalationDays !== undefined) patch = { ...patch, impedimentEscalationDays: checkEscalationDays(patch.impedimentEscalationDays, ValidationError) };
     Object.assign(this.state.settings, patch);
     return this._persist();
   }

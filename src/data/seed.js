@@ -258,13 +258,16 @@ const checkIns = [
 ].map(([n, confidence, note, d], i) => ({ id: `ci-${i + 1}`, epicId: eid(n), quarterId: 'q-26-4', confidence, note, authorName: plannerOf(E.find((x) => x[0] === n)[1]), createdAt: ago(d) }));
 // Epics 29 and 31 intentionally have no check-in (stale).
 
-// Section 23 (M5): in 2026 Q4 two open impediments (IMP-0001 older than 7 days, IMP-0002 fresh); risks stay beta.
+// Section 23 (M5) / section 27 (D92/D93): 2026 Q4 impediments with a Melder (ownerName / reporterId), an Actiehouder
+// and mixed statuses: IMP-0001 (12 days, In behandeling) and IMP-0006 (9 days, Open) are escalated at the default of
+// 7 days; IMP-0002 is fresh; IMP-0005 is resolved. Risks (IMP-0003 / 0004) stay beta.
 const impediments = [
-  { id: 'im-1', refCode: 'IMP-0001', kind: 'impediment', title: 'Waiting on firewall change approval', epicId: eid(17), depId: null, ownerName: 'Mark van Dijk', status: 'open', roam: null, raisedAt: ago(12), resolvedAt: null },
-  { id: 'im-2', refCode: 'IMP-0002', kind: 'impediment', title: 'No access to claims archive for model training', epicId: eid(7), depId: null, ownerName: 'Sanne Bakker', status: 'open', roam: null, raisedAt: ago(3), resolvedAt: null },
-  { id: 'im-3', refCode: 'IMP-0003', kind: 'risk', title: 'Core vendor release slips to February', epicId: eid(11), depId: null, ownerName: 'Pieter Mulder', status: 'open', roam: 'owned', raisedAt: ago(20), resolvedAt: null },
-  { id: 'im-4', refCode: 'IMP-0004', kind: 'risk', title: 'DNB reporting format not final', epicId: eid(21), depId: null, ownerName: 'Mark van Dijk', status: 'open', roam: 'accepted', raisedAt: ago(9), resolvedAt: null },
-  { id: 'im-5', refCode: 'IMP-0005', kind: 'impediment', title: 'Test devices not available', epicId: eid(25), depId: null, ownerName: 'Lotte Meijer', status: 'resolved', roam: null, raisedAt: ago(14), resolvedAt: ago(5) },
+  { id: 'im-1', refCode: 'IMP-0001', kind: 'impediment', title: 'Waiting on firewall change approval', epicId: eid(17), depId: null, ownerName: 'Mark van Dijk', reporterId: 'u-cld', actionOwnerId: 'u-admin', actionOwnerName: 'Anouk de Jong', status: 'in_progress', roam: null, raisedAt: ago(12), resolvedAt: null },
+  { id: 'im-2', refCode: 'IMP-0002', kind: 'impediment', title: 'No access to claims archive for model training', epicId: eid(7), depId: null, ownerName: 'Sanne Bakker', reporterId: 'u-clm', actionOwnerId: 'u-dat', actionOwnerName: 'Fatima El Amrani', status: 'open', roam: null, raisedAt: ago(3), resolvedAt: null },
+  { id: 'im-3', refCode: 'IMP-0003', kind: 'risk', title: 'Core vendor release slips to February', epicId: eid(11), depId: null, ownerName: 'Pieter Mulder', reporterId: 'u-pol', actionOwnerId: null, actionOwnerName: '', status: 'open', roam: 'owned', raisedAt: ago(20), resolvedAt: null },
+  { id: 'im-4', refCode: 'IMP-0004', kind: 'risk', title: 'DNB reporting format not final', epicId: eid(21), depId: null, ownerName: 'Mark van Dijk', reporterId: 'u-cld', actionOwnerId: null, actionOwnerName: '', status: 'open', roam: 'accepted', raisedAt: ago(9), resolvedAt: null },
+  { id: 'im-5', refCode: 'IMP-0005', kind: 'impediment', title: 'Test devices not available', epicId: eid(25), depId: null, ownerName: 'Lotte Meijer', reporterId: 'u-por', actionOwnerId: 'u-por', actionOwnerName: 'Lotte Meijer', status: 'resolved', roam: null, raisedAt: ago(14), resolvedAt: ago(5) },
+  { id: 'im-6', refCode: 'IMP-0006', kind: 'impediment', title: 'PSP sandbox certificate expired, no renewal date', epicId: eid(30), depId: null, ownerName: 'Joris Smit', reporterId: 'u-pay', actionOwnerId: null, actionOwnerName: 'Leverancier PSP', status: 'open', roam: null, raisedAt: ago(9), resolvedAt: null },
 ];
 
 const events = [
@@ -279,7 +282,7 @@ const state = {
   members: PERSONAS,
   settings: { language: 'nl', setupComplete: true, orgName: 'Oranje Verzekeringen', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5, voteBlocksLock: false,
     capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false, valueModel: 'simple', skin: 'zakelijk',
-    sizeMap: { S: [1, 2], M: [2, 4], L: [4, 8], XL: [8, 13] }, cadence: { mode: 'exception', weeks: 2 } },
+    sizeMap: { S: [1, 2], M: [2, 4], L: [4, 8], XL: [8, 13] }, cadence: { mode: 'exception', weeks: 2 }, impedimentEscalationDays: 7 },
 };
 // Q3 was locked and closed: its baseline is the committed set Afsluiten measures against (D56).
 state.quarters.find((q) => q.id === 'q-26-3').baseline = buildBaseline(state, 'q-26-3');
