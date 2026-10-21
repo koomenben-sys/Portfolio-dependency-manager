@@ -834,3 +834,44 @@ Feature: Volgen
     When Sanne opens the same epic
     Then she sees her own "Volgen" state, not Ruud's
 ```
+
+## N. Uitvoering feedback (2026-10-21, docs/design.md section 25)
+
+Owner review of the Uitvoering phase (2026 Q4 as Joris Smit): items A-K.
+
+**Acceptance criteria**
+- N1. Header: the Demo badge sits next to the logo; the phase is a chip ("Planning", "In uitvoering" with a light green tint, "Afgesloten"), AA contrast, not interactive.
+- N2. Step 1 and its page title read "Prioriteiten" in Uitvoering and Afgesloten, "Prioriteren" in Planning.
+- N3. In Uitvoering and Afgesloten the ranked list splits into "Toegezegd dit kwartaal (n)" and a muted "Niet toegezegd (n)"; rank numbers stay. Committed = plan commitment committed / at_risk, or at least one ask with every ask accepted; not_committed never. Planning shows one list.
+- N4. Epic field "Eigenaar" (free text): editable in the panel by whoever may edit the epic; optional column in Kolommen, default on. Migration 012 re-runnable; RLS: planner sets it on own team's epic, not on another team's; viewer cannot.
+- N5. One "Afhankelijkheden" column: "4/5 toegezegd" coloured by the worst state, with the worst signal or answer and its team when there is one; "Aantal" is gone from Kolommen and a stored choice for it is ignored.
+- N6. "+ Epic" only in Planning. Column "Doel" is labelled "Strategisch doel". Unranked epics sit in "Backlog (n)", collapsed by default, in every phase.
+- N7. Afgestemd (Uitvoering and Afgesloten) is read-only for asks and answers: no answer buttons, no "+ Verzoek", no remove. The provider's signal stays editable in Uitvoering. Both repositories and the DB trigger refuse add / edit / answer / remove once the quarter is locked, active or closed (admins too), with a Dutch message; signals and confirm stay allowed.
+- N8. Seed: 2026 Q4 has asks across every team with mixed answers, three signals, owners and values, committed and not-committed epics and a backlog epic; 2026 Q3 has delivered flags and asks; 2027 Q1 unchanged; every quarter opens without console errors.
+- N9. `npm run build` and `npm run test:rls` pass; all strings via t() with Dutch; helper text ≤ 6 words.
+
+```gherkin
+Feature: Prioriteiten in Uitvoering
+
+  Scenario: Committed and not committed
+    Given 2026 Q4 is in Uitvoering
+    When I open step 1
+    Then it reads "Prioriteiten" and lists "Toegezegd dit kwartaal (13)" above a muted "Niet toegezegd (2)"
+    And "Backlog (1)" is collapsed below the list
+    And there is no "+ Epic" button
+
+  Scenario: Owner and dependencies at a glance
+    Given "Digital claims intake" has two asks, one In gevaar from Platform & Security
+    Then its row shows "Tom de Vries" under Eigenaar and "2/2 toegezegd · In gevaar · Platform & Security"
+
+Feature: Afgestemd is read-only
+
+  Scenario: Provider cannot change an answer
+    Given I am Pieter Mulder (Polisadministratie) in 2026 Q4 on Afgestemd
+    Then asks to my team show their answer as a chip, without Toezeggen / Bespreken / Kan niet
+    And I can still set Op koers / In gevaar / Gaat niet halen on a committed ask
+
+  Scenario: Repository refuses a late answer
+    When the Payments planner answers DEP-0027 through the API in 2026 Q4
+    Then the call fails with "Antwoorden staan vast na het vastzetten"
+```
