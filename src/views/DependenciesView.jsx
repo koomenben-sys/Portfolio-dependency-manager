@@ -73,7 +73,7 @@ export function DependenciesView() {
   return (
     <div data-tour="dependencies">
       <ViewHeader title={t(agreed ? 'Agreed' : 'Dependencies')} meta={quarterMeta(quarter, t)} right={
-        <label className="flex items-center gap-2.5 text-label text-muted w-full sm:w-auto">{t('Choose team')}
+        <label className="flex items-center gap-2.5 text-label text-muted w-full sm:w-auto"><span className="whitespace-nowrap">{t('Choose team')}</span>
           <select className={`${cls.input} !h-10 sm:!w-60 text-subtitle font-medium text-ink`} value={teamId} onChange={(e) => { setTeamId(e.target.value); setFilter(null); }} data-tour="team-select">{state.teams.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
         </label>
       } />
@@ -249,17 +249,19 @@ function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, followed, on
       <ul className="divide-y divide-border">
         {asks.map((d) => (
           <li key={d.id} className="group px-3 py-2">
-            <div className="flex items-center gap-3 min-h-9 flex-wrap md:flex-nowrap">
-              <span className="w-28 sm:w-40 shrink-0 text-label text-muted sm:truncate">{teams.get(d.providerTeamId)?.name}</span>
+            <div className="flex items-center gap-x-3 gap-y-1.5 min-h-9 flex-wrap">
+              <span className="w-28 sm:w-32 shrink-0 text-label text-muted sm:truncate">{teams.get(d.providerTeamId)?.name}</span>
               <span className="flex-1 min-w-[160px] text-body">{d.ask}{d.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</span>
               <PostLockMark dep={d} quarter={quarter} />
-              <SizeCell size={d.size} low={d.effortLow} high={d.effortHigh} settings={state.settings} />
-              <span className="w-28 shrink-0 inline-flex"><StatusChip response={d.response} /></span>
-              {mayWrite && removing !== d.id && <button className={`${cls.icon} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} aria-label={`${t('Remove ask')} ${d.refCode}`} onClick={() => setRemoving(d.id)}><Trash2 size={14} /></button>}
+              <div className="ml-auto flex items-center gap-3">
+                <SizeCell size={d.size} low={d.effortLow} high={d.effortHigh} settings={state.settings} />
+                <span className="w-28 shrink-0 inline-flex"><StatusChip response={d.response} /></span>
+                {mayWrite && removing !== d.id && <button className={`${cls.icon} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} aria-label={`${t('Remove ask')} ${d.refCode}`} onClick={() => setRemoving(d.id)}><Trash2 size={14} /></button>}
+              </div>
             </div>
-            {d.responseReason && <p className="pl-[172px] text-label text-muted">{d.responseReason}</p>}
+            {d.responseReason && <p className="pl-[140px] text-label text-muted">{d.responseReason}</p>}
             {removing === d.id && (
-              <div className="pl-[172px] pt-1">
+              <div className="pl-[140px] pt-1">
                 {locked ? <InlineReason required saveLabel={t('Remove')} onSave={async (reason) => { const r = await act('deleteDependency', d.id, reason); if (r.ok) setRemoving(null); }} onCancel={() => setRemoving(null)} />
                   : <div className="flex items-center gap-2 text-label"><span className="text-muted">{t('Remove?')}</span><button className={cls.secondary} onClick={async () => { const r = await act('deleteDependency', d.id, ''); if (r.ok) setRemoving(null); }}>{t('Yes')}</button><button className={cls.secondary} onClick={() => setRemoving(null)}>{t('No')}</button></div>}
               </div>
@@ -319,21 +321,22 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, act, followed, onOpen }
   const labelId = `ask-${dep.id}`;
   return (
     <li className="group px-3 py-2 rounded-row">
-      <div className="flex items-center gap-3 min-h-9 flex-wrap md:flex-nowrap">
+      <div className="flex items-center gap-x-3 gap-y-1.5 min-h-9 flex-wrap">
         <RankNo rank={rank} hash />
-        <span className="w-28 sm:w-40 shrink-0 text-label text-muted sm:truncate">{team?.name}</span>
-        <div className="flex-1 min-w-[160px]">
-          <div id={labelId} className="text-body">{dep.ask}{dep.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</div>
-          <div className="text-caption text-muted truncate">{t('for')} <button className="hover:underline text-accent focus-ring rounded-control" onClick={onOpen}>{epic?.title}</button><FollowStar on={followed} className="inline ml-1" /></div>
+        <div className="flex-1 min-w-[220px]">
+          <div id={labelId} className="text-body font-medium">{dep.ask}{dep.certainty === 'low' && <span className="text-caption text-faint font-normal"> · {t('low certainty')}</span>}</div>
+          <div className="text-caption text-muted">{team?.name} · {t('for')} <button className="hover:underline text-accent focus-ring rounded-control text-left" onClick={onOpen}>{epic?.title}</button><FollowStar on={followed} className="inline ml-1" /></div>
         </div>
         <PostLockMark dep={dep} quarter={quarter} />
-        <SizeCell size={dep.size} low={dep.effortLow} high={dep.effortHigh} settings={state.settings} />
-        {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <span className="w-28 shrink-0 inline-flex"><StatusChip response={dep.response} /></span>}
-        {mayAnswer && (dep.response === 'partial' || dep.response === 'deferred') && <StatusChip response={dep.response} />}
+        <div className="ml-auto flex items-center gap-3">
+          <SizeCell size={dep.size} low={dep.effortLow} high={dep.effortHigh} settings={state.settings} />
+          {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <span className="w-28 shrink-0 inline-flex"><StatusChip response={dep.response} /></span>}
+          {mayAnswer && (dep.response === 'partial' || dep.response === 'deferred') && <StatusChip response={dep.response} />}
+        </div>
       </div>
-      {dep.responseReason && reasonFor == null && <p className="pl-[172px] text-label text-muted mt-0.5">{dep.responseReason}</p>}
+      {dep.responseReason && reasonFor == null && <p className="pl-[46px] text-label text-muted mt-0.5">{dep.responseReason}</p>}
       {reasonFor && (
-        <div className="pl-[172px] pt-1">
+        <div className="pl-[46px] pt-1">
           <InlineReason required defaultValue={dep.responseReason || ''} placeholder={t('What stands in the way?')}
             onSave={async (reason) => { const r = await act('answerDependency', dep.id, { response: reasonFor, reason }); if (r.ok) setReasonFor(null); }} onCancel={() => setReasonFor(null)} />
         </div>
