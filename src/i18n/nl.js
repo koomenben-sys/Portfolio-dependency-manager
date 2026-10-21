@@ -759,7 +759,6 @@ export const nl = {
   'No asks yet.': 'Nog geen verzoeken.',
   'No epics in this quarter yet.': 'Nog geen epics in dit kwartaal.',
   'No match.': 'Geen resultaat.',
-  'Not prioritised yet': 'Nog niet geprioriteerd',
   'Nothing ranked yet.': 'Nog niets gerangschikt.',
   'Ranked epics': 'Gerangschikte epics',
   'Remove from this quarter': 'Uit dit kwartaal halen',
@@ -1051,4 +1050,5 @@ export const nl = {
   'In execution': 'In uitvoering',
   'Priorities': 'Prioriteiten',
   'Committed this quarter': 'Toegezegd dit kwartaal',
+  'Backlog': 'Backlog',
 };

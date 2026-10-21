@@ -15,7 +15,7 @@ import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
 // Screen 1 — Prioriteren (docs/design.md section 19, D26/D28; Release A section 21, D42/D43). One ranked table; drag
 // or use the arrow buttons to reorder; the moved row shows an inline optional reason; unranked epics sit in a collapsed
-// group. Above the table one strategy line (top-10 per goal) that filters; one filter select for teams and goals.
+// "Backlog (n)" group (item I). Above the table one strategy line (top-10 per goal) that filters; one filter select for teams and goals.
 // Release B (section 22): a compact capacity line when filtered to one team (L3) and the worst signal in the
 // dependency cell (L8, inside WorstIssue). Section 23: read-only once the quarter is Afgesloten (M4); "Gevolgd (n)"
 // at the top of the filter and a small star after followed titles (M8).
@@ -274,8 +274,8 @@ export function PrioritizeView() {
           </table>
           {unranked.length > 0 && (
             <div className="border-t border-border px-3 py-2 bg-surface-2">
-              <Disclosure summary={<>{t('Not prioritised yet')} <span className="tnum">({unranked.length})</span></>}>
-                <table className="w-full text-body" aria-label={t('Not prioritised yet')}>
+              <Disclosure summary={<>{t('Backlog')} <span className="tnum">({unranked.length})</span></>}>
+                <table className="w-full text-body" aria-label={t('Backlog')}>
                   <tbody className="divide-y divide-border">{visibleUnranked.map((p, i) => renderRow(p, i, false))}</tbody>
                 </table>
               </Disclosure>
