@@ -1051,4 +1051,6 @@ export const nl = {
   'Priorities': 'Prioriteiten',
   'Committed this quarter': 'Toegezegd dit kwartaal',
   'Backlog': 'Backlog',
+  'Asks are fixed once the plan is locked': 'Verzoeken staan vast na het vastzetten',
+  'Answers are fixed once the plan is locked': 'Antwoorden staan vast na het vastzetten',
 };

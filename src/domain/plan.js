@@ -350,9 +350,14 @@ export function attention(state, user, quarterId, now = Date.now(), t = en) {
   return items;
 }
 
+// Asks and answers are fixed once the plan is locked (owner feedback 2026-10-21, item J; D83): 'answer' and 'ask'
+// are open during Planning only (asks from Prep, answers from Negotiate). Signals stay with the provider (rhythm.js).
+export const ASKS_FIXED = 'Asks are fixed once the plan is locked';
+export const ANSWERS_FIXED = 'Answers are fixed once the plan is locked';
 export function phaseAllows(phase, what) {
   const i = PHASE_INDEX[phase];
-  if (what === 'answer') return i >= PHASE_INDEX.negotiate && phase !== 'closed';
+  if (what === 'answer') return i >= PHASE_INDEX.negotiate && i < PHASE_INDEX.locked;
+  if (what === 'ask') return i < PHASE_INDEX.locked;
   if (what === 'edit') return phase !== 'closed';
   if (what === 'vote') return phase === 'vote' || phase === 'locked';
   return true;

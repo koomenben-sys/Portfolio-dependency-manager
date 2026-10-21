@@ -12,7 +12,7 @@
 //   carry a reason go through the RPCs update_with_reason / delete_with_reason (005). Events the triggers do
 //   not write (plan_added, dependency_added/edited/acknowledged, vote_cast, ...) are inserted by _event().
 import { supabase } from '../lib/supabase';
-import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
+import { buildBaseline, readiness, phaseAllows, ASKS_FIXED, ANSWERS_FIXED } from '../domain/plan';
 import { PHASE_INDEX, isLockedPhase, REASON_REQUIRED } from '../domain/model';
 import { checkTheme, isHttpUrl } from '../domain/value';
 import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, nextQuarter } from '../domain/rhythm';
@@ -87,6 +87,12 @@ export class SupabaseRepository {
     if (q.phase === 'closed') throw new ValidationError('Quarter is closed');
     if (isLockedPhase(q.phase) && !trim(reason)) throw new ValidationError(`The quarter is locked: a reason is required to ${what}`);
     return q;
+  }
+  // Asks are fixed once the plan is locked (item J, D83): no add, edit or remove in Uitvoering / Afgesloten.
+  async _guardAsk(quarterId, reason, what) {
+    const q = await this._quarter(quarterId);
+    if (isLockedPhase(q.phase)) throw new PermissionError(ASKS_FIXED);
+    return this._guardPhase(quarterId, reason, what);
   }
   async _withReason(table, id, patch, reason) {
     const { error } = await supabase.rpc('update_with_reason', { _table: table, _id: id, _patch: patch, _reason: reason || '' });
@@ -319,7 +325,7 @@ export class SupabaseRepository {
     if (dep.size !== undefined) dep = { ...dep, ...sizePatch(this.settings, dep.size, ValidationError) };
     if (dep.certainty !== undefined) checkCertainty(dep.certainty, ValidationError);
     if ((dep.effortLow || 0) > (dep.effortHigh || 0)) throw new ValidationError('High estimate must be at least the low estimate');
-    await this._guardPhase(dep.quarterId, dep.reason, 'add an ask');
+    await this._guardAsk(dep.quarterId, dep.reason, 'add an ask');
     const { reason, ...depFields } = dep;
     const row = toRow(depFields, org);
     row.ref_code = await this._ref('dependency');
@@ -334,7 +340,8 @@ export class SupabaseRepository {
     const d = await this._dep(depId);
     if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can answer');
     const q = await this._quarter(d.quarterId);
-    if (!phaseAllows(q.phase, 'answer')) throw new ValidationError(`Answers are open from the Negotiate phase until the quarter closes (now: ${q.phase})`);
+    if (isLockedPhase(q.phase)) throw new PermissionError(ANSWERS_FIXED);
+    if (!phaseAllows(q.phase, 'answer')) throw new ValidationError(`Answers are open from the Negotiate phase until the plan is locked (now: ${q.phase})`);
     if (REASON_REQUIRED.has(response) && !trim(reason)) throw new ValidationError('A reason is required for this answer');
     if (response === 'deferred' && !deferredToQuarterId) throw new ValidationError('Choose the quarter to defer to');
     if (response === 'partial') {
@@ -366,7 +373,7 @@ export class SupabaseRepository {
     const d = await this._dep(depId);
     if (!canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can edit the ask');
     let { reason, ...rest } = patch;
-    await this._guardPhase(d.quarterId, reason, 'edit an ask');
+    await this._guardAsk(d.quarterId, reason, 'edit an ask');
     if (rest.size !== undefined) rest = { ...rest, ...sizePatch(this.settings, rest.size, ValidationError) };
     if (rest.certainty !== undefined) checkCertainty(rest.certainty, ValidationError);
     const next = { ...d, ...rest };
@@ -385,7 +392,7 @@ export class SupabaseRepository {
     if (row) {
       const d = fromRow(row);
       if (!canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can remove the ask');
-      await this._guardPhase(d.quarterId, reason, 'remove an ask');
+      await this._guardAsk(d.quarterId, reason, 'remove an ask');
     }
     // The 005 delete trigger logs dependencies_removed with the reason.
     this._throw((await supabase.rpc('delete_with_reason', { _table: 'dependencies', _id: depId, _reason: reason })).error);

@@ -1,6 +1,6 @@
 // In-memory + localStorage implementation of the repository contract (docs/design.md D12, AC A1-A5).
 import { seedState } from './seed';
-import { buildBaseline, readiness, phaseAllows } from '../domain/plan';
+import { buildBaseline, readiness, phaseAllows, ASKS_FIXED, ANSWERS_FIXED } from '../domain/plan';
 import { PHASES, isLockedPhase, REASON_REQUIRED } from '../domain/model';
 import { checkTheme, isHttpUrl } from '../domain/value';
 import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, nextQuarter } from '../domain/rhythm';
@@ -85,6 +85,11 @@ export class MockRepository {
     if (q.phase === 'closed') throw new ValidationError('Quarter is closed');
     if (isLockedPhase(q.phase) && !String(reason || '').trim()) throw new ValidationError(`The quarter is locked: a reason is required to ${what}`);
     return q;
+  }
+  // Asks are fixed once the plan is locked (item J, D83): no add, edit or remove in Uitvoering / Afgesloten.
+  _guardAsk(quarterId, reason, what) {
+    if (isLockedPhase(this._quarter(quarterId).phase)) throw new PermissionError(ASKS_FIXED);
+    return this._guardPhase(quarterId, reason, what);
   }
   _epic(id) { const e = this.state.epics.find((x) => x.id === id); if (!e) throw new ValidationError('Unknown epic'); return e; }
 
@@ -208,7 +213,7 @@ export class MockRepository {
     if (dep.size !== undefined) dep = { ...dep, ...sizePatch(this.state.settings, dep.size, ValidationError) };
     if (dep.certainty !== undefined) checkCertainty(dep.certainty, ValidationError);
     if ((dep.effortLow || 0) > (dep.effortHigh || 0)) throw new ValidationError('High estimate must be at least the low estimate');
-    this._guardPhase(dep.quarterId, dep.reason, 'add an ask');
+    this._guardAsk(dep.quarterId, dep.reason, 'add an ask');
     const created = { id: uid(), refCode: this._ref('dependency'), requesterTeamId: epic.teamId, requesterName: epic.ownerName || actor.name, ifDeclined: '', neededBy: null, effortLow: 0, effortHigh: 0, size: null, certainty: 'medium', signal: 'on_track', signalNote: '', signalAt: null, confirmedAt: null, grantedLow: null, grantedHigh: null, response: 'proposed', responseReason: '', deferredToQuarterId: null, respondedAt: null, createdAt: now(), ...dep };
     delete created.reason;
     this.state.dependencies.push(created);
@@ -220,7 +225,8 @@ export class MockRepository {
     if (!d) throw new ValidationError('Unknown dependency');
     if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can answer');
     const q = this._quarter(d.quarterId);
-    if (!phaseAllows(q.phase, 'answer')) throw new ValidationError(`Answers are open from the Negotiate phase until the quarter closes (now: ${q.phase})`);
+    if (isLockedPhase(q.phase)) throw new PermissionError(ANSWERS_FIXED);
+    if (!phaseAllows(q.phase, 'answer')) throw new ValidationError(`Answers are open from the Negotiate phase until the plan is locked (now: ${q.phase})`);
     if (REASON_REQUIRED.has(response) && !reason.trim()) throw new ValidationError('A reason is required for this answer');
     if (response === 'deferred' && !deferredToQuarterId) throw new ValidationError('Choose the quarter to defer to');
     if (response === 'partial') {
@@ -251,7 +257,7 @@ export class MockRepository {
     if (!d) throw new ValidationError('Unknown dependency');
     if (!canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can edit the ask');
     let { reason, ...rest } = patch;
-    this._guardPhase(d.quarterId, reason, 'edit an ask');
+    this._guardAsk(d.quarterId, reason, 'edit an ask');
     if (rest.size !== undefined) rest = { ...rest, ...sizePatch(this.state.settings, rest.size, ValidationError) };
     if (rest.certainty !== undefined) checkCertainty(rest.certainty, ValidationError);
     const next = { ...d, ...rest };
@@ -266,7 +272,7 @@ export class MockRepository {
   async deleteDependency(actor, depId, reason = '') {
     const d = this.state.dependencies.find((x) => x.id === depId);
     if (d && !canWriteTeam(actor, d.requesterTeamId)) throw new PermissionError('Only the requesting team can remove the ask');
-    if (d) { this._guardPhase(d.quarterId, reason, 'remove an ask'); this._event(actor, 'dependency_removed', 'dependencies', d.id, d.quarterId, reason, { ask: d.ask, response: d.response }, null); }
+    if (d) { this._guardAsk(d.quarterId, reason, 'remove an ask'); this._event(actor, 'dependency_removed', 'dependencies', d.id, d.quarterId, reason, { ask: d.ask, response: d.response }, null); }
     this.state.dependencies = this.state.dependencies.filter((x) => x.id !== depId);
     return this._persist();
   }

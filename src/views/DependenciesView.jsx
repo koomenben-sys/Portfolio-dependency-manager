@@ -18,8 +18,9 @@ import { useTourNudge } from '../components/plan/TourPanel';
 // "Aan ons gevraagd": asks to this team ordered by the requesting epic's rank, answered with one click.
 // Release B (section 22): the team's capacity line + a four-field dialog (L2/L3), size and certainty on the ask
 // form (L1/L4), the provider's signal on committed asks in "Aan ons gevraagd" and the read-only signal in "Wij vragen" (L7/L8).
-// Section 23 (M3): the same screen is step 2 "Afgestemd" once the quarter runs — asks added after the lock carry a
-// small "na vastzetten" label, an "Alleen gevolgd" toggle filters on followed epics (M8), and a closed quarter is read-only.
+// Section 23 (M3): the same screen is step 2 "Afgestemd" once the quarter runs — an "Alleen gevolgd" toggle filters on
+// followed epics (M8). Section 25 (D83): asks and answers are fixed from the lock on; only the provider's signal stays
+// editable until the quarter closes. Older asks created after a lock still carry the "na vastzetten" label.
 const COUNT_ORDER = ['declined', 'needs_priority_call', 'proposed', 'accepted'];
 
 export function DependenciesView() {
@@ -53,7 +54,9 @@ export function DependenciesView() {
   const asksOf = (p) => outgoing.filter((d) => d.epicId === p.epicId);
   const withAsks = ourPlans.filter((p) => asksOf(p).some(inFilter));
   const withoutAsks = ourPlans.filter((p) => asksOf(p).length === 0);
-  const mayWrite = canWriteTeam(actor, teamId) && quarter.phase !== 'closed';
+  const mayWrite = canWriteTeam(actor, teamId) && quarter.phase !== 'closed'; // capacity and signals
+  // Asks and answers are fixed once the plan is locked (item J, D83): Afgestemd is read-only, signals stay editable.
+  const mayAsk = mayWrite && phaseAllows(quarter.phase, 'ask');
   const answersOpen = phaseAllows(quarter.phase, 'answer');
   const mayAnswer = mayWrite && answersOpen;
   const locked = isLockedPhase(quarter.phase);
@@ -85,10 +88,10 @@ export function DependenciesView() {
           <ColumnHead label={t('We ask')} deps={outgoing} filter={filter} onFilter={setFilter} />
           <div className="mt-4 space-y-3" data-tour="outgoing">
             {ourPlans.length === 0 && <div className={cls.card}><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'No epics for this team in this quarter.')}</EmptyLine></div>}
-            {withAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={asksOf(p).filter(inFilter)} teams={teams} mayWrite={mayWrite} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}
+            {withAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={asksOf(p).filter(inFilter)} teams={teams} mayWrite={mayAsk} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}
             {withoutAsks.length > 0 && !filter && (
               <Disclosure className="px-1" summary={withoutAsks.length === 1 ? t('1 epic without asks') : t('{n} epics without asks', { n: withoutAsks.length })}>
-                <div className="space-y-3">{withoutAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={[]} teams={teams} mayWrite={mayWrite} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}</div>
+                <div className="space-y-3">{withoutAsks.map((p) => <EpicAsks key={p.id} plan={p} epic={epics.get(p.epicId)} asks={[]} teams={teams} mayWrite={mayAsk} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}</div>
               </Disclosure>
             )}
           </div>
@@ -97,7 +100,7 @@ export function DependenciesView() {
         <section className={tab === 'incoming' ? '' : 'hidden xl:block'} aria-label={t('Asked of us')}>
           <ColumnHead label={t('Asked of us')} deps={incoming} filter={filter} onFilter={setFilter} />
           <div className="mt-4" data-tour="incoming">
-            {!answersOpen && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
+            {!answersOpen && !agreed && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
             {incoming.length === 0 ? <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div> : (
               <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
                 {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} maySignal={mayWrite} act={act} followed={followed.has(d.epicId)} onOpen={() => setOpenEpic(d.epicId)} />)}
