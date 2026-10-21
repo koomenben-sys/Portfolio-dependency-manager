@@ -6,7 +6,7 @@ import { checkTheme, isHttpUrl } from '../domain/value';
 import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, DEFAULT_ESCALATION_DAYS, checkImpedimentStatus, checkEscalationDays, nextQuarter } from '../domain/rhythm';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, canChangeImpediment, normaliseEmail, checkRole, checkMemberChange, checkCapacity } from './repository';
 
-const KEY = 'kwartaalplan.mock.v8'; // v8: section 27 seed (impediments with Melder / Actiehouder / status); v7: section 26 seed (every team both ways, sizes, capacity per quarter); v6: section 25 seed (Uitvoering asks, signals, owners); v5 section 23; v4 Release B; v3 Release A; v2 the 2026-10-17 reset
+const KEY = 'kwartaalplan.mock.v9'; // v9: plan createdAt (Nieuw ongepland werk); v8: section 27 seed (impediments with Melder / Actiehouder / status); v7: section 26 seed (every team both ways, sizes, capacity per quarter); v6: section 25 seed (Uitvoering asks, signals, owners); v5 section 23; v4 Release B; v3 Release A; v2 the 2026-10-17 reset
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const now = () => new Date().toISOString();
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -36,7 +36,7 @@ export class MockRepository {
     this.state.epics.forEach((e) => { e.value ||= {}; e.valueNote ||= ''; e.onePager ||= {}; e.onePagerUrl ??= null; });
     this.state.settings.valueModel ||= 'none';
     this.state.capacity.forEach((c) => { c.fteVacant ??= 0; });
-    this.state.plans.forEach((p) => { p.size ??= null; p.delivered = !!p.delivered; });
+    this.state.plans.forEach((p) => { p.size ??= null; p.delivered = !!p.delivered; p.createdAt ??= p.updatedAt; });
     this.state.dependencies.forEach((d) => { d.size ??= null; d.certainty ||= 'medium'; d.signal ||= 'on_track'; d.signalNote ||= ''; d.signalAt ??= null; d.confirmedAt ??= null; });
     this.state.settings.sizeMap ||= { ...DEFAULT_SIZE_MAP };
     this.state.settings.cadence ||= { ...DEFAULT_CADENCE };
@@ -170,7 +170,7 @@ export class MockRepository {
       }
       Object.assign(existing, plan, { updatedAt: now() });
     } else {
-      const created = { id: uid(), rank: null, effortLow: 0, effortHigh: 0, size: null, delivered: false, commitment: 'draft', confidence: 'medium', ...plan, updatedAt: now() };
+      const created = { id: uid(), rank: null, effortLow: 0, effortHigh: 0, size: null, delivered: false, commitment: 'draft', confidence: 'medium', ...plan, createdAt: now(), updatedAt: now() };
       this.state.plans.push(created);
       this._event(actor, 'plan_added', 'plans', created.id, q.id, reason, null, { epicId: plan.epicId });
       if (plan.rank != null) this._event(actor, 'rank_changed', 'plans', created.id, q.id, reason, { rank: null }, { rank: plan.rank });
@@ -385,7 +385,7 @@ export class MockRepository {
     if (!next) throw new ValidationError('Add the next quarter first');
     if (next.phase === 'closed') throw new ValidationError('Quarter is closed');
     if (this.state.plans.some((x) => x.epicId === p.epicId && x.quarterId === next.id)) return this._persist();
-    const created = { id: uid(), epicId: p.epicId, quarterId: next.id, rank: null, effortLow: p.effortLow, effortHigh: p.effortHigh, size: p.size ?? null, delivered: false, commitment: 'draft', confidence: 'medium', updatedAt: now() };
+    const created = { id: uid(), epicId: p.epicId, quarterId: next.id, rank: null, effortLow: p.effortLow, effortHigh: p.effortHigh, size: p.size ?? null, delivered: false, commitment: 'draft', confidence: 'medium', createdAt: now(), updatedAt: now() };
     this.state.plans.push(created);
     this._event(actor, 'carried_over', 'plans', created.id, next.id, '', { quarterId: p.quarterId }, { epicId: p.epicId, quarterId: next.id });
     return this._persist();

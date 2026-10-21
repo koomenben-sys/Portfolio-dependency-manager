@@ -3,17 +3,17 @@ import { Plus, Lock, Pencil, TriangleAlert } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { isPlanner, isAdmin, canWriteTeam, canChangeImpediment } from '../data/repository';
 import { planFor, byId, daysSince } from '../domain/plan';
-import { hasSignal, inExecution, quarterWeek, openImpediments, signalOf, needsConfirmation, isEscalated, IMPEDIMENT_STATUSES, IMPEDIMENT_STATUS_META } from '../domain/rhythm';
+import { hasSignal, inExecution, quarterWeek, openImpediments, signalOf, needsConfirmation, isEscalated, newSinceLock, IMPEDIMENT_STATUSES, IMPEDIMENT_STATUS_META } from '../domain/rhythm';
 import { followsOf, readFollowOnly, writeFollowOnly } from '../domain/follows';
 import { useT } from '../i18n';
-import { cls, ViewHeader, quarterMeta, RankNo, StatusChip, SignalChip, SignalControl, InlineReason, EmptyLine, ErrorLine, Dialog, Disclosure, FollowStar, FollowOnlyToggle, isPostLock, normAsk, toneClass } from '../components/plan/core';
+import { cls, ViewHeader, quarterMeta, RankNo, SignalChip, SignalControl, InlineReason, EmptyLine, ErrorLine, Dialog, Disclosure, FollowStar, FollowOnlyToggle, fmtDay, normAsk, toneClass } from '../components/plan/core';
 import { CloseQuarterDialog } from '../components/plan/CycleActions';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
 // Step 3 during Uitvoering — Voortgang (docs/design.md section 23, D65; acceptance M5). One top line, then sections
 // that hide when empty: Deadline in gevaar (signals on committed asks), Impediments (not resolved, kind 'impediment'),
-// Nieuw sinds vastzetten (asks created after lockedAt), Onze toezeggingen. "Alleen gevolgd" filters them (M8).
+// Nieuw ongepland werk (epics added after the lock, D97), Onze toezeggingen. "Alleen gevolgd" filters them (M8).
 // Section 27 (D94/D95): a "Team kiezen" select with "Alle teams" on the title row filters Deadline in gevaar,
 // Impediments and Onze toezeggingen (admin / viewer: all teams; planner: own team). The three are tables with the
 // same column template (# · … · Team · Signaal/Status · Toelichting/Actiehouder) so columns line up across sections.
@@ -56,7 +56,7 @@ export function ProgressView() {
   const impsAll = openImpediments(state, quarter.id);
   const atRisk = atRiskAll.filter((d) => keep(d.epicId) && inTeam(d)).sort(byRank);
   const imps = impsAll.filter((i) => keep(i.epicId) && (!teamId || teamOf(i.epicId) === teamId));
-  const fresh = deps.filter((d) => isPostLock(d, quarter) && keep(d.epicId)).sort(byRank);
+  const fresh = newSinceLock(state, quarter).filter((p) => keep(p.epicId)); // epics added after the lock (D97)
   const followedInQuarter = state.plans.filter((p) => p.quarterId === quarter.id && followed.has(p.epicId)).length;
   const { week, total } = quarterWeek(quarter, state.settings);
   const executing = inExecution(quarter.phase);
@@ -139,21 +139,27 @@ export function ProgressView() {
       )}
 
       {fresh.length > 0 && (
-        <section className="mb-6" aria-label={t('New since lock')} data-tour="new-since-lock">
-          {sectionHead(t('New since lock'), fresh.length)}
-          <ul className={`${cls.card} divide-y divide-border`}>
-            {fresh.map((d) => (
-              <li key={d.id} className="flex items-center gap-3 px-3 min-h-10 py-1.5 flex-wrap md:flex-nowrap">
-                <RankNo rank={planFor(state, d.epicId, quarter.id)?.rank} size="sm" />
-                <div className="min-w-0 flex-1">
-                  {title(d.epicId, 'text-body font-medium')}
-                  <div className="text-caption text-muted truncate">{teams.get(d.providerTeamId)?.name} · {d.ask}</div>
-                </div>
-                <SignalChip dep={d} />
-                <StatusChip response={d.response} />
-              </li>
-            ))}
-          </ul>
+        <section className="mb-6" aria-label={t('New unplanned work')} data-tour="new-since-lock">
+          {sectionHead(t('New unplanned work'), fresh.length)}
+          {table(t('New unplanned work'), (
+            <>
+              {head(t('Epic'), t('Owner'), t('Added'))}
+              <tbody className="divide-y divide-border">
+                {fresh.map((p) => {
+                  const e = epics.get(p.epicId);
+                  return (
+                    <tr key={p.id} className="h-row">
+                      <td className={TC.rank}><RankNo rank={p.rank} hash /></td>
+                      <td className={`${TC.main} min-w-0`}><div className="text-body font-medium truncate">{title(p.epicId)}</div></td>
+                      <td className={`${TC.team} text-label text-muted truncate`}>{teams.get(e?.teamId)?.name}</td>
+                      <td className={`${TC.state} text-label text-muted truncate`}>{e?.ownerName}</td>
+                      <td className={`${TC.note} text-label text-muted tnum`}>{fmtDay(p.createdAt, t.lang)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </>
+          ))}
         </section>
       )}
 

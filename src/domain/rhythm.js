@@ -167,6 +167,11 @@ export function checkEscalationDays(n, Err = Error) {
 export const isEscalated = (imp, settings, now = Date.now()) => imp.status !== 'resolved' && (now - new Date(imp.raisedAt).getTime()) / DAY > escalationDays(settings);
 // Asks created after the quarter was locked ("na vastzetten", M3/M5).
 export const isPostLock = (dep, quarter) => !!(quarter?.lockedAt && dep?.createdAt && dep.createdAt > quarter.lockedAt);
+// "Nieuw ongepland werk" (section 27, D97): epics whose plan was added to the quarter after the lock, by rank.
+export function newSinceLock(state, quarter) {
+  if (!quarter?.lockedAt) return [];
+  return state.plans.filter((p) => p.quarterId === quarter.id && p.createdAt && p.createdAt > quarter.lockedAt).sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
+}
 
 // ── Afsluiten (D56) ──────────────────────────────────────────────────────────
 // "Toegezegd" = epics whose plan was in the baseline with every ask accepted (or none); without a baseline the

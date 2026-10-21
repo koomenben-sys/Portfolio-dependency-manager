@@ -1042,6 +1042,8 @@ export const nl = {
   'Impediment': 'Impediment',
   'Impediments': 'Impediments',
   'New since lock': 'Nieuw sinds vastzetten',
+  'New unplanned work': 'Nieuw ongepland werk',
+  'Added': 'Toegevoegd',
   'Resolved': 'Opgelost',
   'New impediment': 'Nieuw impediment',
   'What is blocking?': 'Wat blokkeert?',

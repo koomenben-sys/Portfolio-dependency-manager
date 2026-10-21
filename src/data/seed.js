@@ -136,7 +136,7 @@ const P1 = [
 ];
 const plans = P1.map(([n, rank, effortLow, effortHigh, commitment, confidence, size], i) => ({
   id: `p1-${i + 1}`, epicId: eid(n), quarterId: 'q-27-1', rank, effortLow, effortHigh, commitment, confidence, size: size || null, delivered: false,
-  updatedAt: ago(1 + (i % 9)),
+  createdAt: ago(40 + i), updatedAt: ago(1 + (i % 9)),
 }));
 // Plans for 2026 Q4 (active): [epic, rank, low, high, commitment, confidence, size]. Ranks 1-12 committed; 14 and 15 are
 // not committed (item D: "Niet toegezegd"); epic 20 is unranked (item I: "Backlog"). Rank 13 is added after the lock below.
@@ -149,7 +149,7 @@ const P0 = [
 ];
 const plans0 = P0.map(([n, rank, effortLow, effortHigh, commitment, confidence, size], i) => ({
   id: `p0-${i + 1}`, epicId: eid(n), quarterId: 'q-26-4', rank, effortLow, effortHigh, commitment, confidence, size: size || null, delivered: false,
-  updatedAt: ago(20 + i),
+  createdAt: ago(45 + i), updatedAt: ago(20 + i),
 }));
 // Plans for 2026 Q3 (closed): [epic, rank, low, high, delivered, size]. Every team delivered something; Claims (above
 // capacity) and Data Platform (krap) each left one epic undelivered.
@@ -159,7 +159,7 @@ const P3 = [
 ];
 const plans3 = P3.map(([n, rank, effortLow, effortHigh, delivered, size], i) => ({
   id: `p3-${i + 1}`, epicId: eid(n), quarterId: 'q-26-3', rank, effortLow, effortHigh, commitment: 'committed', confidence: 'medium', size: size || null, delivered,
-  updatedAt: ago(100 + i),
+  createdAt: ago(130 + i), updatedAt: ago(100 + i),
 }));
 
 // Dependencies: [n, epic, provider, quarter, ask, low, high, response, reason, createdDaysAgo, size?, certainty?]
@@ -294,7 +294,9 @@ state.quarters.find((q) => q.id === 'q-26-4').lockedAt = ago(30);
 const p0 = state.plans.find((p) => p.id === 'p0-9');
 p0.commitment = 'at_risk';
 state.events.push({ id: 'ev-3', at: ago(7), actorId: 'u-pay', actorName: 'Joris Smit', action: 'commitment_changed', entity: 'plans', entityId: 'p0-9', quarterId: 'q-26-4', reason: 'PSP vendor delivered late', before: { commitment: 'committed' }, after: { commitment: 'at_risk' } });
-state.plans.push({ id: 'p0-13', epicId: eid(23), quarterId: 'q-26-4', rank: 13, effortLow: 2, effortHigh: 4, commitment: 'committed', confidence: 'medium', size: 'M', delivered: false, updatedAt: ago(10) });
+state.plans.push({ id: 'p0-13', epicId: eid(23), quarterId: 'q-26-4', rank: 13, effortLow: 2, effortHigh: 4, commitment: 'committed', confidence: 'medium', size: 'M', delivered: false, createdAt: ago(10), updatedAt: ago(10) });
+// "Nieuw ongepland werk" (D97): the backlog epic 20 was also added after the lock.
+state.plans.find((p) => p.quarterId === 'q-26-4' && p.epicId === eid(20)).createdAt = ago(5);
 state.events.push({ id: 'ev-4', at: ago(2), actorId: 'u-cld', actorName: 'Mark van Dijk', action: 'signal_set', entity: 'dependencies', entityId: 'd-21', quarterId: 'q-26-4', reason: 'Pentest schuift', before: { signal: 'on_track' }, after: { signal: 'at_risk', note: 'Pentest schuift' } });
 state.events.push({ id: 'ev-5', at: ago(4), actorId: 'u-pol', actorName: 'Pieter Mulder', action: 'signal_set', entity: 'dependencies', entityId: 'd-26', quarterId: 'q-26-4', reason: 'Twee engineers op IFRS 17', before: { signal: 'on_track' }, after: { signal: 'at_risk', note: 'Twee engineers op IFRS 17' } });
 state.events.push({ id: 'ev-6', at: ago(1), actorId: 'u-pol', actorName: 'Pieter Mulder', action: 'signal_set', entity: 'dependencies', entityId: 'd-25', quarterId: 'q-26-4', reason: 'Extract geblokkeerd door kernmigratie; cijfers pas na de deadline', before: { signal: 'on_track' }, after: { signal: 'wont_make', note: 'Extract geblokkeerd door kernmigratie; cijfers pas na de deadline' } });

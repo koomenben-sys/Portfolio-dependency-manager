@@ -160,7 +160,7 @@ export class SupabaseRepository {
       // no surrogate key in SQL (PK = org, team, quarter); numeric columns arrive as strings, Release B fields may be absent before 010
       capacity: capacity.map((c) => ({ id: `${c.teamId}:${c.quarterId}`, ...c, headcount: Number(c.headcount) || 0, fteVacant: Number(c.fteVacant) || 0, absenceWeeks: Number(c.absenceWeeks) || 0, reservePct: Number(c.reservePct) || 0, weeks: Number(c.weeks) || 13, focusFactor: Number(c.focusFactor) || 1 })),
       epics: epics.sort(byCreated('createdAt')),
-      plans: plans.map((p) => ({ ...p, rank: p.strategicRank, effortLow: Number(p.effortLow) || 0, effortHigh: Number(p.effortHigh) || 0, size: p.size ?? null, delivered: !!p.delivered })),
+      plans: plans.map((p) => ({ ...p, rank: p.strategicRank, effortLow: Number(p.effortLow) || 0, effortHigh: Number(p.effortHigh) || 0, size: p.size ?? null, delivered: !!p.delivered, createdAt: p.createdAt ?? p.updatedAt ?? null })),
       dependencies: dependencies.map((d) => ({ ...d, effortLow: Number(d.effortLow) || 0, effortHigh: Number(d.effortHigh) || 0, size: d.size ?? null, certainty: d.certainty || 'medium', signal: d.signal || 'on_track', signalNote: d.signalNote || '', signalAt: d.signalAt ?? null, confirmedAt: d.confirmedAt ?? null })).sort(byCreated('createdAt')),
       votes: votes.map((v) => ({ id: `${v.teamId}:${v.quarterId}`, ...v })),
       discussions: discussions.map((d) => ({ ...d, depId: d.dependencyId })).sort(byCreated('createdAt')),
