@@ -86,7 +86,7 @@ export function PrioritizeView() {
   const planning = cyclePhase(quarter.phase) === 'Planning';
   const closed = quarter.phase === 'closed'; // Afgesloten: no drag, no arrows (M4)
   const mayRank = canRank(actor) && !closed;
-  const mayAdd = isPlanner(actor) && !closed;
+  const mayAdd = isPlanner(actor) && planning; // "+ Epic" only while planning (item G)
   const followed = followsOf(state, actor.id);
   const followedN = plansQ.filter((p) => followed.has(p.epicId)).length;
   // Searching or filtering (team or goal) hides rows, so the visible order is no longer 1..n: reordering pauses.
