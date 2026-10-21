@@ -8,11 +8,10 @@ import { teamCapacity } from '../domain/capacity';
 import { planFor, phaseAllows, byId } from '../domain/plan';
 import { CERTAINTIES, CERTAINTY_META, sizeRange } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, quarterMeta, fmtDay, ErrorLine, Disclosure, Dialog, toneClass, normAsk, ASK_SEVERITY, SizePicker, SizeCell, FollowStar, FollowOnlyToggle, PostLockMark } from '../components/plan/core';
+import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, quarterMeta, fmtDay, ErrorLine, Disclosure, Dialog, toneClass, normAsk, SizePicker, SizeCell, FollowStar, FollowOnlyToggle, PostLockMark } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 import { useTourNudge } from '../components/plan/TourPanel';
-import { useTableSort, SortButton, SortedChip } from '../components/plan/sort';
 
 // Screen 2 — Afhankelijkheden, per team like the Feb version (docs/design.md section 19, D26/D29/D31; iteration 1).
 // "Wij vragen": our epics in rank order with their asks and an inline "+ Verzoek".
@@ -22,13 +21,16 @@ import { useTableSort, SortButton, SortedChip } from '../components/plan/sort';
 // followed epics (M8). Section 25 (D83): asks and answers are fixed from the lock on.
 // Section 26 (D86, "Optie 1"): the title row carries the team selector on the right; below it one team block with the
 // capacity band, percentage and bar; in Uitvoering / Afgesloten a read-only line. Signals left this screen (Voortgang).
-// Section 27 (D91): both columns are flat rows in rank order with one structure (AskRow): #rank · ask · "Team · voor
-// Epic" · size cell · answer. Only the team shown differs (provider / requester) and the provider gets the answer
-// control while answering is allowed. "+ Verzoek" is the last row of "Wij vragen" and picks the epic itself.
+// Section 27 (D91, amended): both columns are cards per epic (EpicCard) in rank order — header "#rank Epic title",
+// the asks as rows inside with one structure (AskRow): "Aan|Van <team>" · ask · size cell · answer. Only the team
+// shown differs (provider / requester) and the provider gets the answer control while answering is allowed.
+// No header row and no column sorting here: cards follow the epic rank, rows the creation order.
 const COUNT_ORDER = ['declined', 'needs_priority_call', 'proposed', 'accepted'];
 const teamKey = (actorId) => `kp.team.${actorId}`;
 const readTeam = (actorId) => { try { return localStorage.getItem(teamKey(actorId)) || ''; } catch { return ''; } };
 const writeTeam = (actorId, teamId) => { try { localStorage.setItem(teamKey(actorId), teamId); } catch { /* private mode */ } };
+// The short-lived generic sort on this page (D99) left `kp.sort.afhankelijkheden-*` keys behind; drop them once.
+const dropOldSort = () => { try { Object.keys(localStorage).filter((k) => k.startsWith('kp.sort.afhankelijkheden-')).forEach((k) => localStorage.removeItem(k)); } catch { /* private mode */ } };
 
 export function DependenciesView() {
   const { state, actor, quarter, run } = usePlan();
@@ -46,6 +48,7 @@ export function DependenciesView() {
   const [err, setErr] = useState(null);
   const [followOnly, setFollowOnlyState] = useState(() => readFollowOnly(actor.id));
   useEffect(() => { setFollowOnlyState(readFollowOnly(actor.id)); }, [actor.id]);
+  useEffect(dropOldSort, []);
   if (!quarter) return <NoQuarter />;
   const agreed = cyclePhase(quarter.phase) !== 'Planning'; // step 2 "Afgestemd" (M3)
   const followed = followsOf(state, actor.id);
@@ -58,21 +61,23 @@ export function DependenciesView() {
   const followOk = (epicId) => !(agreed && followOnly) || followed.has(epicId);
   const inFilter = (d) => (!filter || normAsk(d.response) === filter) && followOk(d.epicId);
   const rankOf = (d) => planFor(state, d.epicId, quarter.id)?.rank ?? 1e9;
-  // Generic sorting (D99) on both lists; the default order is the rank of the epic.
-  const sortOut = useTableSort('afhankelijkheden-wij', actor.id);
-  const sortIn = useTableSort('afhankelijkheden-ons', actor.id);
-  const accessors = (teamOf) => ({ ask: (d) => d.ask, team: (d) => teams.get(teamOf(d))?.name, size: (d) => (d.effortHigh > 0 ? Number(d.effortHigh) : null), answer: (d) => ASK_SEVERITY[normAsk(d.response)] });
   const byRank = (a, b) => rankOf(a) - rankOf(b) || a.createdAt.localeCompare(b.createdAt);
-  const incomingSorted = sortIn.apply([...incoming].filter(inFilter).sort(byRank), accessors((d) => d.requesterTeamId));
-  const outgoingSorted = sortOut.apply([...outgoing].filter(inFilter).sort(byRank), accessors((d) => d.providerTeamId));
+  const incomingSorted = [...incoming].filter(inFilter).sort(byRank);
+  // "Aan ons gevraagd" grouped per requesting epic, in the order of the sorted asks (rank of that epic).
+  const incomingGroups = incomingSorted.reduce((acc, d) => { const g = acc.find((x) => x.epicId === d.epicId); if (g) g.asks.push(d); else acc.push({ epicId: d.epicId, asks: [d] }); return acc; }, []);
   const ourPlans = state.plans.filter((p) => p.quarterId === quarter.id && epics.get(p.epicId)?.teamId === teamId && followOk(p.epicId)).sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
   const followedInQuarter = state.plans.filter((p) => p.quarterId === quarter.id && followed.has(p.epicId)).length;
-  const withoutAsks = ourPlans.filter((p) => !outgoing.some((d) => d.epicId === p.epicId));
+  const asksOf = (p) => outgoing.filter((d) => d.epicId === p.epicId).sort(byRank);
+  const withAsks = ourPlans.filter((p) => asksOf(p).some(inFilter));
+  const withoutAsks = ourPlans.filter((p) => asksOf(p).length === 0);
   const mayWrite = canWriteTeam(actor, teamId) && quarter.phase !== 'closed'; // capacity
   // Asks and answers are fixed once the plan is locked (item J, D83): Afgestemd is read-only.
   const mayAsk = mayWrite && phaseAllows(quarter.phase, 'ask');
   const answersOpen = phaseAllows(quarter.phase, 'answer');
   const mayAnswer = mayWrite && answersOpen;
+  // The answer cell has one fixed width on both columns so the size cells line up across the page (D87):
+  // the chip width, or the width of the three-button control while the provider may answer.
+  const answerW = mayAnswer && incoming.length > 0 ? ANSWER_CONTROL_W : ANSWER_CHIP_W;
   const locked = isLockedPhase(quarter.phase);
   const act = async (m, ...a) => { const r = await run(m, ...a); setErr(r.ok ? null : r.error); return r; };
   // Release B (L3): own work + committed asks against the calendar-based capacity (domain/capacity.js).
@@ -104,25 +109,13 @@ export function DependenciesView() {
       <div className="xl:grid xl:grid-cols-2 xl:gap-6 xl:items-start xl:mt-5">
         <section className={tab === 'outgoing' ? '' : 'hidden xl:block'} aria-label={t('We ask')}>
           <ColumnHead label={t('We ask')} deps={outgoing} filter={filter} onFilter={setFilter} />
-          <div className="mt-4" data-tour="outgoing">
-            {ourPlans.length === 0 ? <div className={cls.card}><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'No epics for this team in this quarter.')}</EmptyLine></div> : (
-              <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
-                <ListHead sort={sortOut} teamLabel={t('To')} />
-                {outgoingSorted.map((d) => <OutgoingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.providerTeamId)} mayWrite={mayAsk} locked={locked} act={act} followed={followed.has(d.epicId)} onOpen={() => setOpenEpic(d.epicId)} />)}
-                {outgoingSorted.length === 0 && <li><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'Nothing here.')}</EmptyLine></li>}
-                {mayAsk && <AddAskRow plans={ourPlans} epics={epics} locked={locked} act={act} />}
-              </ul>
-            )}
+          <div className="mt-4 space-y-3" data-tour="outgoing">
+            {ourPlans.length === 0 && <div className={cls.card}><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'No epics for this team in this quarter.')}</EmptyLine></div>}
+            {ourPlans.length > 0 && withAsks.length === 0 && <div className={cls.card}><EmptyLine>{t('Nothing here.')}</EmptyLine></div>}
+            {withAsks.map((p) => <OutgoingCard key={p.id} plan={p} epic={epics.get(p.epicId)} asks={asksOf(p).filter(inFilter)} teams={teams} answerW={answerW} mayWrite={mayAsk} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}
             {withoutAsks.length > 0 && !filter && (
-              <Disclosure className="px-1 mt-3" summary={withoutAsks.length === 1 ? t('1 epic without asks') : t('{n} epics without asks', { n: withoutAsks.length })}>
-                <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
-                  {withoutAsks.map((p) => (
-                    <li key={p.id} className="flex items-center gap-3 px-3 min-h-10 py-1.5">
-                      <RankNo rank={p.rank} hash />
-                      <button className="min-w-0 flex-1 text-left text-body text-muted truncate hover:underline focus-ring rounded-control" onClick={() => setOpenEpic(p.epicId)}>{epics.get(p.epicId)?.title}<FollowStar on={followed.has(p.epicId)} className="inline ml-1.5 -mt-0.5" /></button>
-                    </li>
-                  ))}
-                </ul>
+              <Disclosure className="px-1" summary={withoutAsks.length === 1 ? t('1 epic without asks') : t('{n} epics without asks', { n: withoutAsks.length })}>
+                <div className="space-y-3">{withoutAsks.map((p) => <OutgoingCard key={p.id} plan={p} epic={epics.get(p.epicId)} asks={[]} teams={teams} answerW={answerW} mayWrite={mayAsk} locked={locked} act={act} followed={followed.has(p.epicId)} onOpen={() => setOpenEpic(p.epicId)} />)}</div>
               </Disclosure>
             )}
           </div>
@@ -130,15 +123,16 @@ export function DependenciesView() {
 
         <section className={tab === 'incoming' ? '' : 'hidden xl:block'} aria-label={t('Asked of us')}>
           <ColumnHead label={t('Asked of us')} deps={incoming} filter={filter} onFilter={setFilter} />
-          <div className="mt-4" data-tour="incoming">
-            {!answersOpen && !agreed && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
-            {incoming.length === 0 ? <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div> : (
-              <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
-                <ListHead sort={sortIn} teamLabel={t('From')} />
-                {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} act={act} followed={followed.has(d.epicId)} onOpen={() => setOpenEpic(d.epicId)} />)}
-                {incomingSorted.length === 0 && <li><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'Nothing here.')}</EmptyLine></li>}
-              </ul>
-            )}
+          <div className="mt-4 space-y-3" data-tour="incoming">
+            {!answersOpen && !agreed && incoming.length > 0 && <p className="text-caption text-muted">{t('Answers open from Negotiate.')}</p>}
+            {incoming.length === 0 && <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div>}
+            {incoming.length > 0 && incomingGroups.length === 0 && <div className={cls.card}><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'Nothing here.')}</EmptyLine></div>}
+            {incomingGroups.map((g) => (
+              <EpicCard key={g.epicId} rank={planFor(state, g.epicId, quarter.id)?.rank} epic={epics.get(g.epicId)} followed={followed.has(g.epicId)} onOpen={() => setOpenEpic(g.epicId)}
+                right={<span className="text-label text-muted truncate">{teams.get(epics.get(g.epicId)?.teamId)?.name}</span>}>
+                {g.asks.map((d) => <IncomingRow key={d.id} dep={d} team={teams.get(d.requesterTeamId)} answerW={answerW} mayAnswer={mayAnswer} act={act} />)}
+              </EpicCard>
+            ))}
           </div>
         </section>
       </div>
@@ -253,64 +247,81 @@ function CountChips({ deps, value, onChange }) {
   );
 }
 
-// One row structure for both columns (D91): #rank · ask (+ "low certainty") · "Aan|Van Team · voor Epic" · size cell ·
-// `right`. `team` is the provider in "Wij vragen" ("Aan <team>") and the requester in "Aan ons gevraagd" ("Van <team>").
-function AskRow({ dep, epic, rank, team, direction, followed, onOpen, right, below }) {
+// One card per epic in both columns: header "#rank Epic title" (+ follow star) with `right` ("+ Verzoek" in Wij
+// vragen, the requesting team in Aan ons gevraagd), the asks as rows inside, `footer` for the inline ask form.
+function EpicCard({ rank, epic, followed, onOpen, right, children, footer }) {
+  if (!epic) return null;
+  return (
+    <section className={cls.card} aria-label={epic.title}>
+      <header className="flex items-center gap-3 px-3 h-12 border-b border-border">
+        <RankNo rank={rank} hash />
+        <button className="min-w-0 flex-1 text-left text-body font-medium sm:truncate hover:underline focus-ring rounded-control" onClick={onOpen}>{epic.title}<FollowStar on={followed} className="inline ml-1.5 -mt-0.5" /></button>
+        {right}
+      </header>
+      <ul className="divide-y divide-border">{children}</ul>
+      {footer}
+    </section>
+  );
+}
+
+// One row structure for both columns: "Aan|Van <team>" (fixed cell) · ask (+ "low certainty") · size cell (D87) · the
+// answer cell `right` in the fixed width `answerW`, so sizes and answers line up across every card of both columns.
+const ANSWER_CHIP_W = 'w-28';
+const ANSWER_CONTROL_W = 'sm:w-[296px]'; // below sm the control takes its own width and wraps
+const ROW_INDENT = 'pl-[124px] sm:pl-[140px]'; // team cell + gap
+function AskRow({ dep, team, direction, answerW, right, below }) {
   const { state, quarter } = usePlan();
   const t = useT();
   const labelId = `ask-${dep.id}`;
   return (
-    <li className="group px-3 py-2 rounded-row">
+    <li className="group px-3 py-2">
       <div className="flex items-center gap-x-3 gap-y-1.5 min-h-9 flex-wrap">
-        <RankNo rank={rank} hash />
-        <div className="flex-1 min-w-[220px]">
-          <div id={labelId} className="text-body font-medium">{dep.ask}{dep.certainty === 'low' && <span className="text-caption text-faint font-normal"> · {t('low certainty')}</span>}</div>
-          <div className="text-caption text-muted">{t(direction === 'outgoing' ? 'To' : 'From')} <span className="font-semibold text-ink-2">{team?.name}</span> · {t('for')} <button className="hover:underline text-accent focus-ring rounded-control text-left" onClick={onOpen}>{epic?.title}</button><FollowStar on={followed} className="inline ml-1" /></div>
-        </div>
+        <span className="w-28 sm:w-32 shrink-0 text-label text-muted sm:truncate">{t(direction === 'outgoing' ? 'To' : 'From')} <span className="font-semibold text-ink-2">{team?.name}</span></span>
+        <span id={labelId} className="flex-1 min-w-[160px] text-body">{dep.ask}{dep.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</span>
         <PostLockMark dep={dep} quarter={quarter} />
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-x-3 gap-y-1.5 flex-wrap justify-end">
           <SizeCell size={dep.size} low={dep.effortLow} high={dep.effortHigh} settings={state.settings} />
-          {right(labelId)}
+          <span className={`${answerW} shrink-0 inline-flex items-center gap-2`}>{right(labelId)}</span>
         </div>
       </div>
       {below}
     </li>
   );
 }
-// Header row of an ask list (D99): # · Verzoek · Aan|Van · Maat · Antwoord, each a sort button; the chip when sorted.
-function ListHead({ sort, teamLabel }) {
+
+// "Wij vragen": one of our epics with its asks and the inline "+ Verzoek" in the header.
+function OutgoingCard({ plan, epic, asks, teams, answerW, mayWrite, locked, act, followed, onOpen }) {
+  const { state, quarter } = usePlan();
   const t = useT();
-  const labels = { ask: t('Ask'), team: teamLabel, size: t('Size'), answer: t('Response') };
+  const [adding, setAdding] = useState(false);
+  if (!epic) return null;
+  const others = state.teams.filter((x) => x.id !== epic.teamId);
   return (
-    <li className="px-3 bg-surface-2 text-caption text-muted">
-      <div className="flex items-center gap-x-3 min-h-9 flex-wrap">
-        <span className="min-w-[34px] text-center font-medium">#</span>
-        <span className="flex-1 min-w-[220px] inline-flex items-center gap-3"><SortButton col="ask" label={labels.ask} sort={sort.sort} onToggle={sort.toggle} /><SortButton col="team" label={labels.team} sort={sort.sort} onToggle={sort.toggle} /></span>
-        <span className="ml-auto flex items-center gap-3"><span className="w-[148px]"><SortButton col="size" label={labels.size} sort={sort.sort} onToggle={sort.toggle} /></span><span className="w-28"><SortButton col="answer" label={labels.answer} sort={sort.sort} onToggle={sort.toggle} /></span></span>
-      </div>
-      {sort.sort && <div className="pb-2"><SortedChip sort={sort.sort} labels={labels} onClear={sort.clear} /></div>}
-    </li>
+    <EpicCard rank={plan.rank} epic={epic} followed={followed} onOpen={onOpen}
+      right={mayWrite && !adding && <button className={cls.ghost} onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" />{t('Ask')}</button>}
+      footer={adding && <NewAskRow epic={epic} quarter={quarter} others={others} locked={locked} act={act} onDone={() => setAdding(false)} />}>
+      {asks.map((d) => <OutgoingRow key={d.id} dep={d} team={teams.get(d.providerTeamId)} answerW={answerW} mayWrite={mayWrite} locked={locked} act={act} />)}
+    </EpicCard>
   );
 }
-const ChipCell = ({ response }) => <span className="w-28 shrink-0 inline-flex"><StatusChip response={response} /></span>;
 
-// "Wij vragen": the answer chip, the provider's reason, and (while asks may change) a hover "remove" with a reason after lock.
-function OutgoingRow({ dep, epic, rank, team, mayWrite, locked, act, followed, onOpen }) {
+// "Wij vragen" row: the answer chip, the provider's reason, and (while asks may change) a hover "remove" with a reason after lock.
+function OutgoingRow({ dep, team, answerW, mayWrite, locked, act }) {
   const t = useT();
   const [removing, setRemoving] = useState(false);
   return (
-    <AskRow dep={dep} epic={epic} rank={rank} team={team} direction="outgoing" followed={followed} onOpen={onOpen}
+    <AskRow dep={dep} team={team} direction="outgoing" answerW={answerW}
       right={() => (
         <>
-          <ChipCell response={dep.response} />
+          <StatusChip response={dep.response} />
           {mayWrite && !removing && <button className={`${cls.icon} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} aria-label={`${t('Remove ask')} ${dep.refCode}`} onClick={() => setRemoving(true)}><Trash2 size={14} /></button>}
         </>
       )}
       below={(
         <>
-          {dep.responseReason && !removing && <p className="pl-[46px] text-label text-muted mt-0.5">{dep.responseReason}</p>}
+          {dep.responseReason && !removing && <p className={`${ROW_INDENT} text-label text-muted`}>{dep.responseReason}</p>}
           {removing && (
-            <div className="pl-[46px] pt-1">
+            <div className={`${ROW_INDENT} pt-1`}>
               {locked ? <InlineReason required saveLabel={t('Remove')} onSave={async (reason) => { const r = await act('deleteDependency', dep.id, reason); if (r.ok) setRemoving(false); }} onCancel={() => setRemoving(false)} />
                 : <div className="flex items-center gap-2 text-label"><span className="text-muted">{t('Remove?')}</span><button className={cls.secondary} onClick={async () => { const r = await act('deleteDependency', dep.id, ''); if (r.ok) setRemoving(false); }}>{t('Yes')}</button><button className={cls.secondary} onClick={() => setRemoving(false)}>{t('No')}</button></div>}
             </div>
@@ -320,9 +331,9 @@ function OutgoingRow({ dep, epic, rank, team, mayWrite, locked, act, followed, o
   );
 }
 
-// "Aan ons gevraagd": Toezeggen / Bespreken / Kan niet while answering is allowed, else the chip.
+// "Aan ons gevraagd" row: Toezeggen / Bespreken / Kan niet while answering is allowed, else the chip.
 // Only "Kan niet" opens an inline reason (item 10); the other two answer in one click.
-function IncomingRow({ dep, epic, rank, team, mayAnswer, act, followed, onOpen }) {
+function IncomingRow({ dep, team, answerW, mayAnswer, act }) {
   const t = useT();
   const [reasonFor, setReasonFor] = useState(null); // response awaiting an inline reason
   const pick = async (response) => {
@@ -332,18 +343,18 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, act, followed, onOpen }
     await act('answerDependency', dep.id, { response, reason: '' });
   };
   return (
-    <AskRow dep={dep} epic={epic} rank={rank} team={team} direction="incoming" followed={followed} onOpen={onOpen}
+    <AskRow dep={dep} team={team} direction="incoming" answerW={answerW}
       right={(labelId) => (
         <>
-          {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <ChipCell response={dep.response} />}
+          {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <StatusChip response={dep.response} />}
           {mayAnswer && (dep.response === 'partial' || dep.response === 'deferred') && <StatusChip response={dep.response} />}
         </>
       )}
       below={(
         <>
-          {dep.responseReason && reasonFor == null && <p className="pl-[46px] text-label text-muted mt-0.5">{dep.responseReason}</p>}
+          {dep.responseReason && reasonFor == null && <p className={`${ROW_INDENT} text-label text-muted`}>{dep.responseReason}</p>}
           {reasonFor && (
-            <div className="pl-[46px] pt-1">
+            <div className={`${ROW_INDENT} pt-1`}>
               <InlineReason required defaultValue={dep.responseReason || ''} placeholder={t('What stands in the way?')}
                 onSave={async (reason) => { const r = await act('answerDependency', dep.id, { response: reasonFor, reason }); if (r.ok) setReasonFor(null); }} onCancel={() => setReasonFor(null)} />
             </div>
@@ -353,25 +364,10 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, act, followed, onOpen }
   );
 }
 
-// Last row of "Wij vragen": "+ Verzoek" opens the form with an epic picker (our plans by rank).
-function AddAskRow({ plans, epics, locked, act }) {
-  const t = useT();
-  const [adding, setAdding] = useState(false);
-  return (
-    <li className="bg-surface-2">
-      {adding ? <NewAskRow plans={plans} epics={epics} locked={locked} act={act} onDone={() => setAdding(false)} />
-        : <div className="px-3 h-10 flex items-center"><button className={cls.ghost} onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" />{t('Ask')}</button></div>}
-    </li>
-  );
-}
-
 // Release B (L1/L4): size picker writes the mapped range; without a size the pw field stays; certainty next to it.
-function NewAskRow({ plans, epics, locked, act, onDone }) {
-  const { state, quarter } = usePlan();
+function NewAskRow({ epic, quarter, others, locked, act, onDone }) {
+  const { state } = usePlan();
   const t = useT();
-  const [epicId, setEpicId] = useState(plans[0]?.epicId || '');
-  const epic = epics.get(epicId);
-  const others = state.teams.filter((x) => x.id !== epic?.teamId);
   const [providerTeamId, setProviderTeamId] = useState(others[0]?.id || '');
   const [ask, setAsk] = useState('');
   const [effort, setEffort] = useState('');
@@ -382,12 +378,11 @@ function NewAskRow({ plans, epics, locked, act, onDone }) {
   const submit = async (e) => {
     e.preventDefault();
     const pw = Number(effort || 0);
-    const r = await act('addDependency', { epicId, providerTeamId, quarterId: quarter.id, ask: ask.trim(), effortLow: pw, effortHigh: pw, size, certainty, reason });
+    const r = await act('addDependency', { epicId: epic.id, providerTeamId, quarterId: quarter.id, ask: ask.trim(), effortLow: pw, effortHigh: pw, size, certainty, reason });
     if (r.ok) onDone();
   };
   return (
-    <form onSubmit={submit} className="px-3 py-2 flex items-center gap-2 flex-wrap anim-fade-in">
-      <select className={`${cls.input} !w-56`} value={epicId} onChange={(e) => setEpicId(e.target.value)} aria-label={t('Epic')}>{plans.map((p) => <option key={p.id} value={p.epicId}>{p.rank != null ? `#${p.rank} · ` : ''}{epics.get(p.epicId)?.title}</option>)}</select>
+    <form onSubmit={submit} className="px-3 py-2 border-t border-border bg-surface-2 rounded-b-panel flex items-center gap-2 flex-wrap anim-fade-in">
       <select className={`${cls.input} !w-40`} value={providerTeamId} onChange={(e) => setProviderTeamId(e.target.value)} aria-label={t('Team we need')}>{others.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
       <input autoFocus className={`${cls.input} flex-1 min-w-[200px]`} placeholder={t('What do we need?')} aria-label={t('What do we need?')} value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') onDone(); }} />
       <SizePicker value={size} onPick={setSize} />
@@ -395,7 +390,7 @@ function NewAskRow({ plans, epics, locked, act, onDone }) {
         : <input type="number" min="0" step="0.5" className={`${cls.input} !w-20 tnum`} placeholder="pw" aria-label={t('Effort (pw)')} value={effort} onChange={(e) => setEffort(e.target.value)} />}
       <select className={`${cls.input} !w-auto`} value={certainty} onChange={(e) => setCertainty(e.target.value)} aria-label={t('Certainty')} title={t('Certainty')}>{CERTAINTIES.map((c) => <option key={c} value={c}>{t(CERTAINTY_META[c].label)}</option>)}</select>
       {locked && <input className={`${cls.input} !w-48`} placeholder={t('Why? (quarter is locked)')} aria-label={t('Why? (quarter is locked)')} value={reason} onChange={(e) => setReason(e.target.value)} />}
-      <button type="submit" className={cls.primary} disabled={!ask.trim() || !epicId || !providerTeamId}>{t('Send')}</button>
+      <button type="submit" className={cls.primary} disabled={!ask.trim() || !providerTeamId}>{t('Send')}</button>
       <button type="button" className={cls.secondary} onClick={onDone}>{t('Cancel')}</button>
     </form>
   );
