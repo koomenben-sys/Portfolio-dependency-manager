@@ -178,14 +178,14 @@ export function SizeCell({ size, low, high, settings, className = '' }) {
 const SIGNAL_ICON = { on_track: Check, at_risk: TriangleAlert, wont_make: OctagonX };
 export const SignalIcon = ({ signal, size = 12, className = '' }) => { const I = SIGNAL_ICON[signal] || Check; return <I size={size} strokeWidth={2.25} className={className} aria-hidden="true" />; };
 // Read-only signal: icon + label (+ note), nothing when on track (L7: Op koers shows nothing).
-export function SignalChip({ dep, className = '' }) {
+export function SignalChip({ dep, className = '', withNote = true }) {
   const t = useT();
   const sig = signalOf(dep);
   if (sig === 'on_track') return null;
   const m = SIGNAL_META[sig];
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(m.tone)} ${className}`} title={dep.signalNote || undefined}>
-      <SignalIcon signal={sig} />{t(m.label)}{dep.signalNote && <span className="font-normal truncate max-w-[220px]"> · {dep.signalNote}</span>}
+      <SignalIcon signal={sig} />{t(m.label)}{withNote && dep.signalNote && <span className="font-normal truncate max-w-[220px]"> · {dep.signalNote}</span>}
     </span>
   );
 }
