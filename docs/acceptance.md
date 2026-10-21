@@ -875,3 +875,38 @@ Feature: Afgestemd is read-only
     When the Payments planner answers DEP-0027 through the API in 2026 Q4
     Then the call fails with "Antwoorden staan vast na het vastzetten"
 ```
+
+## O. Page titles, team header, size column (2026-10-21, docs/design.md section 26)
+
+**Acceptance criteria**
+- O1. Every step of every phase shows one page title row: a 32px h1 with a quiet context line ("2027 Q1"; "2026 Q4 · vastgezet op <datum>" once locked; "2026 Q3 · afgesloten" when closed), same position and size on all screens.
+- O2. Afhankelijkheden / Afgestemd: "Team kiezen" select on the right of the title row; the chosen team is remembered per person on the device.
+- O3. One team block: "Team <naam>", a "Capaciteit" chip tinted ok / warn / danger by the load band (< 80, 80-100, > 100%), the percentage, a bar with a marker at 80%, one line "<n> van <m> pw gevraagd" (Planning) or "toegezegd" (Uitvoering / Afgesloten) "· run x% · n vacature(s)" and "krap vanaf 80%"; the pencil (planner / admin) sits in the block. Without capacity: "Capaciteit invullen".
+- O4. Uitvoering / Afgesloten show "Afgestemd op <datum> · alleen-lezen" under the block. The old capacity line and the "Afhankelijkheden · Team ▾" heading are gone.
+- O5. Afgestemd rows show only the answer chip (no In gevaar / Gaat niet halen). Voortgang has "Onze toezeggingen (n)" (planner: own team; admin: team select) where the provider sets Op koers / In gevaar / Gaat niet halen (+ optional line) on every committed ask and confirms under a sprint cadence; viewers see no controls. Rank chips read "#8" with title "Prioriteit van de epic"; status chips are 28px with icon + label.
+- O6. Every ask row (both columns, all phases) has a fixed-width size cell right before the status chip: bar scaled against the largest size in the organisation's mapping, letter, "2–3 pw"; bars, letters and numbers align across rows. Numbers without a size: bar + "–"; nothing: empty cell. The size is no longer repeated in the meta text. Kolommen offers "Maat" (default off) on Prioriteren / Prioriteiten.
+- O7. Seed: in 2026 Q3, 2026 Q4 and 2027 Q1 every team has asks in both directions, every ask has a size (S / M / L / XL mix), answers fit the phase (Planning: open / bespreken / kan niet / toegezegd; Uitvoering: toegezegd plus a few kan niet; Afgesloten: delivered flags with some not delivered), every team has capacity in every quarter with one team above 100% and one in 80-100% per phase, every epic has an owner. Mock key bumped so the demo reloads fresh.
+- O8. `npm run build` and `npm run test:rls` pass; all strings via t() with Dutch; helper text ≤ 6 words.
+
+```gherkin
+Feature: Team header
+
+  Scenario: Planner opens Afhankelijkheden
+    Given I am Mark van Dijk in 2027 Q1
+    When I open step 2
+    Then the title row reads "Afhankelijkheden" with "2027 Q1" and "Team kiezen · Platform & Security" on the right
+    And one block reads "Team Platform & Security", a red "Capaciteit" chip, "126%" and "41 van 32,6 pw gevraagd · run 30% · 1 vacature"
+
+  Scenario: Afgestemd is read-only
+    Given I am Joris Smit in 2026 Q4
+    When I open Afgestemd
+    Then under the block it reads "Afgestemd op <datum> · alleen-lezen"
+    And every row shows a size cell and an answer chip, no signal
+
+Feature: Size column
+
+  Scenario: Aligned sizes
+    Given "Aan ons gevraagd" lists an S, an M and an XL ask
+    Then the bars start at the same x, the letters sit in one column and the pw ranges in one column
+    And the XL bar is the longest
+```

@@ -1,9 +1,9 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown, Flag, TriangleAlert, OctagonX, Pencil, Star } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { ASK_META, COMMITMENT_META } from '../../domain/model';
+import { ASK_META, COMMITMENT_META, isLockedPhase } from '../../domain/model';
 import { SIMPLE_META, fmtMonth } from '../../domain/value';
-import { SIZES, SIGNALS, SIGNAL_META, BOTTLENECK_META, signalOf, worstSignal, fmtEffort, isPostLock } from '../../domain/rhythm';
+import { SIZES, SIGNALS, SIGNAL_META, BOTTLENECK_META, signalOf, worstSignal, fmtEffort, isPostLock, sizeMapOf } from '../../domain/rhythm';
 import { useT } from '../../i18n';
 
 // Calm primitives for the three core screens (docs/design.md section 19). Tokens come from src/index.css and differ
@@ -39,12 +39,13 @@ const ASK_ICON = { proposed: Clock, accepted: Check, partial: CircleDot, deferre
 export const AskIcon = ({ response, size = 14, className = '' }) => { const I = ASK_ICON[response] || Clock; return <I size={size} strokeWidth={2.25} className={className} aria-hidden="true" />; };
 
 // Status = icon + short label + pastel colour; never colour alone.
+// Section 26 (D86): 28px high with a 13px label so the answer reads from a distance (team pages, Afstemmen, Voortgang).
 export function StatusChip({ response, compact = false, className = '' }) {
   const t = useT();
   const m = ASK_META[response] || ASK_META.proposed;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(m.tone)} ${className}`}>
-      <AskIcon response={response} size={12} />{!compact && <span>{t(m.label)}</span>}
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 h-7 text-label font-semibold whitespace-nowrap ${toneClass(m.tone)} ${className}`}>
+      <AskIcon response={response} size={13} />{!compact && <span>{t(m.label)}</span>}
     </span>
   );
 }
@@ -80,11 +81,13 @@ export function ValueChip({ model, score }) {
 }
 
 // Strategic rank as a quiet tabular number; one neutral style for every rank (iteration 1, item 4).
-export function RankNo({ rank, size = 'md' }) {
+// `hash`: the team-page variant "#8" (section 26, D86), 28px high, titled "Prioriteit van de epic".
+export function RankNo({ rank, size = 'md', hash = false }) {
   const t = useT();
-  const dim = size === 'sm' ? 'w-6 h-6 text-caption' : 'w-7 h-7 text-label';
+  const dim = hash ? 'h-7 min-w-[34px] px-1 text-label' : size === 'sm' ? 'w-6 h-6 text-caption' : 'w-7 h-7 text-label';
   const look = rank == null ? 'bg-surface-2 text-faint rounded-rank' : 'rank-no';
-  return <span className={`shrink-0 tnum inline-flex items-center justify-center ${dim} ${look}`} aria-label={rank == null ? t('Unranked') : t('Strategic rank {rank}', { rank })}>{rank ?? '–'}</span>;
+  const label = rank == null ? t('Unranked') : hash ? `${t('Priority of the epic')}: ${rank}` : t('Strategic rank {rank}', { rank });
+  return <span className={`shrink-0 tnum inline-flex items-center justify-center ${dim} ${look}`} aria-label={label} title={hash ? t('Priority of the epic') : undefined}>{rank == null ? '–' : hash ? `#${rank}` : rank}</span>;
 }
 
 // Four core states; older partial/deferred data folds into the nearest one (D31).
@@ -149,6 +152,27 @@ export function SizePicker({ value, onPick, disabled = false, ariaLabel, size = 
 export function SizeText({ size, low, high, className = '' }) {
   if (!size && !(high > 0)) return <span className={`text-faint ${className}`}>–</span>;
   return <span className={`tnum whitespace-nowrap ${className}`}>{size && <span className="font-medium">{size} · </span>}{fmtEffort(low || 0, high || 0)} pw</span>;
+}
+
+// Size column, variant C (section 26, D87): a bar scaled to the upper estimate (against the organisation's largest
+// size), the letter and the pw range in three fixed-width cells, so bars, letters and numbers line up across rows.
+// Numbers without a size: bar + "–"; nothing estimated: an empty cell of the same width.
+export const SIZE_CELL_W = 'w-[148px]';
+export function SizeCell({ size, low, high, settings, className = '' }) {
+  const t = useT();
+  const map = sizeMapOf(settings);
+  const max = Math.max(...Object.values(map).map((r) => Number(r[1]) || 0), 1);
+  const hi = Number(high) || 0;
+  const has = !!size || hi > 0;
+  const pct = has ? Math.max(4, Math.min(100, Math.round((hi / max) * 100))) : 0;
+  const label = has ? `${t('Size')} ${size || '–'} · ${fmtEffort(low || 0, hi)} pw` : t('No size');
+  return (
+    <span className={`${SIZE_CELL_W} shrink-0 grid grid-cols-[52px_20px_1fr] items-center gap-2 tnum ${className}`} title={has ? label : undefined} aria-label={label} role="img">
+      <span aria-hidden="true" className="h-2 rounded-control bg-surface-2 overflow-hidden">{has && <span className="block h-full rounded-control bg-accent" style={{ width: `${pct}%` }} />}</span>
+      <span className="text-label font-semibold text-ink text-center">{has ? size || '–' : ''}</span>
+      <span className="text-caption text-muted whitespace-nowrap">{has ? `${fmtEffort(low || 0, hi)} pw` : ''}</span>
+    </span>
+  );
 }
 
 const SIGNAL_ICON = { on_track: Check, at_risk: TriangleAlert, wont_make: OctagonX };
@@ -347,14 +371,28 @@ export function AnswerControl({ value, onPick, disabled = false, labelledBy }) {
   );
 }
 
-// Section header inside a view: title left, actions right. Titles stay short; no paragraphs below.
+// Page title row (section 26, D85): one large h1 in the display font with a quiet context line next to it
+// ("2026 Q4 · vastgezet op 2 okt"), actions on the right. Same position and size on every step of every phase.
 export function ViewHeader({ title, meta, right }) {
   return (
-    <div className="flex items-center justify-between gap-4 mb-5 min-h-8">
-      <div className="flex items-baseline gap-3 min-w-0"><h1 className="text-title text-ink truncate">{title}</h1>{meta && <span className="text-label text-muted whitespace-nowrap">{meta}</span>}</div>
-      {right && <div className="flex items-center gap-2 shrink-0">{right}</div>}
+    <div className="flex items-center gap-x-6 gap-y-3 flex-wrap mb-6 min-h-10">
+      <div className="flex items-baseline gap-x-3 gap-y-1 min-w-0 flex-wrap">
+        <h1 className="text-display text-ink leading-none tracking-[-0.02em]">{title}</h1>
+        {meta && <span className="text-body text-muted">{meta}</span>}
+      </div>
+      {right && <div className="ml-auto flex items-center gap-2 flex-wrap">{right}</div>}
     </div>
   );
+}
+// "2 okt" / "2 Oct" for the context line.
+export const fmtDay = (iso, lang = 'nl') => (iso ? new Date(iso).toLocaleDateString(lang === 'nl' ? 'nl-NL' : 'en-GB', { day: 'numeric', month: 'short' }).replace('.', '') : '');
+// Context line next to the page title: the quarter, plus "vastgezet op <datum>" once locked or "afgesloten" when closed.
+export function quarterMeta(quarter, t) {
+  if (!quarter) return '';
+  const label = `${quarter.year} Q${quarter.q}`;
+  if (quarter.phase === 'closed') return `${label} · ${t('closed')}`;
+  if (isLockedPhase(quarter.phase) && quarter.lockedAt) return `${label} · ${t('locked on {d}', { d: fmtDay(quarter.lockedAt, t.lang) })}`;
+  return label;
 }
 
 // Popover menu: click outside / Escape closes, focus returns to the trigger, arrow keys move between items.

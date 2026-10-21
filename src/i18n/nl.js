@@ -942,7 +942,7 @@ export const nl = {
   'Number of epics': 'Aantal epics',
   'Sum of the value scores': 'Som van de waardescores',
   // Release B — Capaciteit & ritme (docs/design.md section 22)
-  'Size': 'Grootte',
+  'Size': 'Maat',
   'Job sizes (pw)': 'Jobgroottes (pw)',
   'low': 'laag',
   'high': 'hoog',
@@ -1053,4 +1053,18 @@ export const nl = {
   'Backlog': 'Backlog',
   'Asks are fixed once the plan is locked': 'Verzoeken staan vast na het vastzetten',
   'Answers are fixed once the plan is locked': 'Antwoorden staan vast na het vastzetten',
+  // Page titles, team block, size column (section 26)
+  'locked on {d}': 'vastgezet op {d}',
+  'Choose team': 'Team kiezen',
+  'Priority of the epic': 'Prioriteit van de epic',
+  'Agreed on {d}': 'Afgestemd op {d}',
+  'read-only': 'alleen-lezen',
+  '{a} of {b} pw committed': '{a} van {b} pw toegezegd',
+  '{a} of {b} pw requested': '{a} van {b} pw gevraagd',
+  '1 vacancy': '1 vacature',
+  '{n} vacancies': '{n} vacatures',
+  'tight from 80%': 'krap vanaf 80%',
+  'No size': 'Geen maat',
+  'Our commitments': 'Onze toezeggingen',
+  'No commitments.': 'Geen toezeggingen.',
 };

@@ -5,7 +5,7 @@ import { canWriteTeam } from '../data/repository';
 import { quarterLabel } from '../domain/model';
 import { closeRows, nextQuarter } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, ViewHeader, RankNo, EmptyLine, ErrorLine, FollowStar } from '../components/plan/core';
+import { cls, ViewHeader, quarterMeta, RankNo, EmptyLine, ErrorLine, FollowStar } from '../components/plan/core';
 import { followsOf } from '../domain/follows';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
@@ -30,9 +30,10 @@ export function ResultView() {
 
   return (
     <div className="print-landscape" data-tour="result">
-      <ViewHeader title={t('What goes ahead and what does not')} meta={`${t('Result')} · ${quarterLabel(quarter)} · ${resultDate(t.lang)}`} right={
+      <ViewHeader title={t('Result')} meta={`${quarterMeta(quarter, t)} · ${resultDate(t.lang)}`} right={
         <button className={`${cls.secondary} print:hidden`} onClick={() => window.print()}><Printer size={14} aria-hidden="true" />{t('Print / PDF')}</button>
       } />
+      <h2 className="text-subtitle font-semibold mb-2">{t('What goes ahead and what does not')}</h2>
       <ResultTable onOpen={setOpenEpic} />
       <ErrorLine error={err} />
 
