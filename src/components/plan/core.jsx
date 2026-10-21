@@ -97,7 +97,7 @@ export const worstAsk = (deps) => (deps.length ? deps.map((d) => normAsk(d.respo
 const WORST_TEXT = { declined: 'text-danger-fg', needs_priority_call: 'text-warn-fg', proposed: 'text-ink-2', accepted: 'text-ok-fg' };
 
 // The Afhankelijkheden cell (owner feedback 2026-10-21, item F; D82): "4/5 toegezegd" coloured by the worst state,
-// followed by the worst signal or answer when there is one: "4/5 toegezegd · In gevaar · Platform & Security",
+// followed by the worst signal or answer when there is one: "4/5 toegezegd · Deadline in gevaar · Platform & Security",
 // "2/3 toegezegd · Kan niet · Claims", "1/3 toegezegd · 2 open". The tooltip lists every ask.
 // Release B (L8): a signal worse than Op koers on a committed ask wins over an open ask.
 export function WorstIssue({ deps, teams }) {
@@ -189,7 +189,7 @@ export function SignalChip({ dep, className = '' }) {
     </span>
   );
 }
-// Provider control: Op koers · In gevaar · Gaat niet halen (role=radiogroup); the caller opens the note input.
+// Provider control: Op koers · Deadline in gevaar · Gaat niet halen (role=radiogroup); the caller opens the note input.
 const SIG_ACTIVE = { on_track: 'bg-surface-2 text-ink-2 border-border-strong', at_risk: 'bg-warn-bg text-warn-fg border-warn-border', wont_make: 'bg-danger-bg text-danger-fg border-danger-border' };
 export function SignalControl({ value, onPick, disabled = false, labelledBy }) {
   const t = useT();

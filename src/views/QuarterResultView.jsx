@@ -51,7 +51,7 @@ export function ResultTable({ onOpen }) {
     <>
       {res.top > 0 && (
         <p className={`mb-4 text-label tnum ${res.topAtRisk ? 'text-ink' : 'text-muted'}`}>
-          {t('Of the top {n}: {c} committed, {r} at risk', { n: res.top, c: res.topCommitted, r: res.topAtRisk })}
+          {t('Of the top {n}: {c} committed, {r} deadlines at risk', { n: res.top, c: res.topCommitted, r: res.topAtRisk })}
         </p>
       )}
 

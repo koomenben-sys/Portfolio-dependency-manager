@@ -68,7 +68,7 @@ export function bottleneckFor(state, dep, loads = null) {
 export const SIGNALS = ['on_track', 'at_risk', 'wont_make'];
 export const SIGNAL_META = {
   on_track: { label: 'On track', tone: 'ok', order: 0 },
-  at_risk: { label: 'At risk', tone: 'warn', order: 1 },
+  at_risk: { label: 'Deadline at risk', tone: 'warn', order: 1 },
   wont_make: { label: "Won't make it", tone: 'danger', order: 2 },
 };
 export const signalOf = (dep) => (SIGNALS.includes(dep?.signal) ? dep.signal : 'on_track');

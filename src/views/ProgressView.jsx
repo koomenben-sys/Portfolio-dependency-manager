@@ -13,7 +13,7 @@ import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
 // Step 3 during Uitvoering — Voortgang (docs/design.md section 23, D65; acceptance M5). One top line, then three
-// compact sections that hide when empty: In gevaar (signals on committed asks), Impediments (open, kind
+// compact sections that hide when empty: Deadline in gevaar (signals on committed asks), Impediments (open, kind
 // 'impediment'), Nieuw sinds vastzetten (asks created after lockedAt). "Alleen gevolgd" filters all three (M8).
 // Admins close the quarter at the bottom (M7); the steps then switch and Resultaat opens.
 export function ProgressView() {
@@ -45,7 +45,7 @@ export function ProgressView() {
   const mayRaise = isPlanner(actor) && inExecution(quarter.phase);
   const mayClose = isAdmin(actor) && inExecution(quarter.phase);
   // "Onze toezeggingen" (section 26, D86): every committed ask the team provides, with the signal control, so a first
-  // In gevaar can be raised here. Planners see their own team; admins pick one. Viewers see no controls.
+  // Deadline in gevaar can be raised here. Planners see their own team; admins pick one. Viewers see no controls.
   const [ownTeam, setOwnTeam] = useState(actor.teamId || state.teams[0]?.id || '');
   useEffect(() => { setOwnTeam(actor.teamId || state.teams[0]?.id || ''); }, [actor.id]);
   const ours = deps.filter((d) => d.providerTeamId === ownTeam && normAsk(d.response) === 'accepted' && keep(d.epicId)).sort(byRank);
@@ -66,7 +66,7 @@ export function ProgressView() {
       } />
       <p className="mb-5 text-label tnum text-ink" data-tour="progress-line">
         <span className="font-medium">{t('Week {w} of {n}', { w: week, n: total })}</span>
-        <span className="text-faint"> · </span><span className={atRiskAll.length ? 'text-warn-fg font-medium' : 'text-muted'}>{t('{n} at risk', { n: atRiskAll.length })}</span>
+        <span className="text-faint"> · </span><span className={atRiskAll.length ? 'text-warn-fg font-medium' : 'text-muted'}>{t('{n} deadlines at risk', { n: atRiskAll.length })}</span>
         <span className="text-faint"> · </span><span className={impsAll.length ? 'text-ink' : 'text-muted'}>{impsAll.length === 1 ? t('1 impediment') : t('{n} impediments', { n: impsAll.length })}</span>
       </p>
       <ErrorLine error={err} />
@@ -76,8 +76,8 @@ export function ProgressView() {
       )}
 
       {atRisk.length > 0 && (
-        <section className="mb-6" aria-label={t('At risk')} data-tour="at-risk">
-          {sectionHead(t('At risk'), atRisk.length)}
+        <section className="mb-6" aria-label={t('Deadline at risk')} data-tour="at-risk">
+          {sectionHead(t('Deadline at risk'), atRisk.length)}
           <ul className={`${cls.card} divide-y divide-border`}>
             {atRisk.map((d) => (
               <li key={d.id} className="flex items-center gap-3 px-3 min-h-10 py-1.5 flex-wrap md:flex-nowrap">
@@ -167,7 +167,7 @@ export function ProgressView() {
 }
 
 // The provider changes a signal here (section 26: signals belong on Voortgang, not on Afgestemd). Op koers clears
-// the note; In gevaar / Gaat niet halen open an optional one-line note (L7).
+// the note; Deadline in gevaar / Gaat niet halen open an optional one-line note (L7).
 function SignalRow({ dep, act }) {
   const { state, quarter } = usePlan();
   const t = useT();
