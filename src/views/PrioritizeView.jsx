@@ -9,7 +9,7 @@ import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../doma
 import { teamCapacity } from '../domain/capacity';
 import { committedEpicIds } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip, CapacityLine, FollowStar, Menu, MenuLabel, menuItem } from '../components/plan/core';
+import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, quarterMeta, Dialog, ErrorLine, MustChip, ValueChip, CapacityLine, FollowStar, Menu, MenuLabel, menuItem } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
@@ -199,7 +199,7 @@ export function PrioritizeView() {
 
   return (
     <div className="pr-0" data-tour="prioritize">
-      <ViewHeader title={t(planning ? 'Prioritise' : 'Priorities')} meta={t('{n} epics', { n: plansQ.length })} right={
+      <ViewHeader title={t(planning ? 'Prioritise' : 'Priorities')} meta={`${quarterMeta(quarter, t)} · ${t('{n} epics', { n: plansQ.length })}`} right={
         <>
           <label className="sr-only" htmlFor="prio-filter">{t('Filter')}</label>
           <select id="prio-filter" className={`${cls.input} !w-auto max-w-[220px]`} value={filter} onChange={(e) => setFilter(e.target.value)}>

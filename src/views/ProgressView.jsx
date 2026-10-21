@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Check, Lock } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { isPlanner, isAdmin } from '../data/repository';
-import { quarterLabel, IMPEDIMENT_AGING_DAYS } from '../domain/model';
+import { IMPEDIMENT_AGING_DAYS } from '../domain/model';
 import { planFor, byId, daysSince } from '../domain/plan';
 import { hasSignal, inExecution, quarterWeek, openImpediments } from '../domain/rhythm';
 import { followsOf, readFollowOnly, writeFollowOnly } from '../domain/follows';
 import { useT } from '../i18n';
-import { cls, ViewHeader, RankNo, StatusChip, SignalChip, EmptyLine, ErrorLine, Dialog, FollowStar, FollowOnlyToggle, isPostLock } from '../components/plan/core';
+import { cls, ViewHeader, quarterMeta, RankNo, StatusChip, SignalChip, EmptyLine, ErrorLine, Dialog, FollowStar, FollowOnlyToggle, isPostLock } from '../components/plan/core';
 import { CloseQuarterDialog } from '../components/plan/CycleActions';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
@@ -52,7 +52,7 @@ export function ProgressView() {
 
   return (
     <div data-tour="progress">
-      <ViewHeader title={t('Progress')} meta={quarterLabel(quarter)} right={
+      <ViewHeader title={t('Progress')} meta={quarterMeta(quarter, t)} right={
         <>
           <FollowOnlyToggle on={followOnly} onChange={setFollowOnly} count={followedInQuarter} />
           {mayRaise && <button className={cls.secondary} onClick={() => setRaising(true)} data-tour="add-impediment"><Plus size={14} aria-hidden="true" />{t('Impediment')}</button>}

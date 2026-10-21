@@ -6,7 +6,7 @@ import { ASK_META, REASON_REQUIRED, needsTalk, isLockedPhase } from '../domain/m
 import { planFor, phaseAllows, byId } from '../domain/plan';
 import { bottleneckFor, hasSignal, inExecution } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, StatusChip, AskIcon, RankNo, AnswerControl, InlineReason, toneClass, toneBorder, EmptyLine, ViewHeader, ErrorLine, Disclosure, normAsk, ASK_SEVERITY, worstAsk, BottleneckChip, SignalChip } from '../components/plan/core';
+import { cls, StatusChip, AskIcon, RankNo, AnswerControl, InlineReason, toneClass, toneBorder, EmptyLine, ViewHeader, quarterMeta, ErrorLine, Disclosure, normAsk, ASK_SEVERITY, worstAsk, BottleneckChip, SignalChip } from '../components/plan/core';
 import { LockPlanDialog } from '../components/plan/CycleActions';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
@@ -122,7 +122,7 @@ export function AlignView() {
 
   return (
     <div data-tour="align">
-      <ViewHeader title={t('Align')} right={
+      <ViewHeader title={t('Align')} meta={quarterMeta(quarter, t)} right={
         <a className={cls.secondary} href="#kwartaalresultaat" data-tour="quarter-result-link"><FileBarChart size={14} aria-hidden="true" />{t('Quarter result')}</a>
       } />
       {locking && <LockPlanDialog quarter={quarter} onClose={() => setLocking(false)} />}

@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown, Flag, TriangleAlert, OctagonX, Pencil, Star } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { ASK_META, COMMITMENT_META } from '../../domain/model';
+import { ASK_META, COMMITMENT_META, isLockedPhase } from '../../domain/model';
 import { SIMPLE_META, fmtMonth } from '../../domain/value';
 import { SIZES, SIGNALS, SIGNAL_META, BOTTLENECK_META, signalOf, worstSignal, fmtEffort, isPostLock } from '../../domain/rhythm';
 import { useT } from '../../i18n';
@@ -347,14 +347,28 @@ export function AnswerControl({ value, onPick, disabled = false, labelledBy }) {
   );
 }
 
-// Section header inside a view: title left, actions right. Titles stay short; no paragraphs below.
+// Page title row (section 26, D85): one large h1 in the display font with a quiet context line next to it
+// ("2026 Q4 · vastgezet op 2 okt"), actions on the right. Same position and size on every step of every phase.
 export function ViewHeader({ title, meta, right }) {
   return (
-    <div className="flex items-center justify-between gap-4 mb-5 min-h-8">
-      <div className="flex items-baseline gap-3 min-w-0"><h1 className="text-title text-ink truncate">{title}</h1>{meta && <span className="text-label text-muted whitespace-nowrap">{meta}</span>}</div>
-      {right && <div className="flex items-center gap-2 shrink-0">{right}</div>}
+    <div className="flex items-center gap-x-6 gap-y-3 flex-wrap mb-6 min-h-10">
+      <div className="flex items-baseline gap-x-3 gap-y-1 min-w-0 flex-wrap">
+        <h1 className="text-display text-ink leading-none tracking-[-0.02em]">{title}</h1>
+        {meta && <span className="text-body text-muted">{meta}</span>}
+      </div>
+      {right && <div className="ml-auto flex items-center gap-2 flex-wrap">{right}</div>}
     </div>
   );
+}
+// "2 okt" / "2 Oct" for the context line.
+export const fmtDay = (iso, lang = 'nl') => (iso ? new Date(iso).toLocaleDateString(lang === 'nl' ? 'nl-NL' : 'en-GB', { day: 'numeric', month: 'short' }).replace('.', '') : '');
+// Context line next to the page title: the quarter, plus "vastgezet op <datum>" once locked or "afgesloten" when closed.
+export function quarterMeta(quarter, t) {
+  if (!quarter) return '';
+  const label = `${quarter.year} Q${quarter.q}`;
+  if (quarter.phase === 'closed') return `${label} · ${t('closed')}`;
+  if (isLockedPhase(quarter.phase) && quarter.lockedAt) return `${label} · ${t('locked on {d}', { d: fmtDay(quarter.lockedAt, t.lang) })}`;
+  return label;
 }
 
 // Popover menu: click outside / Escape closes, focus returns to the trigger, arrow keys move between items.

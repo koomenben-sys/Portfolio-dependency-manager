@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Printer, ArrowLeft } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
-import { quarterLabel } from '../domain/model';
+
 import { quarterResult, THEME_TYPE_LABEL } from '../domain/value';
 import { useT } from '../i18n';
-import { cls, ViewHeader, RankNo, EmptyLine, MustChip } from '../components/plan/core';
+import { cls, ViewHeader, quarterMeta, RankNo, EmptyLine, MustChip } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
@@ -22,9 +22,10 @@ export function QuarterResultView() {
   return (
     <div className="print-landscape" data-tour="quarter-result">
       <a className={`${cls.quiet} print:hidden -ml-2 mb-1`} href="#afstemmen"><ArrowLeft size={13} aria-hidden="true" />{t('Align')}</a>
-      <ViewHeader title={t('What goes ahead and what does not')} meta={`${t('Quarter result')} · ${quarterLabel(quarter)} · ${resultDate(t.lang)}`} right={
+      <ViewHeader title={t('Quarter result')} meta={`${quarterMeta(quarter, t)} · ${resultDate(t.lang)}`} right={
         <button className={`${cls.secondary} print:hidden`} onClick={() => window.print()}><Printer size={14} aria-hidden="true" />{t('Print / PDF')}</button>
       } />
+      <h2 className="text-subtitle font-semibold mb-2">{t('What goes ahead and what does not')}</h2>
       <ResultTable onOpen={setOpenEpic} />
       {openEpic && <SimpleEpicPanel epicId={openEpic} onClose={() => setOpenEpic(null)} />}
     </div>
