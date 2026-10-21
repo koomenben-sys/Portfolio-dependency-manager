@@ -6,7 +6,7 @@ import { checkTheme, isHttpUrl } from '../domain/value';
 import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, nextQuarter } from '../domain/rhythm';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, normaliseEmail, checkRole, checkMemberChange, checkCapacity } from './repository';
 
-const KEY = 'kwartaalplan.mock.v6'; // v6: section 25 seed (Uitvoering asks, signals, owners); v5 section 23; v4 Release B; v3 Release A; v2 the 2026-10-17 reset
+const KEY = 'kwartaalplan.mock.v7'; // v7: section 26 seed (every team both ways, sizes, capacity per quarter); v6: section 25 seed (Uitvoering asks, signals, owners); v5 section 23; v4 Release B; v3 Release A; v2 the 2026-10-17 reset
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const now = () => new Date().toISOString();
 const clone = (x) => JSON.parse(JSON.stringify(x));
