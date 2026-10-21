@@ -93,32 +93,37 @@ export const ASK_SEVERITY = { declined: 3, needs_priority_call: 2, proposed: 1, 
 export const worstAsk = (deps) => (deps.length ? deps.map((d) => normAsk(d.response)).sort((a, b) => ASK_SEVERITY[b] - ASK_SEVERITY[a])[0] : null);
 const WORST_TEXT = { declined: 'text-danger-fg', needs_priority_call: 'text-warn-fg', proposed: 'text-ink-2', accepted: 'text-ok-fg' };
 
-// One readable "worst issue" per epic (iteration 1, item 2): "✕ Kan niet · Platform & Security", "? Bespreken · Team",
-// "◷ 1 open", "✓ 2 toegezegd", "–". Several asks: the worst plus "+n"; the tooltip lists them all.
-// Release B (L8): a signal worse than Op koers on a committed ask wins over Toegezegd ("In gevaar · Team").
+// The Afhankelijkheden cell (owner feedback 2026-10-21, item F; D82): "4/5 toegezegd" coloured by the worst state,
+// followed by the worst signal or answer when there is one: "4/5 toegezegd · In gevaar · Platform & Security",
+// "2/3 toegezegd · Kan niet · Claims", "1/3 toegezegd · 2 open". The tooltip lists every ask.
+// Release B (L8): a signal worse than Op koers on a committed ask wins over an open ask.
 export function WorstIssue({ deps, teams }) {
   const t = useT();
   if (!deps.length) return <span className="text-faint text-caption">–</span>;
   const worst = worstAsk(deps);
   const sig = worst === 'accepted' || worst === 'proposed' ? worstSignal(deps) : null;
+  const all = deps.map((d) => `${teams.get(d.providerTeamId)?.name || '?'}: ${d.ask} — ${t(ASK_META[normAsk(d.response)].label)}${signalOf(d) !== 'on_track' ? ` · ${t(SIGNAL_META[signalOf(d)].label)}${d.signalNote ? ` (${d.signalNote})` : ''}` : ''}`).join('\n');
+  const yes = deps.filter((d) => normAsk(d.response) === 'accepted').length;
+  const count = `${yes}/${deps.length} ${t(ASK_META.accepted.label).toLowerCase()}`;
+  let icon; let tone; let tail = null;
   if (sig) {
-    const all = deps.map((d) => `${teams.get(d.providerTeamId)?.name || '?'}: ${d.ask} — ${t(ASK_META[normAsk(d.response)].label)}${signalOf(d) !== 'on_track' ? ` · ${t(SIGNAL_META[signalOf(d)].label)}${d.signalNote ? ` (${d.signalNote})` : ''}` : ''}`).join('\n');
     const m = SIGNAL_META[signalOf(sig)];
-    return (
-      <span className={`inline-flex items-center gap-1.5 text-label font-medium min-w-0 ${m.tone === 'danger' ? 'text-danger-fg' : 'text-warn-fg'}`} title={all} aria-label={all}>
-        <SignalIcon signal={signalOf(sig)} size={13} className="shrink-0" /><span className="truncate">{t(m.label)} <span className="text-muted">· {teams.get(sig.providerTeamId)?.name}</span></span>
-      </span>
-    );
+    icon = <SignalIcon signal={signalOf(sig)} size={13} className="shrink-0" />;
+    tone = m.tone === 'danger' ? 'text-danger-fg' : 'text-warn-fg';
+    tail = <>{t(m.label)} <span className="text-muted">· {teams.get(sig.providerTeamId)?.name}</span></>;
+  } else {
+    icon = <AskIcon response={worst} size={13} className="shrink-0" />;
+    tone = WORST_TEXT[worst];
+    if (worst === 'declined' || worst === 'needs_priority_call') {
+      const first = deps.find((d) => normAsk(d.response) === worst);
+      tail = <>{t(ASK_META[worst].label)} <span className="text-muted">· {teams.get(first.providerTeamId)?.name}</span></>;
+    } else if (worst === 'proposed') {
+      tail = <span className="text-muted">{deps.filter((d) => normAsk(d.response) === 'proposed').length} {t(ASK_META.proposed.label).toLowerCase()}</span>;
+    }
   }
-  const all = deps.map((d) => `${teams.get(d.providerTeamId)?.name || '?'}: ${d.ask} — ${t(ASK_META[normAsk(d.response)].label)}`).join('\n');
-  const first = deps.find((d) => normAsk(d.response) === worst);
-  const n = deps.filter((d) => normAsk(d.response) === worst).length;
-  const text = worst === 'declined' || worst === 'needs_priority_call'
-    ? <>{t(ASK_META[worst].label)} <span className="text-muted">· {teams.get(first.providerTeamId)?.name}</span></>
-    : <>{n} {t(ASK_META[worst].label).toLowerCase()}</>;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-label font-medium min-w-0 ${WORST_TEXT[worst]}`} title={all} aria-label={all}>
-      <AskIcon response={worst} size={13} className="shrink-0" /><span className="truncate">{text}</span>
+    <span className={`inline-flex items-center gap-1.5 text-label font-medium min-w-0 tnum ${tone}`} title={all} aria-label={all}>
+      {icon}<span className="truncate">{count}{tail && <> <span className="text-muted">·</span> {tail}</>}</span>
     </span>
   );
 }

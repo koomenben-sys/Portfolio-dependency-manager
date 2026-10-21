@@ -25,13 +25,13 @@ const COLS = [
   { id: 'team', label: 'Team', on: true },
   { id: 'owner', label: 'Owner', on: true },
   { id: 'value', label: 'Value', on: true, needsModel: true },
-  { id: 'depCount', label: 'Number of dependencies', on: false },
   { id: 'deps', label: 'Dependencies', on: true },
   { id: 'goal', label: 'Goal', on: false },
 ];
 const COLS_KEY = 'kp.prioCols';
 const defaultCols = () => Object.fromEntries(COLS.map((c) => [c.id, c.on]));
-const readCols = () => { try { return { ...defaultCols(), ...JSON.parse(localStorage.getItem(COLS_KEY) || '{}') }; } catch { return defaultCols(); } };
+// Stored choices for columns that no longer exist (Aantal merged into Afhankelijkheden, item F) are dropped.
+const readCols = () => { try { const saved = JSON.parse(localStorage.getItem(COLS_KEY) || '{}'); return { ...defaultCols(), ...Object.fromEntries(Object.entries(saved).filter(([k]) => COLS.some((c) => c.id === k))) }; } catch { return defaultCols(); } };
 const writeCols = (v) => { try { localStorage.setItem(COLS_KEY, JSON.stringify(v)); } catch { /* private mode */ } };
 export function PrioritizeView() {
   const { state, actor, quarter, run } = usePlan();
@@ -161,8 +161,7 @@ export function PrioritizeView() {
           {show('team') && <td className="w-44 pr-3 text-label text-muted truncate">{teams.get(e.teamId)?.name}</td>}
           {show('owner') && <td className="w-36 pr-3 text-label text-muted truncate">{e.ownerName}</td>}
           {show('value') && <td className="w-14 pr-2"><ValueChip model={model} score={valueScore(model, e.value, p)} /></td>}
-          {show('depCount') && <td className="w-16 pr-3 text-label text-muted tnum">{deps.length || ''}</td>}
-          {show('deps') && <td className="w-64 pr-3"><WorstIssue deps={deps} teams={teams} /></td>}
+          {show('deps') && <td className="w-72 pr-3"><WorstIssue deps={deps} teams={teams} /></td>}
           {show('goal') && <td className="w-44 pr-3 text-label text-muted truncate">{themes.get(e.themeId)?.name}</td>}
           <td className="w-20 pr-2">
             {mayRank && (inList ? (
@@ -263,8 +262,7 @@ export function PrioritizeView() {
                 {show('team') && <th className="w-44 font-medium" scope="col">{t('Team')}</th>}
                 {show('owner') && <th className="w-36 font-medium" scope="col">{t('Owner')}</th>}
                 {show('value') && <th className="w-14 font-medium" scope="col">{t('Value')}</th>}
-                {show('depCount') && <th className="w-16 font-medium" scope="col" title={t('Number of dependencies')}>{t('Count')}</th>}
-                {show('deps') && <th className="w-64 font-medium" scope="col">{t('Dependencies')}</th>}
+                {show('deps') && <th className="w-72 font-medium" scope="col">{t('Dependencies')}</th>}
                 {show('goal') && <th className="w-44 font-medium" scope="col">{t('Goal')}</th>}
                 <th className="w-20" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
               </tr>
