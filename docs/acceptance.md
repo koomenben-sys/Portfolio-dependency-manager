@@ -915,14 +915,14 @@ Feature: Size column
 
 **Acceptance criteria**
 - P1. Kolommen menu: every optional column has "Naar links" / "Naar rechts" buttons (keyboard reachable, aria-labels); the order is remembered with the visibility per device; title and rank stay first. Header and cells share padding and alignment: no two headings touch.
-- P2. Afhankelijkheden / Afgestemd: both columns are flat rows in rank order with the same structure (#rank · verzoek · "Aan|Van <team> · voor epic" · maat · antwoord); the team name is bold; only the provider sees the answer control while answering is allowed. Heading counts have the heading's colour and weight. "+ Verzoek" is the last row of Wij vragen.
+- P2. Afhankelijkheden / Afgestemd: both columns are cards per epic in rank order with the same structure — header "#rank Epic title" ("+ Verzoek" in Wij vragen while asking is allowed, the requesting team in Aan ons gevraagd), rows "Aan|Van <team>" · verzoek · maat · antwoord with identical spacing and column widths; the team name is bold; only the provider sees the answer control while answering is allowed; size cells line up across both columns. Heading counts have the heading's colour and weight. No header row and no sorting on this page; epics without asks in a collapsed group.
 - P3. The signal reads "Deadline in gevaar" everywhere (control, chips, Prioriteiten cell, Voortgang heading and top line, Afstemmen "Top 5: n deadline in gevaar", Kwartaalresultaat); "Op koers" and "Gaat niet halen" unchanged.
 - P4. Voortgang has "Team kiezen" with "Alle teams" (admin / viewer default; planner: own team) that filters Deadline in gevaar, Impediments and Onze toezeggingen.
 - P5. Deadline in gevaar, Impediments, Nieuw ongepland werk and Onze toezeggingen are tables with headers and fixed widths that line up across sections; long notes truncate with a tooltip.
 - P6. Impediments carry Melder (raiser, admin may change) and Actiehouder (free text or member); status Open · In behandeling · Opgelost changeable by the melder, the actiehouder, the epic team's planner and admins — in both repositories and in SQL (013); an impediment not Opgelost and older than the threshold (Instellingen, default 7) shows red with "Escalatie" and sorts first. `npm run test:rls` stays green.
 - P7. A quarter bar shows the weeks (week n van N), past weeks filled, "▼ nu · week n"; selecting a Deadline in gevaar row highlights now → deadline with "Tot deadline (wk n): m weken". No remaining estimate is shown.
 - P8. "Nieuw ongepland werk" lists epics added to the quarter after the lock with rank, title, team, owner and date; the seed has two in 2026 Q4.
-- P9. Every table and list sorts by clicking a header (asc → desc → default), shows ↑/↓ and aria-sort, a chip "Gesorteerd op <kolom> ↑" with "Terug naar rang", remembers the choice per table per person per device; Prioriteren disables drag while sorted.
+- P9. Every table and list except the ask cards on Afhankelijkheden / Afgestemd (P2) sorts by clicking a header (asc → desc → default), shows ↑/↓ and aria-sort, a chip "Gesorteerd op <kolom> ↑" with "Terug naar rang", remembers the choice per table per person per device; Prioriteren disables drag while sorted.
 - P10. The phase chip shows Pause / Play / Square before the label; Planning is yellow (warn tint), In uitvoering green, Afgesloten neutral, in both skins.
 
 ```gherkin
