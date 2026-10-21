@@ -122,7 +122,7 @@ function ShellInner({ ctx, onSignOut }) {
     <div className="min-h-screen bg-canvas text-ink">
       <a href="#main" className="skip-link sr-only-focusable">{t('Skip to content')}</a>
       <header className="bg-surface border-b border-border sticky top-0 z-header" data-print="hide">
-        <div className="h-14 px-4 md:px-6 max-w-[1440px] mx-auto flex md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
+        <div className="min-h-14 md:h-14 px-4 md:px-6 py-2 md:py-0 max-w-[1440px] mx-auto flex flex-wrap md:flex-nowrap md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-2 justify-self-start min-w-0">
             <button className="flex items-center gap-2 h-8 px-1 -ml-1 rounded-control focus-ring" onClick={() => setView('prioriteren')} aria-label="Kwartaalplan">
               <span className="w-6 h-6 rounded-rank bg-accent text-accent-fg font-semibold text-caption flex items-center justify-center" aria-hidden="true">K</span>
@@ -131,7 +131,7 @@ function ShellInner({ ctx, onSignOut }) {
             {/* Demo badge sits with the logo (owner feedback 2026-10-21, item A), not between phase and quarter. */}
             {dataSource === 'mock' && <span className="hidden md:inline-flex items-center h-6 px-2 rounded-full bg-surface-2 text-micro font-semibold uppercase tracking-wide text-muted" title={t('Fictional data, stored in this browser')}>Demo</span>}
           </div>
-          <nav aria-label={t('Main')} className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none" data-tour="nav">
+          <nav aria-label={t('Main')} className="order-last w-full md:order-none md:w-auto flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none" data-tour="nav">
             {steps.map((id, i) => {
               const v = CORE.find((x) => x.id === id);
               const active = resolved === v.id;

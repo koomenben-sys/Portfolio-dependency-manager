@@ -299,7 +299,7 @@ export function PrioritizeView() {
       {plansQ.length === 0 ? (
         <div className={cls.card}><EmptyLine action={mayAdd && <button className={cls.primary} onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" />{t('Epic')}</button>}>{t('No epics in this quarter yet.')}</EmptyLine></div>
       ) : (
-        <div className={`${cls.card} panel-table overflow-hidden`}>
+        <div className={`${cls.card} panel-table overflow-x-auto`}>
           <table className="w-full text-body" aria-label={t('Ranked epics')}>
             <thead>
               <tr className="text-caption text-muted text-left border-b border-border">
