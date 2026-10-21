@@ -23,7 +23,7 @@ export const SCENARIOS = [
     steps: [
       { view: 'afhankelijkheden', target: 'team-select', ui: { tab: 'incoming' }, text: L('Kies je team; de verzoeken staan op rang van het vragende epic.', 'Pick your team; the asks are ordered by the rank of the requesting epic.') },
       { view: 'afhankelijkheden', target: 'incoming', ui: { tab: 'incoming' }, text: L('Toezeggen, Bespreken of Kan niet: één klik, bij Kan niet één regel waarom.', 'Commit, Discuss or Can\'t: one click, and one line why for Can\'t.') },
-      { view: 'afhankelijkheden', target: 'outgoing', ui: { tab: 'outgoing' }, text: L('Wij vragen: je eigen epics met hun verzoeken; + Verzoek voegt er een toe.', 'We ask: your own epics with their asks; + Ask adds one.') },
+      { view: 'afhankelijkheden', target: 'outgoing', ui: { tab: 'outgoing' }, text: L('Wij vragen: onze verzoeken op rang; + Verzoek voegt er een toe.', 'We ask: our asks in rank order; + Ask adds one.') },
     ],
   },
   {
