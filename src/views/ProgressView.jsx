@@ -93,7 +93,7 @@ export function ProgressView() {
     );
   };
   const table = (label, children) => (
-    <div className={`${cls.card} panel-table overflow-x-auto`}><table className="w-full table-fixed min-w-[900px] text-body" aria-label={label}>{children}</table></div>
+    <div className={`${cls.card} panel-table overflow-x-auto`}><table className="w-full table-fixed min-w-[1120px] text-body" aria-label={label}>{children}</table></div>
   );
   const nothing = atRisk.length === 0 && imps.length === 0 && fresh.length === 0;
   const selectedDep = atRisk.find((d) => d.id === selectedId) || null;

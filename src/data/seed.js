@@ -294,7 +294,7 @@ state.quarters.find((q) => q.id === 'q-26-4').lockedAt = ago(30);
 const p0 = state.plans.find((p) => p.id === 'p0-9');
 p0.commitment = 'at_risk';
 state.events.push({ id: 'ev-3', at: ago(7), actorId: 'u-pay', actorName: 'Joris Smit', action: 'commitment_changed', entity: 'plans', entityId: 'p0-9', quarterId: 'q-26-4', reason: 'PSP vendor delivered late', before: { commitment: 'committed' }, after: { commitment: 'at_risk' } });
-state.plans.push({ id: 'p0-13', epicId: eid(23), quarterId: 'q-26-4', rank: 13, effortLow: 2, effortHigh: 4, commitment: 'committed', confidence: 'medium', size: 'M', delivered: false, createdAt: ago(10), updatedAt: ago(10) });
+state.plans.push({ id: 'p0-16', epicId: eid(23), quarterId: 'q-26-4', rank: 13, effortLow: 2, effortHigh: 4, commitment: 'committed', confidence: 'medium', size: 'M', delivered: false, createdAt: ago(10), updatedAt: ago(10) });
 // "Nieuw ongepland werk" (D97): the backlog epic 20 was also added after the lock.
 state.plans.find((p) => p.quarterId === 'q-26-4' && p.epicId === eid(20)).createdAt = ago(5);
 state.events.push({ id: 'ev-4', at: ago(2), actorId: 'u-cld', actorName: 'Mark van Dijk', action: 'signal_set', entity: 'dependencies', entityId: 'd-21', quarterId: 'q-26-4', reason: 'Pentest schuift', before: { signal: 'on_track' }, after: { signal: 'at_risk', note: 'Pentest schuift' } });

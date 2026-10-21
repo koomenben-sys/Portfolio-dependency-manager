@@ -33,7 +33,7 @@ const COLS = [
   { id: 'goal', label: 'Strategic goal', on: false },
 ];
 // One class per column for header and cells alike (D90): same padding, same alignment, so headings never touch.
-const COL_CLASS = { team: 'w-44 text-left', owner: 'w-36 text-left', value: 'w-20 text-center', size: 'w-44 text-left', deps: 'w-72 text-left', goal: 'w-44 text-left' };
+const COL_CLASS = { team: 'w-44 text-left', owner: 'w-36 text-left', value: 'w-24 text-center', size: 'w-44 text-left', deps: 'w-72 text-left', goal: 'w-44 text-left' };
 const COLS_KEY = 'kp.prioCols';
 const COL_IDS = COLS.map((c) => c.id);
 const defaultCols = () => ({ on: Object.fromEntries(COLS.map((c) => [c.id, c.on])), order: [...COL_IDS] });
