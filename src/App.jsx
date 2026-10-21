@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid, Presentation } from 'lucide-react';
+import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid, Presentation, Pause, Play, Square } from 'lucide-react';
 import { PlanProvider, usePlan } from './context/PlanContext';
 import { useAuth } from './context/AuthContext';
 import { DATA_SOURCE, isAdmin } from './data/repository';
@@ -74,6 +74,9 @@ function SupabaseGate() {
 }
 
 const Loading = () => <div className="min-h-screen flex items-center justify-center text-muted">…</div>;
+// Phase chip icon (D98): Planning pauses, In uitvoering plays, Afgesloten stops. Same size as the 12px caption text.
+const PHASE_ICON = { Planning: Pause, Execution: Play, Closed: Square };
+const PhaseIcon = ({ phase }) => { const I = PHASE_ICON[phase] || Pause; return <I size={12} strokeWidth={2.5} fill="currentColor" aria-hidden="true" />; };
 
 // Presentatiemodus (section 24, D76): larger type for the beamer. Personal and per device (localStorage), never an
 // organisation setting; src/index.css scales the page under html[data-present].
@@ -150,7 +153,7 @@ function ShellInner({ ctx, onSignOut }) {
           </nav>
 
           <div className="ml-auto md:ml-0 md:justify-self-end min-w-0 flex items-center gap-2">
-            {quarter && <span className={`hidden md:inline-flex items-center h-6 px-2 rounded-full border text-caption font-medium whitespace-nowrap ${toneClass(PHASE_CHIP[phase].tone)} ${toneBorder(PHASE_CHIP[phase].tone)}`} title={t('Cycle phase')} data-tour="cycle">{t(PHASE_CHIP[phase].label)}</span>}
+            {quarter && <span className={`hidden md:inline-flex items-center gap-1 h-6 px-2 rounded-full border text-caption font-medium whitespace-nowrap ${toneClass(PHASE_CHIP[phase].tone)} ${toneBorder(PHASE_CHIP[phase].tone)}`} title={t('Cycle phase')} data-tour="cycle"><PhaseIcon phase={phase} />{t(PHASE_CHIP[phase].label)}</span>}
             {dataSource !== 'mock' && <LiveIndicator />}
             <label className="flex items-center gap-1.5 text-label text-muted">
               <span className="sr-only">{t('Quarter')}</span>

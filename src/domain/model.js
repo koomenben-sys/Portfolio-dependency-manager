@@ -74,7 +74,8 @@ export const needsTalk = (response) => response === 'declined' || response === '
 export const CYCLE = { prep: 'Planning', draft: 'Planning', negotiate: 'Planning', review: 'Planning', vote: 'Planning', locked: 'Execution', active: 'Execution', closed: 'Closed' };
 export const cyclePhase = (phase) => CYCLE[phase] || 'Planning';
 // Header chip per cycle phase (owner feedback 2026-10-21, item B): label key + tone. Execution reads "In uitvoering".
-export const PHASE_CHIP = { Planning: { label: 'Planning', tone: 'neutral' }, Execution: { label: 'In execution', tone: 'ok' }, Closed: { label: 'Closed', tone: 'neutral' } };
+// Section 27 (D98): an icon per phase (Pause · Play · Square) and Planning in the warn tint (yellow).
+export const PHASE_CHIP = { Planning: { label: 'Planning', tone: 'warn' }, Execution: { label: 'In execution', tone: 'ok' }, Closed: { label: 'Closed', tone: 'neutral' } };
 // Step ids per cycle phase (M2). Step 1 keeps its name; 2 and 3 change meaning with the phase.
 export const STEPS = {
   Planning: ['prioriteren', 'afhankelijkheden', 'afstemmen'],
