@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { GripVertical, ArrowUp, ArrowDown, Plus, Search, ListOrdered, Check, Columns3 } from 'lucide-react';
+import { GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Plus, Search, ListOrdered, Check, Columns3 } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canRank, isPlanner, isAdmin } from '../data/repository';
 import { isLockedPhase, cyclePhase } from '../domain/model';
@@ -21,6 +21,7 @@ import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 // at the top of the filter and a small star after followed titles (M8).
 const TOP_N = 10;
 // Kolomkeuze (section 24, D78): optional columns, per user per device. Title and rank always show.
+// Section 27 (D89): the optional columns can be reordered from the same menu; `order` is stored with the choice.
 const COLS = [
   { id: 'team', label: 'Team', on: true },
   { id: 'owner', label: 'Owner', on: true },
@@ -29,10 +30,22 @@ const COLS = [
   { id: 'deps', label: 'Dependencies', on: true },
   { id: 'goal', label: 'Strategic goal', on: false },
 ];
+// One class per column for header and cells alike (D90): same padding, same alignment, so headings never touch.
+const COL_CLASS = { team: 'w-44 text-left', owner: 'w-36 text-left', value: 'w-20 text-center', size: 'w-44 text-left', deps: 'w-72 text-left', goal: 'w-44 text-left' };
 const COLS_KEY = 'kp.prioCols';
-const defaultCols = () => Object.fromEntries(COLS.map((c) => [c.id, c.on]));
-// Stored choices for columns that no longer exist (Aantal merged into Afhankelijkheden, item F) are dropped.
-const readCols = () => { try { const saved = JSON.parse(localStorage.getItem(COLS_KEY) || '{}'); return { ...defaultCols(), ...Object.fromEntries(Object.entries(saved).filter(([k]) => COLS.some((c) => c.id === k))) }; } catch { return defaultCols(); } };
+const COL_IDS = COLS.map((c) => c.id);
+const defaultCols = () => ({ on: Object.fromEntries(COLS.map((c) => [c.id, c.on])), order: [...COL_IDS] });
+// Stored shape: { on: { id: bool }, order: [id] }. The older shape { id: bool } (section 24) is read as `on`; choices for
+// columns that no longer exist (Aantal, item F) are dropped and missing columns are appended in default order.
+const readCols = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLS_KEY) || '{}');
+    const base = defaultCols();
+    const on = saved.on && typeof saved.on === 'object' ? saved.on : saved;
+    const order = Array.isArray(saved.order) ? saved.order.filter((id, i, a) => COL_IDS.includes(id) && a.indexOf(id) === i) : [];
+    return { on: { ...base.on, ...Object.fromEntries(Object.entries(on).filter(([k, v]) => COL_IDS.includes(k) && typeof v === 'boolean')) }, order: [...order, ...COL_IDS.filter((id) => !order.includes(id))] };
+  } catch { return defaultCols(); }
+};
 const writeCols = (v) => { try { localStorage.setItem(COLS_KEY, JSON.stringify(v)); } catch { /* private mode */ } };
 export function PrioritizeView() {
   const { state, actor, quarter, run } = usePlan();
@@ -47,7 +60,13 @@ export function PrioritizeView() {
   const [err, setErr] = useState(null);
   const [adding, setAdding] = useState(false);
   const [cols, setCols] = useState(readCols);
-  const toggleCol = (id) => setCols((c) => { const n = { ...c, [id]: !c[id] }; writeCols(n); return n; });
+  const toggleCol = (id) => setCols((c) => { const n = { ...c, on: { ...c.on, [id]: !c.on[id] } }; writeCols(n); return n; });
+  const moveCol = (id, delta) => setCols((c) => {
+    const i = c.order.indexOf(id); const j = i + delta;
+    if (i < 0 || j < 0 || j >= c.order.length) return c;
+    const order = [...c.order]; order.splice(i, 1); order.splice(j, 0, id);
+    const n = { ...c, order }; writeCols(n); return n;
+  });
   const pendingRef = useRef(pending); pendingRef.current = pending;
   const runRef = useRef(run); runRef.current = run;
   const quarterRef = useRef(quarter); quarterRef.current = quarter;
@@ -59,8 +78,9 @@ export function PrioritizeView() {
   const teams = useMemo(() => byId(state.teams), [state.teams]);
   const themes = useMemo(() => byId(state.themes), [state.themes]);
   const model = state.settings.valueModel || 'none';
-  const show = (id) => !!cols[id] && (id !== 'value' || model !== 'none');
-  const nCols = 4 + COLS.filter((c) => show(c.id)).length; // drag, rank, title, reorder + optional
+  const show = (id) => !!cols.on[id] && (id !== 'value' || model !== 'none');
+  const shown = cols.order.filter(show);
+  const nCols = 4 + shown.length; // drag, rank, title, reorder + optional
   const tbodyRef = useRef(null);
   const rectsRef = useRef(new Map());
   // FLIP: rows that changed vertical position since the last paint glide there instead of snapping.
@@ -134,6 +154,14 @@ export function PrioritizeView() {
     const deps = epicDeps(state, e.id, quarter.id);
     const isMoved = pending?.movedId === p.id;
     const dragging = dragId === p.id;
+    const cell = {
+      team: () => teams.get(e.teamId)?.name,
+      owner: () => e.ownerName,
+      value: () => <ValueChip model={model} score={valueScore(model, e.value, p)} />,
+      size: () => <SizeCell size={p.size} low={p.effortLow} high={p.effortHigh} settings={state.settings} />,
+      deps: () => <WorstIssue deps={deps} teams={teams} />,
+      goal: () => themes.get(e.themeId)?.name,
+    };
     return (
       <React.Fragment key={p.id}>
         <tr id={`row-${p.id}`} data-plan={p.id} tabIndex={0} draggable={canDrag && inList} aria-selected={openEpic === e.id || undefined}
@@ -151,21 +179,16 @@ export function PrioritizeView() {
           <td className="w-7 pl-2">
             {canDrag && inList ? <span title={t('Drag, or Alt+↑/↓')}><GripVertical size={14} className="text-muted group-hover:text-ink" aria-hidden="true" /></span> : null}
           </td>
-          <td className="w-10 pr-2"><RankNo rank={inList ? index + 1 : null} size="sm" /></td>
-          <td className="pr-3 min-w-0">
+          <td className="w-10 px-1 text-center"><RankNo rank={inList ? index + 1 : null} size="sm" /></td>
+          <td className="px-3 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className={`text-body truncate ${muted ? 'text-muted' : 'text-ink'}`}>{e.title}</span>
               <FollowStar on={followed.has(e.id)} />
               <MustChip must={effectiveMust(e, themes.get(e.themeId))} className="shrink-0" />
             </div>
           </td>
-          {show('team') && <td className="w-44 pr-3 text-label text-muted truncate">{teams.get(e.teamId)?.name}</td>}
-          {show('owner') && <td className="w-36 pr-3 text-label text-muted truncate">{e.ownerName}</td>}
-          {show('value') && <td className="w-14 pr-2"><ValueChip model={model} score={valueScore(model, e.value, p)} /></td>}
-          {show('size') && <td className="w-40 pr-3"><SizeCell size={p.size} low={p.effortLow} high={p.effortHigh} settings={state.settings} /></td>}
-          {show('deps') && <td className="w-72 pr-3"><WorstIssue deps={deps} teams={teams} /></td>}
-          {show('goal') && <td className="w-44 pr-3 text-label text-muted truncate">{themes.get(e.themeId)?.name}</td>}
-          <td className="w-20 pr-2">
+          {shown.map((id) => <td key={id} className={`${COL_CLASS[id]} px-3 ${id === 'team' || id === 'owner' || id === 'goal' ? 'text-label text-muted truncate' : ''}`}>{cell[id]()}</td>)}
+          <td className="w-20 px-2">
             {mayRank && (inList ? (
               <span className={`inline-flex gap-0.5 transition-base ${searching ? 'invisible' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}>
                 <button className={cls.icon} aria-label={t('Move up')} disabled={index === 0} onClick={() => nudge(p.id, -1)}><ArrowUp size={14} /></button>
@@ -210,13 +233,17 @@ export function PrioritizeView() {
             <optgroup label={t('Teams')}>{state.teams.map((x) => <option key={x.id} value={`team:${x.id}`}>{x.name}</option>)}</optgroup>
             {goals.length > 0 && <optgroup label={t('Goals')}>{goals.map((x) => <option key={x.id} value={`goal:${x.id}`}>{x.name}</option>)}<option value="goal:none">{t('Without goal')}</option></optgroup>}
           </select>
-          <Menu ariaLabel={t('Columns')} width="w-56" button={({ ref, toggle, open, ...a }) => (
+          <Menu ariaLabel={t('Columns')} width="w-64" button={({ ref, toggle, open, ...a }) => (
             <button ref={ref} onClick={toggle} {...a} className={cls.secondary} data-tour="columns"><Columns3 size={14} aria-hidden="true" />{t('Columns')}</button>)}>
             <MenuLabel>{t('Columns')}</MenuLabel>
-            {COLS.filter((c) => !c.needsModel || model !== 'none').map((c) => (
-              <button key={c.id} role="menuitemcheckbox" aria-checked={!!cols[c.id]} className={menuItem} onClick={() => toggleCol(c.id)}>
-                <span className="w-4 inline-flex justify-center">{cols[c.id] && <Check size={14} aria-hidden="true" />}</span>{t(c.label)}
-              </button>
+            {cols.order.map((id) => COLS.find((c) => c.id === id)).filter((c) => !c.needsModel || model !== 'none').map((c, i, list) => (
+              <div key={c.id} className="flex items-center gap-0.5">
+                <button role="menuitemcheckbox" aria-checked={!!cols.on[c.id]} className={`${menuItem} flex-1 min-w-0`} onClick={() => toggleCol(c.id)}>
+                  <span className="w-4 inline-flex justify-center shrink-0">{cols.on[c.id] && <Check size={14} aria-hidden="true" />}</span><span className="truncate">{t(c.label)}</span>
+                </button>
+                <button type="button" className={`${cls.icon} !w-6 !h-6 shrink-0`} aria-label={`${t('Move left')}: ${t(c.label)}`} title={t('Move left')} disabled={i === 0} onClick={() => moveCol(c.id, -1)}><ArrowLeft size={13} /></button>
+                <button type="button" className={`${cls.icon} !w-6 !h-6 shrink-0`} aria-label={`${t('Move right')}: ${t(c.label)}`} title={t('Move right')} disabled={i === list.length - 1} onClick={() => moveCol(c.id, 1)}><ArrowRight size={13} /></button>
+              </div>
             ))}
           </Menu>
           <label className="relative"><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-faint" aria-hidden="true" /><input type="search" className={`${cls.input} !w-52 !pl-7`} placeholder={t('Search')} aria-label={t('Search epics')} value={query} onChange={(e) => setQuery(e.target.value)} /></label>
@@ -259,15 +286,10 @@ export function PrioritizeView() {
             <thead>
               <tr className="text-caption text-muted text-left border-b border-border">
                 <th className="h-9 w-7" scope="col"><span className="sr-only">{t('Drag')}</span></th>
-                <th className="w-10 pr-2 font-medium" scope="col"><span className="inline-flex w-6 justify-center">#</span></th>
-                <th className="font-medium" scope="col">{t('Epic')}</th>
-                {show('team') && <th className="w-44 font-medium" scope="col">{t('Team')}</th>}
-                {show('owner') && <th className="w-36 font-medium" scope="col">{t('Owner')}</th>}
-                {show('value') && <th className="w-14 font-medium" scope="col">{t('Value')}</th>}
-                {show('size') && <th className="w-40 font-medium" scope="col">{t('Size')}</th>}
-                {show('deps') && <th className="w-72 font-medium" scope="col">{t('Dependencies')}</th>}
-                {show('goal') && <th className="w-44 font-medium" scope="col">{t('Strategic goal')}</th>}
-                <th className="w-20" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
+                <th className="w-10 px-1 text-center font-medium" scope="col">#</th>
+                <th className="px-3 font-medium" scope="col">{t('Epic')}</th>
+                {shown.map((id) => <th key={id} className={`${COL_CLASS[id]} px-3 font-medium whitespace-nowrap`} scope="col">{t(COLS.find((c) => c.id === id).label)}</th>)}
+                <th className="w-20 px-2" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
               </tr>
             </thead>
             <tbody ref={tbodyRef} className="divide-y divide-border">

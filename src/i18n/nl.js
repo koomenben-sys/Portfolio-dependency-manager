@@ -754,6 +754,8 @@ export const nl = {
   'More': 'Meer',
   'Move down': 'Omlaag',
   'Move up': 'Omhoog',
+  'Move left': 'Naar links',
+  'Move right': 'Naar rechts',
   'Moved to #{n}': 'Verplaatst naar #{n}',
   'New epic': 'Nieuwe epic',
   'No asks yet.': 'Nog geen verzoeken.',
