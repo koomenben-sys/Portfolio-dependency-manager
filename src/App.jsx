@@ -3,7 +3,7 @@ import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid, P
 import { PlanProvider, usePlan } from './context/PlanContext';
 import { useAuth } from './context/AuthContext';
 import { DATA_SOURCE, isAdmin } from './data/repository';
-import { quarterLabel, PHASES, cyclePhase, STEPS, STEP_LABEL, stepForPhase, PHASE_CHIP } from './domain/model';
+import { quarterLabel, PHASES, cyclePhase, STEPS, STEP_LABEL, stepForPhase, stepLabel, PHASE_CHIP } from './domain/model';
 import { LoginView } from './views/LoginView';
 import { PrioritizeView } from './views/PrioritizeView';
 import { DependenciesView } from './views/DependenciesView';
@@ -135,7 +135,7 @@ function ShellInner({ ctx, onSignOut }) {
               return (
                 <button key={v.id} aria-current={active ? 'page' : undefined} onClick={() => setView(v.id)} data-tour={`nav-${v.id}`}
                   className={`nav-step inline-flex shrink-0 whitespace-nowrap items-center gap-2 h-8 px-2.5 rounded-control text-label focus-ring ${active ? 'font-medium' : 'text-muted hover:text-ink hover:bg-surface-2'}`}>
-                  <span className={`tnum w-5 h-5 rounded-full text-micro font-semibold inline-flex items-center justify-center ${active ? 'bg-[var(--nav-badge-bg)] text-[var(--nav-badge-fg)]' : 'bg-surface-2 text-muted'}`} aria-hidden="true">{i + 1}</span>{t(v.label)}
+                  <span className={`tnum w-5 h-5 rounded-full text-micro font-semibold inline-flex items-center justify-center ${active ? 'bg-[var(--nav-badge-bg)] text-[var(--nav-badge-fg)]' : 'bg-surface-2 text-muted'}`} aria-hidden="true">{i + 1}</span>{t(stepLabel(v.id, quarter?.phase))}
                 </button>
               );
             })}

@@ -1051,4 +1051,5 @@ export const nl = {
   'Count': 'Aantal',
   // Uitvoering feedback (section 25)
   'In execution': 'In uitvoering',
+  'Priorities': 'Prioriteiten',
 };

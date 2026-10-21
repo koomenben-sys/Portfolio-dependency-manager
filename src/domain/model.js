@@ -82,6 +82,8 @@ export const STEPS = {
   Closed: ['prioriteren', 'afgestemd', 'resultaat'],
 };
 export const STEP_LABEL = { prioriteren: 'Prioritise', afhankelijkheden: 'Dependencies', afgestemd: 'Agreed', afstemmen: 'Align', voortgang: 'Progress', resultaat: 'Result' };
+// Step 1 is "Prioriteren" while planning and "Prioriteiten" once the list is fixed (owner feedback 2026-10-21, item C).
+export const stepLabel = (viewId, phase) => (viewId === 'prioriteren' && cyclePhase(phase) !== 'Planning' ? 'Priorities' : STEP_LABEL[viewId]);
 const STEP_NO = { prioriteren: 0, afhankelijkheden: 1, afgestemd: 1, afstemmen: 2, voortgang: 2, resultaat: 2, afsluiten: 2 };
 // A step hash that does not belong to the quarter's phase opens that phase's step with the same number (M2, M6).
 export function stepForPhase(viewId, phase) {

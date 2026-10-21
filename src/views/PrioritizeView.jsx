@@ -81,7 +81,8 @@ export function PrioritizeView() {
   const order = pending ? pending.order.map((id) => plansQ.find((p) => p.id === id)).filter(Boolean) : rankedBase;
   const orderIds = new Set(order.map((p) => p.id));
   const unranked = plansQ.filter((p) => !orderIds.has(p.id));
-  const closed = quarter.phase === 'closed'; // Afgesloten: no drag, no arrows, no "+ Epic" (M4)
+  const planning = cyclePhase(quarter.phase) === 'Planning';
+  const closed = quarter.phase === 'closed'; // Afgesloten: no drag, no arrows (M4)
   const mayRank = canRank(actor) && !closed;
   const mayAdd = isPlanner(actor) && !closed;
   const followed = followsOf(state, actor.id);
@@ -186,7 +187,7 @@ export function PrioritizeView() {
 
   return (
     <div className="pr-0" data-tour="prioritize">
-      <ViewHeader title={t('Prioritise')} meta={t('{n} epics', { n: plansQ.length })} right={
+      <ViewHeader title={t(planning ? 'Prioritise' : 'Priorities')} meta={t('{n} epics', { n: plansQ.length })} right={
         <>
           <label className="sr-only" htmlFor="prio-filter">{t('Filter')}</label>
           <select id="prio-filter" className={`${cls.input} !w-auto max-w-[220px]`} value={filter} onChange={(e) => setFilter(e.target.value)}>
@@ -209,7 +210,7 @@ export function PrioritizeView() {
         </>
       } />
 
-      {goals.length > 0 && strategy.top > 0 && cyclePhase(quarter.phase) === 'Planning' && (() => {
+      {goals.length > 0 && strategy.top > 0 && planning && (() => {
         // Iteration 1 (item 1): goals with epics in the top N first ("Klantcontact 5"), empty goals muted at the end.
         const goalBtn = (id, label, n, muted) => {
           const active = filter === `goal:${id}`;
