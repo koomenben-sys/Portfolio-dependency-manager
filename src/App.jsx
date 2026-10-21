@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import LogoMark from './components/plan/LogoMark';
 import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid, Presentation, Pause, Play, Square } from 'lucide-react';
 import { PlanProvider, usePlan } from './context/PlanContext';
 import { useAuth } from './context/AuthContext';
@@ -125,7 +126,7 @@ function ShellInner({ ctx, onSignOut }) {
         <div className="min-h-14 md:h-14 px-4 md:px-6 py-2 md:py-0 max-w-[1440px] mx-auto flex flex-wrap md:flex-nowrap md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-2 justify-self-start min-w-0">
             <button className="flex items-center gap-2 h-8 px-1 -ml-1 rounded-control focus-ring" onClick={() => setView('prioriteren')} aria-label="Kwartaalplan">
-              <span className="w-6 h-6 rounded-rank bg-accent text-accent-fg font-semibold text-caption flex items-center justify-center" aria-hidden="true">K</span>
+              <LogoMark size={26} />
               <span className="font-display font-[var(--font-display-weight)] text-body hidden sm:inline">Kwartaalplan</span>
             </button>
             {/* Demo badge sits with the logo (owner feedback 2026-10-21, item A), not between phase and quarter. */}

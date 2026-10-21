@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import LogoMark from '../components/plan/LogoMark';
 import { supabase } from '../lib/supabase';
 
 export function LoginView() {
@@ -38,7 +39,7 @@ export function LoginView() {
     <div className="min-h-screen bg-surface-2 flex flex-col">
       {/* Header */}
       <div className="bg-accent-700 text-white p-4">
-        <h1 className="text-2xl font-bold">Kwartaalplan</h1>
+        <h1 className="text-2xl font-bold flex items-center gap-3"><LogoMark size={32} />Kwartaalplan</h1>
       </div>
 
       {/* Card */}
