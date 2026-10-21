@@ -3,7 +3,8 @@ import { Plus, Lock, Pencil, TriangleAlert } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { isPlanner, isAdmin, canWriteTeam, canChangeImpediment } from '../data/repository';
 import { planFor, byId, daysSince } from '../domain/plan';
-import { hasSignal, inExecution, quarterWeek, openImpediments, signalOf, needsConfirmation, isEscalated, newSinceLock, IMPEDIMENT_STATUSES, IMPEDIMENT_STATUS_META } from '../domain/rhythm';
+import { hasSignal, inExecution, quarterWeek, openImpediments, signalOf, needsConfirmation, isEscalated, newSinceLock, epicDeadline, weekOf, IMPEDIMENT_STATUSES, IMPEDIMENT_STATUS_META } from '../domain/rhythm';
+import { effectiveMust } from '../domain/value';
 import { followsOf, readFollowOnly, writeFollowOnly } from '../domain/follows';
 import { useT } from '../i18n';
 import { cls, ViewHeader, quarterMeta, RankNo, SignalChip, SignalControl, InlineReason, EmptyLine, ErrorLine, Dialog, Disclosure, FollowStar, FollowOnlyToggle, fmtDay, normAsk, toneClass } from '../components/plan/core';
@@ -32,6 +33,7 @@ export function ProgressView() {
   const [raising, setRaising] = useState(false);
   const [editing, setEditing] = useState(null); // impediment
   const [closing, setClosing] = useState(false);
+  const [selectedId, setSelectedId] = useState(null); // "Deadline in gevaar" row shown on the quarter bar (D96)
   const [err, setErr] = useState(null);
   const [followOnly, setFollowOnlyState] = useState(() => readFollowOnly(actor.id));
   useEffect(() => { setFollowOnlyState(readFollowOnly(actor.id)); }, [actor.id]);
@@ -81,6 +83,7 @@ export function ProgressView() {
     <div className={`${cls.card} panel-table overflow-x-auto`}><table className="w-full table-fixed min-w-[900px] text-body" aria-label={label}>{children}</table></div>
   );
   const nothing = atRisk.length === 0 && imps.length === 0 && fresh.length === 0;
+  const selectedDep = atRisk.find((d) => d.id === selectedId) || null;
 
   return (
     <div data-tour="progress">
@@ -102,6 +105,7 @@ export function ProgressView() {
         <span className="text-faint"> · </span><span className={impsAll.length ? 'text-ink' : 'text-muted'}>{impsAll.length === 1 ? t('1 impediment') : t('{n} impediments', { n: impsAll.length })}</span>
       </p>
       <ErrorLine error={err} />
+      {executing && <QuarterBar week={week} total={total} selected={selectedDep} />}
 
       {nothing && (
         <div className={`${cls.card} mb-6`}><EmptyLine>{followOnly && followedInQuarter === 0 ? t('No followed epics here.') : t('All on track.')}</EmptyLine></div>
@@ -116,6 +120,7 @@ export function ProgressView() {
               <tbody className="divide-y divide-border">
                 {atRisk.map((d) => (
                   <SignalTr key={d.id} dep={d} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.providerTeamId)?.name} may={maySignal(d)} act={act}
+                    selected={selectedId === d.id} onSelect={() => setSelectedId((s) => (s === d.id ? null : d.id))}
                     main={<><div className="text-body font-medium truncate">{title(d.epicId)}</div><div className="text-caption text-muted truncate">{d.ask}</div></>} />
                 ))}
               </tbody>
@@ -195,14 +200,57 @@ export function ProgressView() {
   );
 }
 
+// Quarter bar (D96, variant A): the quarter's weeks (quarter-relative, "week 3 van 13"), past weeks filled, a
+// "▼ nu · week n" marker, and for the selected Deadline in gevaar row the span from now to that epic's deadline
+// (Moet deadline, else the latest needed_by of its asks, else the quarter end) with "Tot deadline (wk 11): 8 weken".
+// No "nog nodig / marge": there is no remaining estimate to show (docs section 27, TODO).
+function QuarterBar({ week, total, selected }) {
+  const { state, quarter } = usePlan();
+  const t = useT();
+  const epics = byId(state.epics); const themes = byId(state.themes);
+  const dl = selected ? epicDeadline(state, selected.epicId, quarter, (e) => effectiveMust(e, themes.get(e.themeId))) : null;
+  const dlWeek = dl ? weekOf(dl.date, quarter, state.settings) : null;
+  const left = (w) => `${((w - 1) / total) * 100}%`;
+  const epic = selected ? epics.get(selected.epicId) : null;
+  return (
+    <section className={`${cls.card} px-4 pt-7 pb-3 mb-6`} aria-label={t('Quarter bar')} data-tour="quarter-bar">
+      <div className="relative">
+        <div className="absolute -top-5 text-caption font-medium text-ink whitespace-nowrap tnum -translate-x-1/2" style={{ left: `${((week - 0.5) / total) * 100}%` }} aria-hidden="true">▼ {t('now · week {n}', { n: week })}</div>
+        {dlWeek != null && <div className="absolute -top-5 text-caption font-medium text-warn-fg whitespace-nowrap tnum -translate-x-1/2" style={{ left: `${((dlWeek - 0.5) / total) * 100}%` }} aria-hidden="true">⚑ wk {dlWeek}</div>}
+        <div className="relative flex gap-px h-3 rounded-control overflow-hidden bg-surface-2" role="img" aria-label={t('Week {w} of {n}', { w: week, n: total })}>
+          {Array.from({ length: total }, (_, i) => i + 1).map((w) => (
+            <div key={w} className={`flex-1 ${w < week ? 'bg-border-strong' : w === week ? 'bg-accent' : 'bg-surface-2'}`} />
+          ))}
+          {dlWeek != null && dlWeek >= week && <div className="absolute top-0 bottom-0 bg-warn opacity-40" style={{ left: left(week), width: `${((dlWeek - week + 1) / total) * 100}%` }} aria-hidden="true" />}
+        </div>
+        <div className="mt-1 flex justify-between text-micro text-faint tnum" aria-hidden="true"><span>{t('Week')} 1</span><span>{total}</span></div>
+      </div>
+      {selected && (
+        <p className="mt-2 text-label tnum text-ink">
+          <RankNo rank={planFor(state, selected.epicId, quarter.id)?.rank} size="sm" /> <span className="font-medium">{epic?.title}</span>
+          <span className="text-faint"> · </span>
+          {dlWeek >= week ? t('Until deadline (wk {w}): {n} weeks', { w: dlWeek, n: dlWeek - week }) : t('Deadline passed (wk {w})', { w: dlWeek })}
+          {dl.source === 'must' && <span className="text-muted"> · {t('Must')}</span>}
+        </p>
+      )}
+    </section>
+  );
+}
+
 // One signal row: # · main · Team · Signaal (control for the provider, chip for everyone else) · Toelichting (the note,
 // truncated with a tooltip, and the sprint-cadence "Bevestigen"). Op koers clears the note; Deadline in gevaar / Gaat
 // niet halen open an optional one-line note on a second row (L7).
-function SignalTr({ dep, rank, main, team, may, act }) {
+function SignalTr({ dep, rank, main, team, may, act, selected, onSelect }) {
   const { state, quarter } = usePlan();
   const t = useT();
   const [noteFor, setNoteFor] = useState(null);
   const signal = signalOf(dep);
+  // Selectable rows (D96): click or Enter / Space outside the controls selects the row for the quarter bar.
+  const rowProps = onSelect ? {
+    tabIndex: 0, 'aria-selected': !!selected,
+    onClick: (ev) => { if (!ev.target.closest('button, input, select, a')) onSelect(); },
+    onKeyDown: (ev) => { if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); onSelect(); } },
+  } : {};
   const confirmDue = may && needsConfirmation(dep, quarter, state.settings);
   const pickSignal = async (s) => {
     if (s === signal && noteFor == null) return;
@@ -212,7 +260,7 @@ function SignalTr({ dep, rank, main, team, may, act }) {
   const note = signal !== 'on_track' ? dep.signalNote : '';
   return (
     <>
-      <tr className="h-row">
+      <tr className={`h-row ${onSelect ? 'cursor-pointer focus-ring-inset transition-base' : ''} ${selected ? 'bg-accent-50' : onSelect ? 'hover:bg-surface-2' : ''}`} {...rowProps}>
         <td className={TC.rank}><RankNo rank={rank} hash /></td>
         <td className={`${TC.main} min-w-0`}>{main}</td>
         <td className={`${TC.team} text-label text-muted truncate`}>{team}</td>
