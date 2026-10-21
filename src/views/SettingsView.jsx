@@ -4,7 +4,7 @@ import { usePlan } from '../context/PlanContext';
 import { isAdmin, canRank } from '../data/repository';
 import { PHASES, quarterLabel } from '../domain/model';
 import { VALUE_MODELS, VALUE_MODEL_LABEL, THEME_TYPES, THEME_TYPE_LABEL, monthToDate, dateToMonth } from '../domain/value';
-import { SIZES, sizeMapOf, cadenceOf } from '../domain/rhythm';
+import { SIZES, sizeMapOf, cadenceOf, escalationDays } from '../domain/rhythm';
 import { useT, LANGUAGES } from '../i18n';
 import { cls, ViewHeader, ErrorLine, Disclosure, MustChip } from '../components/plan/core';
 import { Field, input, btn, ErrorNote } from '../components/plan/ui';
@@ -58,6 +58,7 @@ export function SettingsView() {
             <label className="block"><span className={cls.label}>{t('Value model')}</span><select className={cls.input} value={state.settings.valueModel || 'none'} disabled={!admin} onChange={(e) => act('updateSettings', { valueModel: e.target.value })}>{VALUE_MODELS.map((m) => <option key={m} value={m}>{t(VALUE_MODEL_LABEL[m])}</option>)}</select></label>
             <Steering act={act} admin={admin} />
             <label className="block"><span className={cls.label}>{t('Skin')}</span><select className={cls.input} value={state.settings.skin || 'zakelijk'} disabled={!admin} onChange={(e) => act('updateSettings', { skin: e.target.value })}>{SKINS.map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}</select></label>
+            <label className="block"><span className={cls.label}>{t('Escalation after (days)')}</span><input type="number" min="1" max="365" className={`${cls.input} !w-24 tnum`} defaultValue={escalationDays(state.settings)} disabled={!admin} onBlur={(e) => Number(e.target.value) !== escalationDays(state.settings) && act('updateSettings', { impedimentEscalationDays: Number(e.target.value) })} /></label>
           </div>
           <SizeMap act={act} admin={admin} />
         </Section>

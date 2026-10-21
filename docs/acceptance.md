@@ -910,3 +910,51 @@ Feature: Size column
     Then the bars start at the same x, the letters sit in one column and the pw ranges in one column
     And the XL bar is the longest
 ```
+
+## P. Voortgang feedback (2026-10-21, docs/design.md section 27)
+
+**Acceptance criteria**
+- P1. Kolommen menu: every optional column has "Naar links" / "Naar rechts" buttons (keyboard reachable, aria-labels); the order is remembered with the visibility per device; title and rank stay first. Header and cells share padding and alignment: no two headings touch.
+- P2. Afhankelijkheden / Afgestemd: both columns are flat rows in rank order with the same structure (#rank · verzoek · "Aan|Van <team> · voor epic" · maat · antwoord); the team name is bold; only the provider sees the answer control while answering is allowed. Heading counts have the heading's colour and weight. "+ Verzoek" is the last row of Wij vragen.
+- P3. The signal reads "Deadline in gevaar" everywhere (control, chips, Prioriteiten cell, Voortgang heading and top line, Afstemmen "Top 5: n deadline in gevaar", Kwartaalresultaat); "Op koers" and "Gaat niet halen" unchanged.
+- P4. Voortgang has "Team kiezen" with "Alle teams" (admin / viewer default; planner: own team) that filters Deadline in gevaar, Impediments and Onze toezeggingen.
+- P5. Deadline in gevaar, Impediments, Nieuw ongepland werk and Onze toezeggingen are tables with headers and fixed widths that line up across sections; long notes truncate with a tooltip.
+- P6. Impediments carry Melder (raiser, admin may change) and Actiehouder (free text or member); status Open · In behandeling · Opgelost changeable by the melder, the actiehouder, the epic team's planner and admins — in both repositories and in SQL (013); an impediment not Opgelost and older than the threshold (Instellingen, default 7) shows red with "Escalatie" and sorts first. `npm run test:rls` stays green.
+- P7. A quarter bar shows the weeks (week n van N), past weeks filled, "▼ nu · week n"; selecting a Deadline in gevaar row highlights now → deadline with "Tot deadline (wk n): m weken". No remaining estimate is shown.
+- P8. "Nieuw ongepland werk" lists epics added to the quarter after the lock with rank, title, team, owner and date; the seed has two in 2026 Q4.
+- P9. Every table and list sorts by clicking a header (asc → desc → default), shows ↑/↓ and aria-sort, a chip "Gesorteerd op <kolom> ↑" with "Terug naar rang", remembers the choice per table per person per device; Prioriteren disables drag while sorted.
+- P10. The phase chip shows Pause / Play / Square before the label; Planning is yellow (warn tint), In uitvoering green, Afgesloten neutral, in both skins.
+
+```gherkin
+Feature: Impediment status
+
+  Scenario: The action holder resolves an impediment
+    Given IMP-0002 is open, raised by Sanne Bakker with Fatima El Amrani as action holder
+    When Fatima sets the status to Opgelost
+    Then the impediment leaves the Voortgang list and an impediment_status_changed event exists
+
+  Scenario: Another team's planner may not change it
+    Given IMP-0006 (Payments) with action holder "Leverancier PSP"
+    When Mark van Dijk tries to set In behandeling
+    Then he sees "Alleen de melder, de actiehouder, het team van de epic of een beheerder kan de status wijzigen"
+
+  Scenario: Escalation
+    Given the threshold is 7 days and IMP-0006 is 9 days open
+    Then its row is red with the chip "Escalatie" and sits above IMP-0002 (3 days)
+
+Feature: Sorting
+
+  Scenario: Sort Prioriteiten by Team and back
+    When I click the "Team" header
+    Then rows sort by team name ascending, the header shows ↑ and the chip reads "Gesorteerd op Team ↑"
+    And the drag handles are dimmed with "Slepen kan in rangvolgorde"
+    When I click "Terug naar rang"
+    Then the rank order returns and dragging works again
+
+Feature: Quarter bar
+
+  Scenario: Deadline span for a selected row
+    Given 2026 Q4 is in week 3 of 13
+    When I select "#1 Digital claims intake" under Deadline in gevaar
+    Then the bar highlights week 3 to the deadline week and reads "Tot deadline (wk 13): 10 weken"
+```

@@ -1,7 +1,7 @@
 -- ============================================================================
 -- db/tests/rls_test.sql  -  row-level security and tenant-isolation test (BACKLOG P1, docs/design.md section 18)
 -- ----------------------------------------------------------------------------
--- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-012).
+-- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-014).
 -- The result grid shows one row per check with PASS / FAIL; the first row is the total.
 -- Plain SQL, no extension needed (no pgTAP). Re-runnable.
 --
@@ -128,6 +128,18 @@ insert into invitations (org_id, id, email, role) values
 -- Volgen (011): the A2 planner follows epic A1; nobody else may see that row.
 insert into epic_follows (org_id, user_id, epic_id) values
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-00000000a003', '00000000-0000-4000-8000-0000000000a4');
+-- Impediments (013): IMP-1 on epic A1 (team A1) raised by the A2 planner; IMP-2 on epic A2 (team A2) raised by the
+-- admin with the A1 planner as action holder. The A1 planner's display name is used for the free-text holder check.
+update memberships set display_name = 'RLS planner A1' where user_id = '00000000-0000-4000-8000-00000000a002';
+insert into impediments (org_id, id, ref_code, kind, title, epic_id, owner_name, reporter_id, action_owner_id, action_owner_name, status) values
+  ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000af', 'RLS-IMP-1', 'impediment', 'RLS impediment 1',
+   '00000000-0000-4000-8000-0000000000a4', 'RLS provider', '00000000-0000-4000-8000-00000000a003', null, '', 'open'),
+  ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000b9', 'RLS-IMP-2', 'impediment', 'RLS impediment 2',
+   '00000000-0000-4000-8000-0000000000a5', 'RLS admin', '00000000-0000-4000-8000-00000000a001', '00000000-0000-4000-8000-00000000a002', '', 'open'),
+  ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000ba', 'RLS-IMP-3', 'impediment', 'RLS impediment 3',
+   '00000000-0000-4000-8000-0000000000a5', 'RLS admin', '00000000-0000-4000-8000-00000000a001', null, 'RLS planner A1', 'open'),
+  ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000bb', 'RLS-IMP-4', 'impediment', 'RLS impediment 4',
+   '00000000-0000-4000-8000-0000000000a4', 'RLS admin', '00000000-0000-4000-8000-00000000a001', null, '', 'open');
 
 -- ── checks ────────────────────────────────────────────────────────────────────
 -- Short names in the SQL below: A = org A, B = org B (literal ids, so every check is self-contained).
@@ -140,6 +152,7 @@ declare
   QA text := '''00000000-0000-4000-8000-0000000000a3'''; QA2 text := '''00000000-0000-4000-8000-0000000000aa'''; DA text := '''00000000-0000-4000-8000-0000000000a8''';
   GA text := '''00000000-0000-4000-8000-0000000000ab''';
   QL text := '''00000000-0000-4000-8000-0000000000ac'''; DL text := '''00000000-0000-4000-8000-0000000000ae''';
+  I1 text := '''00000000-0000-4000-8000-0000000000af'''; I2 text := '''00000000-0000-4000-8000-0000000000b9'''; I3 text := '''00000000-0000-4000-8000-0000000000ba'''; I4 text := '''00000000-0000-4000-8000-0000000000bb''';
   u_admin   uuid := '00000000-0000-4000-8000-00000000a001';
   u_planner uuid := '00000000-0000-4000-8000-00000000a002';
   u_prov    uuid := '00000000-0000-4000-8000-00000000a003';
@@ -428,6 +441,34 @@ begin
     format('with x as (update dependencies set confirmed_at = now() where id = %s returning 1) select count(*) from x', DL), '1');
   perform pg_temp.rls_check('locked', 'requester still cannot set a signal in a locked quarter', u_planner,
     format('with x as (update dependencies set signal = ''at_risk'' where id = %s returning 1) select count(*) from x', DL), 'error:Only the provider team can set a signal');
+
+  -- 15. Impediments (013, D92): status by reporter, action holder, epic team or admin; reporter is set on insert
+  perform pg_temp.rls_check('impediment', 'reporter (other team) sets In behandeling', u_prov,
+    format('with x as (update impediments set status = ''in_progress'' where id = %s returning 1) select count(*) from x', I1), '1');
+  perform pg_temp.rls_check('impediment', 'planner of the epic''s team resolves it', u_planner,
+    format('with x as (update impediments set status = ''resolved'', resolved_at = now() where id = %s returning 1) select count(*) from x', I1), '1');
+  perform pg_temp.rls_check('impediment', 'admin changes the status', u_admin,
+    format('with x as (update impediments set status = ''in_progress'' where id = %s returning 1) select count(*) from x', I1), '1');
+  perform pg_temp.rls_check('impediment', 'action holder (by id, other team) changes the status', u_planner,
+    format('with x as (update impediments set status = ''in_progress'' where id = %s returning 1) select count(*) from x', I2), '1');
+  perform pg_temp.rls_check('impediment', 'action holder (by name, other team) changes the status', u_planner,
+    format('with x as (update impediments set status = ''resolved'' where id = %s returning 1) select count(*) from x', I3), '1');
+  perform pg_temp.rls_check('impediment', 'planner who is neither reporter, holder nor epic team cannot', u_prov,
+    format('with x as (update impediments set status = ''resolved'' where id = %s returning 1) select count(*) from x', I4), 'error:Only the reporter');
+  perform pg_temp.rls_check('impediment', 'that planner cannot take over the action holder either', u_prov,
+    format('with x as (update impediments set action_owner_name = ''me'' where id = %s returning 1) select count(*) from x', I4), 'error:Only the reporter');
+  perform pg_temp.rls_check('impediment', 'that planner still edits the title (impediments_write)', u_prov,
+    format('with x as (update impediments set title = ''retitled'' where id = %s returning 1) select count(*) from x', I4), '1');
+  perform pg_temp.rls_check('impediment', 'reporter cannot change the reporter (admin only)', u_prov,
+    format('with x as (update impediments set owner_name = ''someone else'' where id = %s returning 1) select count(*) from x', I1), 'error:Only an admin');
+  perform pg_temp.rls_check('impediment', 'admin changes the reporter', u_admin,
+    format('with x as (update impediments set owner_name = ''someone else'' where id = %s returning 1) select count(*) from x', I1), '1');
+  perform pg_temp.rls_check('impediment', 'unknown status is refused', u_admin,
+    format('with x as (update impediments set status = ''weird'' where id = %s returning 1) select count(*) from x', I1), 'error');
+  perform pg_temp.rls_check('impediment', 'viewer cannot change the status (0 rows)', u_viewer,
+    format('with x as (update impediments set status = ''resolved'' where id = %s returning 1) select count(*) from x', I1), '0');
+  perform pg_temp.rls_check('impediment', 'insert sets reporter_id to the raiser', u_planner,
+    format('with x as (insert into impediments (org_id, ref_code, kind, title, epic_id) values (%s, ''RLS-IMP-9'', ''impediment'', ''new'', %s) returning reporter_id) select count(*) from x where reporter_id = %L', A, EA1, u_planner), '1');
 end $$;
 
 

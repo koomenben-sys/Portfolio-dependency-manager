@@ -142,7 +142,7 @@ export function AlignView() {
 
       {topPlans.length > 0 && (
         <p className={`mb-4 text-label tnum ${atRisk.length ? 'text-ink' : 'text-muted'}`}>
-          <span className="font-medium">{t('Top {n}', { n: topPlans.length })}:</span> {t('{n} at risk', { n: atRisk.length })}
+          <span className="font-medium">{t('Top {n}', { n: topPlans.length })}:</span> {t('{n} deadlines at risk', { n: atRisk.length })}
           {atRisk.length > 0 && <> (<span className="text-muted">{t('rank')}</span> {atRisk.map((p, i) => <React.Fragment key={p.id}>{i > 0 && ', '}<button className="text-accent font-medium hover:underline focus-ring rounded-control px-0.5 min-h-6" onClick={() => revealEpic(p.epicId)} aria-label={t('Show rank {rank} in the list', { rank: p.rank })}>{p.rank}</button></React.Fragment>)})</>}
         </p>
       )}

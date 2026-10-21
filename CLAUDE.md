@@ -17,7 +17,8 @@ For major features, before writing code:
 ## Current Work / Last Session
 _Updated by Claude at the end of each session._
 
-- **Last session:** 2026-10-19 — Release A (Waarde & strategie, PR #20) and Release B (Capaciteit & ritme, PR #21, stacked on #20) built, persona-tested and iterated. Merging was left to the owner.
+- **Last session:** 2026-10-21 — branch `claude/voortgang-feedback` (`docs/design.md` section 27, D89-D99; acceptance P): column order in Kolommen, one row structure on Afgestemd ("Aan / Van <team>"), "Deadline in gevaar", Voortgang with team select, aligned tables, quarter bar, "Nieuw ongepland werk" (epics added after the lock, migration 014), impediments with Melder / Actiehouder / Open · In behandeling · Opgelost / Escalatie (migration 013, `impediment_guard()`, `canChangeImpediment()`), generic sorting (`src/components/plan/sort.jsx`), phase chip icons. Owner still has to run 013 and 014 in Supabase. No PR opened.
+- **Earlier:** 2026-10-19 — Release A (Waarde & strategie, PR #20) and Release B (Capaciteit & ritme, PR #21, stacked on #20) built, persona-tested and iterated. Merging was left to the owner.
 - **Release A:** goals/programmes (themes), value model per org, OnePager tab, Kwartaalresultaat (`#kwartaalresultaat`). Migration 009. `docs/design.md` section 21 (D40-D48), `docs/acceptance.md` section K.
 - **Release B:** T-shirt sizes with org mapping, team-level capacity (no per-person data, NL holidays automatic), certainty on asks, automatic bottleneck chips, Plan vastzetten + "gewijzigd", commitment signals + Op uitzondering / Sprintkadans, Afsluiten (`#afsluiten`, via the phase word). Migration 010. `docs/design.md` section 22 (D50-D61), `docs/acceptance.md` section L.
 - **Read first:** `docs/design.md` sections 19-22, `docs/acceptance.md` sections J-L.

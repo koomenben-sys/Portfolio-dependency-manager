@@ -15,7 +15,9 @@
 //   castVote(actor, teamId, quarterId, vote, reason)
 //   raiseDiscussion(actor, item) / resolveDiscussion(actor, id, outcome)
 //   addCheckIn(actor, checkIn)
-//   upsertImpediment(actor, impediment) / resolveImpediment(actor, id)
+//   upsertImpediment(actor, impediment) / resolveImpediment(actor, id) / setImpedimentStatus(actor, id, status)
+//     impediment carries ownerName (Melder, admin may change), actionOwnerId / actionOwnerName (Actiehouder) and
+//     status open | in_progress | resolved; status and action holder changeable by canChangeImpediment() (D92)
 //   upsertCapacity(actor, { teamId, quarterId, headcount (FTE), fteVacant, absenceWeeks, reservePct })   (own team; D51)
 //   upsertPlan / addDependency / updateDependency accept `size` (S|M|L|XL -> writes the mapped effort range, D50);
 //     asks also carry `certainty` (low|medium|high, requester only, D52)
@@ -79,6 +81,18 @@ export function canWriteTeam(actor, teamId) {
 export const isAdmin = (actor) => actor?.role === 'admin';
 export const canRank = (actor) => actor?.role === 'admin' || !!actor?.canRank;
 export const isPlanner = (actor) => actor?.role === 'admin' || actor?.role === 'planner';
+// Impediments (section 27, D92): the status and the action holder may be changed by the Melder (reporter), the
+// Actiehouder (by member id or by name), the planner of the epic's team and admins. Same rule as impediment_guard() (013).
+export function canChangeImpediment(actor, imp, epic) {
+  if (!actor || !imp) return false;
+  if (isAdmin(actor)) return true;
+  if (actor.role !== 'planner') return false;
+  if (imp.reporterId && imp.reporterId === actor.id) return true;
+  if (imp.ownerName && imp.ownerName === actor.name) return true;
+  if (imp.actionOwnerId && imp.actionOwnerId === actor.id) return true;
+  if (imp.actionOwnerName && imp.actionOwnerName === actor.name) return true;
+  return !!epic && canWriteTeam(actor, epic.teamId);
+}
 
 // Release B (D51): the four capacity numbers; same texts in both adapters (010 checks them again in SQL).
 export function checkCapacity(cap) {

@@ -1,17 +1,19 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { GripVertical, ArrowUp, ArrowDown, Plus, Search, ListOrdered, Check, Columns3 } from 'lucide-react';
+import { GripVertical, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Plus, Search, ListOrdered, Check, Columns3 } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canRank, isPlanner, isAdmin } from '../data/repository';
 import { isLockedPhase, cyclePhase } from '../domain/model';
 import { followsOf } from '../domain/follows';
 import { epicDeps, byId } from '../domain/plan';
 import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../domain/value';
+import { worstAsk, ASK_SEVERITY } from '../components/plan/core';
 import { teamCapacity } from '../domain/capacity';
 import { committedEpicIds } from '../domain/rhythm';
 import { useT } from '../i18n';
 import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, quarterMeta, Dialog, ErrorLine, MustChip, ValueChip, SizeCell, CapacityLine, FollowStar, Menu, MenuLabel, menuItem } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
+import { useTableSort, SortTh, SortedChip } from '../components/plan/sort';
 
 // Screen 1 — Prioriteren (docs/design.md section 19, D26/D28; Release A section 21, D42/D43). One ranked table; drag
 // or use the arrow buttons to reorder; the moved row shows an inline optional reason; unranked epics sit in a collapsed
@@ -21,6 +23,7 @@ import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 // at the top of the filter and a small star after followed titles (M8).
 const TOP_N = 10;
 // Kolomkeuze (section 24, D78): optional columns, per user per device. Title and rank always show.
+// Section 27 (D89): the optional columns can be reordered from the same menu; `order` is stored with the choice.
 const COLS = [
   { id: 'team', label: 'Team', on: true },
   { id: 'owner', label: 'Owner', on: true },
@@ -29,10 +32,22 @@ const COLS = [
   { id: 'deps', label: 'Dependencies', on: true },
   { id: 'goal', label: 'Strategic goal', on: false },
 ];
+// One class per column for header and cells alike (D90): same padding, same alignment, so headings never touch.
+const COL_CLASS = { team: 'w-44 text-left', owner: 'w-36 text-left', value: 'w-24 text-center', size: 'w-44 text-left', deps: 'w-72 text-left', goal: 'w-44 text-left' };
 const COLS_KEY = 'kp.prioCols';
-const defaultCols = () => Object.fromEntries(COLS.map((c) => [c.id, c.on]));
-// Stored choices for columns that no longer exist (Aantal merged into Afhankelijkheden, item F) are dropped.
-const readCols = () => { try { const saved = JSON.parse(localStorage.getItem(COLS_KEY) || '{}'); return { ...defaultCols(), ...Object.fromEntries(Object.entries(saved).filter(([k]) => COLS.some((c) => c.id === k))) }; } catch { return defaultCols(); } };
+const COL_IDS = COLS.map((c) => c.id);
+const defaultCols = () => ({ on: Object.fromEntries(COLS.map((c) => [c.id, c.on])), order: [...COL_IDS] });
+// Stored shape: { on: { id: bool }, order: [id] }. The older shape { id: bool } (section 24) is read as `on`; choices for
+// columns that no longer exist (Aantal, item F) are dropped and missing columns are appended in default order.
+const readCols = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLS_KEY) || '{}');
+    const base = defaultCols();
+    const on = saved.on && typeof saved.on === 'object' ? saved.on : saved;
+    const order = Array.isArray(saved.order) ? saved.order.filter((id, i, a) => COL_IDS.includes(id) && a.indexOf(id) === i) : [];
+    return { on: { ...base.on, ...Object.fromEntries(Object.entries(on).filter(([k, v]) => COL_IDS.includes(k) && typeof v === 'boolean')) }, order: [...order, ...COL_IDS.filter((id) => !order.includes(id))] };
+  } catch { return defaultCols(); }
+};
 const writeCols = (v) => { try { localStorage.setItem(COLS_KEY, JSON.stringify(v)); } catch { /* private mode */ } };
 export function PrioritizeView() {
   const { state, actor, quarter, run } = usePlan();
@@ -47,7 +62,15 @@ export function PrioritizeView() {
   const [err, setErr] = useState(null);
   const [adding, setAdding] = useState(false);
   const [cols, setCols] = useState(readCols);
-  const toggleCol = (id) => setCols((c) => { const n = { ...c, [id]: !c[id] }; writeCols(n); return n; });
+  // Generic sorting (D99): a temporary view; reordering pauses while sorted.
+  const { sort, toggle: toggleSort, clear: clearSort, apply: applySort } = useTableSort('prioriteren', actor.id);
+  const toggleCol = (id) => setCols((c) => { const n = { ...c, on: { ...c.on, [id]: !c.on[id] } }; writeCols(n); return n; });
+  const moveCol = (id, delta) => setCols((c) => {
+    const i = c.order.indexOf(id); const j = i + delta;
+    if (i < 0 || j < 0 || j >= c.order.length) return c;
+    const order = [...c.order]; order.splice(i, 1); order.splice(j, 0, id);
+    const n = { ...c, order }; writeCols(n); return n;
+  });
   const pendingRef = useRef(pending); pendingRef.current = pending;
   const runRef = useRef(run); runRef.current = run;
   const quarterRef = useRef(quarter); quarterRef.current = quarter;
@@ -59,8 +82,9 @@ export function PrioritizeView() {
   const teams = useMemo(() => byId(state.teams), [state.teams]);
   const themes = useMemo(() => byId(state.themes), [state.themes]);
   const model = state.settings.valueModel || 'none';
-  const show = (id) => !!cols[id] && (id !== 'value' || model !== 'none');
-  const nCols = 4 + COLS.filter((c) => show(c.id)).length; // drag, rank, title, reorder + optional
+  const show = (id) => !!cols.on[id] && (id !== 'value' || model !== 'none');
+  const shown = cols.order.filter(show);
+  const nCols = 4 + shown.length; // drag, rank, title, reorder + optional
   const tbodyRef = useRef(null);
   const rectsRef = useRef(new Map());
   // FLIP: rows that changed vertical position since the last paint glide there instead of snapping.
@@ -92,7 +116,8 @@ export function PrioritizeView() {
   const followedN = plansQ.filter((p) => followed.has(p.epicId)).length;
   // Searching or filtering (team or goal) hides rows, so the visible order is no longer 1..n: reordering pauses.
   const searching = query.trim().length > 0 || filter !== '';
-  const canDrag = mayRank && !searching;
+  const sorted = !!sort;
+  const canDrag = mayRank && !searching && !sorted;
   const [fKind, fId] = filter.split(':');
   const match = (p) => {
     const e = epics.get(p.epicId);
@@ -134,6 +159,14 @@ export function PrioritizeView() {
     const deps = epicDeps(state, e.id, quarter.id);
     const isMoved = pending?.movedId === p.id;
     const dragging = dragId === p.id;
+    const cell = {
+      team: () => teams.get(e.teamId)?.name,
+      owner: () => e.ownerName,
+      value: () => <ValueChip model={model} score={valueScore(model, e.value, p)} />,
+      size: () => <SizeCell size={p.size} low={p.effortLow} high={p.effortHigh} settings={state.settings} />,
+      deps: () => <WorstIssue deps={deps} teams={teams} />,
+      goal: () => themes.get(e.themeId)?.name,
+    };
     return (
       <React.Fragment key={p.id}>
         <tr id={`row-${p.id}`} data-plan={p.id} tabIndex={0} draggable={canDrag && inList} aria-selected={openEpic === e.id || undefined}
@@ -149,25 +182,21 @@ export function PrioritizeView() {
           }}
           className={`group relative h-row cursor-pointer transition-base focus-ring-inset ${dragging ? 'opacity-40' : ''} ${overId === p.id && dragId !== p.id ? 'shadow-[inset_0_2px_0_0_var(--color-accent-500)]' : ''} ${flashId === p.id ? 'anim-flash' : isMoved ? 'bg-accent-50' : 'hover:bg-surface-2'}`}>
           <td className="w-7 pl-2">
-            {canDrag && inList ? <span title={t('Drag, or Alt+↑/↓')}><GripVertical size={14} className="text-muted group-hover:text-ink" aria-hidden="true" /></span> : null}
+            {canDrag && inList ? <span title={t('Drag, or Alt+↑/↓')}><GripVertical size={14} className="text-muted group-hover:text-ink" aria-hidden="true" /></span>
+              : sorted && mayRank && inList ? <span title={t('Drag works in rank order')}><GripVertical size={14} className="text-faint opacity-50" aria-hidden="true" /></span> : null}
           </td>
-          <td className="w-10 pr-2"><RankNo rank={inList ? index + 1 : null} size="sm" /></td>
-          <td className="pr-3 min-w-0">
+          <td className="w-10 px-1 text-center"><RankNo rank={inList ? index + 1 : null} size="sm" /></td>
+          <td className="px-3 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className={`text-body truncate ${muted ? 'text-muted' : 'text-ink'}`}>{e.title}</span>
               <FollowStar on={followed.has(e.id)} />
               <MustChip must={effectiveMust(e, themes.get(e.themeId))} className="shrink-0" />
             </div>
           </td>
-          {show('team') && <td className="w-44 pr-3 text-label text-muted truncate">{teams.get(e.teamId)?.name}</td>}
-          {show('owner') && <td className="w-36 pr-3 text-label text-muted truncate">{e.ownerName}</td>}
-          {show('value') && <td className="w-14 pr-2"><ValueChip model={model} score={valueScore(model, e.value, p)} /></td>}
-          {show('size') && <td className="w-40 pr-3"><SizeCell size={p.size} low={p.effortLow} high={p.effortHigh} settings={state.settings} /></td>}
-          {show('deps') && <td className="w-72 pr-3"><WorstIssue deps={deps} teams={teams} /></td>}
-          {show('goal') && <td className="w-44 pr-3 text-label text-muted truncate">{themes.get(e.themeId)?.name}</td>}
-          <td className="w-20 pr-2">
+          {shown.map((id) => <td key={id} className={`${COL_CLASS[id]} px-3 ${id === 'team' || id === 'owner' || id === 'goal' ? 'text-label text-muted truncate' : ''}`}>{cell[id]()}</td>)}
+          <td className="w-20 px-2">
             {mayRank && (inList ? (
-              <span className={`inline-flex gap-0.5 transition-base ${searching ? 'invisible' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}>
+              <span className={`inline-flex gap-0.5 transition-base ${searching || sorted ? 'invisible' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}>
                 <button className={cls.icon} aria-label={t('Move up')} disabled={index === 0} onClick={() => nudge(p.id, -1)}><ArrowUp size={14} /></button>
                 <button className={cls.icon} aria-label={t('Move down')} disabled={index === order.length - 1} onClick={() => nudge(p.id, 1)}><ArrowDown size={14} /></button>
               </span>
@@ -186,7 +215,18 @@ export function PrioritizeView() {
     );
   };
 
-  const visible = order.filter(match);
+  // Sort accessors per column (D99); the default order is the rank.
+  const accessors = {
+    title: (p) => epics.get(p.epicId)?.title,
+    team: (p) => teams.get(epics.get(p.epicId)?.teamId)?.name,
+    owner: (p) => epics.get(p.epicId)?.ownerName || null,
+    value: (p) => { const e = epics.get(p.epicId); const v = valueScore(model, e?.value, p); return v == null ? null : model === 'simple' ? ({ high: 3, medium: 2, low: 1 }[v] ?? 0) : Number(v); },
+    size: (p) => (p.effortHigh > 0 ? Number(p.effortHigh) : null),
+    deps: (p) => { const d = epicDeps(state, p.epicId, quarter.id); return d.length ? ASK_SEVERITY[worstAsk(d)] * 100 + d.length : null; },
+    goal: (p) => themes.get(epics.get(p.epicId)?.themeId)?.name || null,
+  };
+  const COL_LABEL = { title: t('Epic'), ...Object.fromEntries(COLS.map((c) => [c.id, t(c.label)])) };
+  const visible = applySort(order.filter(match), accessors);
   const visibleUnranked = unranked.filter(match);
   // Uitvoering / Afgesloten (item D, D80): the ranked list splits into "Toegezegd dit kwartaal" and a muted
   // "Niet toegezegd" group; rank numbers stay. Planning shows one list.
@@ -210,13 +250,17 @@ export function PrioritizeView() {
             <optgroup label={t('Teams')}>{state.teams.map((x) => <option key={x.id} value={`team:${x.id}`}>{x.name}</option>)}</optgroup>
             {goals.length > 0 && <optgroup label={t('Goals')}>{goals.map((x) => <option key={x.id} value={`goal:${x.id}`}>{x.name}</option>)}<option value="goal:none">{t('Without goal')}</option></optgroup>}
           </select>
-          <Menu ariaLabel={t('Columns')} width="w-56" button={({ ref, toggle, open, ...a }) => (
+          <Menu ariaLabel={t('Columns')} width="w-64" button={({ ref, toggle, open, ...a }) => (
             <button ref={ref} onClick={toggle} {...a} className={cls.secondary} data-tour="columns"><Columns3 size={14} aria-hidden="true" />{t('Columns')}</button>)}>
             <MenuLabel>{t('Columns')}</MenuLabel>
-            {COLS.filter((c) => !c.needsModel || model !== 'none').map((c) => (
-              <button key={c.id} role="menuitemcheckbox" aria-checked={!!cols[c.id]} className={menuItem} onClick={() => toggleCol(c.id)}>
-                <span className="w-4 inline-flex justify-center">{cols[c.id] && <Check size={14} aria-hidden="true" />}</span>{t(c.label)}
-              </button>
+            {cols.order.map((id) => COLS.find((c) => c.id === id)).filter((c) => !c.needsModel || model !== 'none').map((c, i, list) => (
+              <div key={c.id} className="flex items-center gap-0.5">
+                <button role="menuitemcheckbox" aria-checked={!!cols.on[c.id]} className={`${menuItem} flex-1 min-w-0`} onClick={() => toggleCol(c.id)}>
+                  <span className="w-4 inline-flex justify-center shrink-0">{cols.on[c.id] && <Check size={14} aria-hidden="true" />}</span><span className="truncate">{t(c.label)}</span>
+                </button>
+                <button type="button" className={`${cls.icon} !w-6 !h-6 shrink-0`} aria-label={`${t('Move left')}: ${t(c.label)}`} title={t('Move left')} disabled={i === 0} onClick={() => moveCol(c.id, -1)}><ArrowLeft size={13} /></button>
+                <button type="button" className={`${cls.icon} !w-6 !h-6 shrink-0`} aria-label={`${t('Move right')}: ${t(c.label)}`} title={t('Move right')} disabled={i === list.length - 1} onClick={() => moveCol(c.id, 1)}><ArrowRight size={13} /></button>
+              </div>
             ))}
           </Menu>
           <label className="relative"><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-faint" aria-hidden="true" /><input type="search" className={`${cls.input} !w-52 !pl-7`} placeholder={t('Search')} aria-label={t('Search epics')} value={query} onChange={(e) => setQuery(e.target.value)} /></label>
@@ -249,6 +293,7 @@ export function PrioritizeView() {
         );
       })()}
 
+      {sort && <p className="mb-3 flex items-center gap-2 min-h-7"><SortedChip sort={sort} labels={COL_LABEL} onClear={clearSort} /></p>}
       {teamCap && <p className="mb-3 flex items-center gap-2 min-h-7" data-tour="team-capacity"><span className="text-label font-medium text-ink">{teams.get(fId)?.name}</span><CapacityLine cap={teamCap} compact /></p>}
 
       {plansQ.length === 0 ? (
@@ -259,15 +304,10 @@ export function PrioritizeView() {
             <thead>
               <tr className="text-caption text-muted text-left border-b border-border">
                 <th className="h-9 w-7" scope="col"><span className="sr-only">{t('Drag')}</span></th>
-                <th className="w-10 pr-2 font-medium" scope="col"><span className="inline-flex w-6 justify-center">#</span></th>
-                <th className="font-medium" scope="col">{t('Epic')}</th>
-                {show('team') && <th className="w-44 font-medium" scope="col">{t('Team')}</th>}
-                {show('owner') && <th className="w-36 font-medium" scope="col">{t('Owner')}</th>}
-                {show('value') && <th className="w-14 font-medium" scope="col">{t('Value')}</th>}
-                {show('size') && <th className="w-40 font-medium" scope="col">{t('Size')}</th>}
-                {show('deps') && <th className="w-72 font-medium" scope="col">{t('Dependencies')}</th>}
-                {show('goal') && <th className="w-44 font-medium" scope="col">{t('Strategic goal')}</th>}
-                <th className="w-20" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
+                <th className="w-10 px-1 text-center font-medium" scope="col">#</th>
+                <SortTh col="title" label={t('Epic')} sort={sort} onToggle={toggleSort} className="px-3 font-medium" />
+                {shown.map((id) => <SortTh key={id} col={id} label={t(COLS.find((c) => c.id === id).label)} sort={sort} onToggle={toggleSort} className={`${COL_CLASS[id]} px-3 font-medium whitespace-nowrap`} />)}
+                <th className="w-20 px-2" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
               </tr>
             </thead>
             <tbody ref={tbodyRef} className="divide-y divide-border">
@@ -279,7 +319,7 @@ export function PrioritizeView() {
             <div className="border-t border-border px-3 py-2 bg-surface-2">
               <Disclosure summary={<>{t('Backlog')} <span className="tnum">({unranked.length})</span></>}>
                 <table className="w-full text-body" aria-label={t('Backlog')}>
-                  <tbody className="divide-y divide-border">{visibleUnranked.map((p, i) => renderRow(p, i, false))}</tbody>
+                  <tbody className="divide-y divide-border">{applySort(visibleUnranked, accessors).map((p, i) => renderRow(p, i, false))}</tbody>
                 </table>
               </Disclosure>
             </div>
