@@ -1049,4 +1049,6 @@ export const nl = {
   'Columns': 'Kolommen',
   'Number of dependencies': 'Aantal afhankelijkheden',
   'Count': 'Aantal',
+  // Uitvoering feedback (section 25)
+  'In execution': 'In uitvoering',
 };

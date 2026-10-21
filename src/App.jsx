@@ -3,7 +3,7 @@ import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid, P
 import { PlanProvider, usePlan } from './context/PlanContext';
 import { useAuth } from './context/AuthContext';
 import { DATA_SOURCE, isAdmin } from './data/repository';
-import { quarterLabel, PHASES, cyclePhase, STEPS, STEP_LABEL, stepForPhase } from './domain/model';
+import { quarterLabel, PHASES, cyclePhase, STEPS, STEP_LABEL, stepForPhase, PHASE_CHIP } from './domain/model';
 import { LoginView } from './views/LoginView';
 import { PrioritizeView } from './views/PrioritizeView';
 import { DependenciesView } from './views/DependenciesView';
@@ -22,7 +22,7 @@ import { ErrorBoundary } from './components/plan/ErrorBoundary';
 import { OnboardingWizard } from './components/plan/OnboardingWizard';
 import { TourPanel } from './components/plan/TourPanel';
 import { SCENARIOS } from './components/plan/tourScenarios';
-import { Menu, MenuLabel, MenuSep, menuItem, cls } from './components/plan/core';
+import { Menu, MenuLabel, MenuSep, menuItem, cls, toneClass, toneBorder } from './components/plan/core';
 import { LiveIndicator } from './components/plan/LiveIndicator';
 import { useT, LANGUAGES } from './i18n';
 
@@ -150,7 +150,7 @@ function ShellInner({ ctx, onSignOut }) {
           </nav>
 
           <div className="ml-auto md:ml-0 md:justify-self-end min-w-0 flex items-center gap-2">
-            {quarter && <span className="hidden md:inline-flex items-center h-8 px-2 text-caption text-muted whitespace-nowrap" title={t('Cycle phase')} data-tour="cycle">{t(phase)}</span>}
+            {quarter && <span className={`hidden md:inline-flex items-center h-6 px-2 rounded-full border text-caption font-medium whitespace-nowrap ${toneClass(PHASE_CHIP[phase].tone)} ${toneBorder(PHASE_CHIP[phase].tone)}`} title={t('Cycle phase')} data-tour="cycle">{t(PHASE_CHIP[phase].label)}</span>}
             {dataSource !== 'mock' && <LiveIndicator />}
             <label className="flex items-center gap-1.5 text-label text-muted">
               <span className="sr-only">{t('Quarter')}</span>
