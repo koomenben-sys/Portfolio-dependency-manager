@@ -8,10 +8,11 @@ import { teamCapacity } from '../domain/capacity';
 import { planFor, phaseAllows, byId } from '../domain/plan';
 import { CERTAINTIES, CERTAINTY_META, sizeRange } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, quarterMeta, fmtDay, ErrorLine, Disclosure, Dialog, toneClass, normAsk, SizePicker, SizeCell, FollowStar, FollowOnlyToggle, PostLockMark } from '../components/plan/core';
+import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, quarterMeta, fmtDay, ErrorLine, Disclosure, Dialog, toneClass, normAsk, ASK_SEVERITY, SizePicker, SizeCell, FollowStar, FollowOnlyToggle, PostLockMark } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 import { useTourNudge } from '../components/plan/TourPanel';
+import { useTableSort, SortButton, SortedChip } from '../components/plan/sort';
 
 // Screen 2 — Afhankelijkheden, per team like the Feb version (docs/design.md section 19, D26/D29/D31; iteration 1).
 // "Wij vragen": our epics in rank order with their asks and an inline "+ Verzoek".
@@ -57,8 +58,13 @@ export function DependenciesView() {
   const followOk = (epicId) => !(agreed && followOnly) || followed.has(epicId);
   const inFilter = (d) => (!filter || normAsk(d.response) === filter) && followOk(d.epicId);
   const rankOf = (d) => planFor(state, d.epicId, quarter.id)?.rank ?? 1e9;
-  const incomingSorted = [...incoming].filter(inFilter).sort((a, b) => rankOf(a) - rankOf(b) || a.createdAt.localeCompare(b.createdAt));
-  const outgoingSorted = [...outgoing].filter(inFilter).sort((a, b) => rankOf(a) - rankOf(b) || a.createdAt.localeCompare(b.createdAt));
+  // Generic sorting (D99) on both lists; the default order is the rank of the epic.
+  const sortOut = useTableSort('afhankelijkheden-wij', actor.id);
+  const sortIn = useTableSort('afhankelijkheden-ons', actor.id);
+  const accessors = (teamOf) => ({ ask: (d) => d.ask, team: (d) => teams.get(teamOf(d))?.name, size: (d) => (d.effortHigh > 0 ? Number(d.effortHigh) : null), answer: (d) => ASK_SEVERITY[normAsk(d.response)] });
+  const byRank = (a, b) => rankOf(a) - rankOf(b) || a.createdAt.localeCompare(b.createdAt);
+  const incomingSorted = sortIn.apply([...incoming].filter(inFilter).sort(byRank), accessors((d) => d.requesterTeamId));
+  const outgoingSorted = sortOut.apply([...outgoing].filter(inFilter).sort(byRank), accessors((d) => d.providerTeamId));
   const ourPlans = state.plans.filter((p) => p.quarterId === quarter.id && epics.get(p.epicId)?.teamId === teamId && followOk(p.epicId)).sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
   const followedInQuarter = state.plans.filter((p) => p.quarterId === quarter.id && followed.has(p.epicId)).length;
   const withoutAsks = ourPlans.filter((p) => !outgoing.some((d) => d.epicId === p.epicId));
@@ -101,6 +107,7 @@ export function DependenciesView() {
           <div className="mt-4" data-tour="outgoing">
             {ourPlans.length === 0 ? <div className={cls.card}><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'No epics for this team in this quarter.')}</EmptyLine></div> : (
               <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
+                <ListHead sort={sortOut} teamLabel={t('To')} />
                 {outgoingSorted.map((d) => <OutgoingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.providerTeamId)} mayWrite={mayAsk} locked={locked} act={act} followed={followed.has(d.epicId)} onOpen={() => setOpenEpic(d.epicId)} />)}
                 {outgoingSorted.length === 0 && <li><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'Nothing here.')}</EmptyLine></li>}
                 {mayAsk && <AddAskRow plans={ourPlans} epics={epics} locked={locked} act={act} />}
@@ -127,6 +134,7 @@ export function DependenciesView() {
             {!answersOpen && !agreed && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
             {incoming.length === 0 ? <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div> : (
               <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
+                <ListHead sort={sortIn} teamLabel={t('From')} />
                 {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} act={act} followed={followed.has(d.epicId)} onOpen={() => setOpenEpic(d.epicId)} />)}
                 {incomingSorted.length === 0 && <li><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'Nothing here.')}</EmptyLine></li>}
               </ul>
@@ -266,6 +274,21 @@ function AskRow({ dep, epic, rank, team, direction, followed, onOpen, right, bel
         </div>
       </div>
       {below}
+    </li>
+  );
+}
+// Header row of an ask list (D99): # · Verzoek · Aan|Van · Maat · Antwoord, each a sort button; the chip when sorted.
+function ListHead({ sort, teamLabel }) {
+  const t = useT();
+  const labels = { ask: t('Ask'), team: teamLabel, size: t('Size'), answer: t('Response') };
+  return (
+    <li className="px-3 bg-surface-2 text-caption text-muted">
+      <div className="flex items-center gap-x-3 min-h-9 flex-wrap">
+        <span className="min-w-[34px] text-center font-medium">#</span>
+        <span className="flex-1 min-w-[220px] inline-flex items-center gap-3"><SortButton col="ask" label={labels.ask} sort={sort.sort} onToggle={sort.toggle} /><SortButton col="team" label={labels.team} sort={sort.sort} onToggle={sort.toggle} /></span>
+        <span className="ml-auto flex items-center gap-3"><span className="w-[148px]"><SortButton col="size" label={labels.size} sort={sort.sort} onToggle={sort.toggle} /></span><span className="w-28"><SortButton col="answer" label={labels.answer} sort={sort.sort} onToggle={sort.toggle} /></span></span>
+      </div>
+      {sort.sort && <div className="pb-2"><SortedChip sort={sort.sort} labels={labels} onClear={sort.clear} /></div>}
     </li>
   );
 }

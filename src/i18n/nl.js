@@ -1089,6 +1089,11 @@ export const nl = {
   'Only an admin can change the reporter': 'Alleen een beheerder kan de melder wijzigen',
   'Only the reporter, the action holder, the epic team or an admin can change the status': 'Alleen de melder, de actiehouder, het team van de epic of een beheerder kan de status wijzigen',
   'Edit impediment': 'Impediment bewerken',
+  'Sort by {col}': 'Sorteren op {col}',
+  'Sorted by {col}': 'Gesorteerd op {col}',
+  'Back to rank': 'Terug naar rang',
+  'Drag works in rank order': 'Slepen kan in rangvolgorde',
+  'Response': 'Antwoord',
   'Edit': 'Bewerken',
   'Note': 'Toelichting',
 };

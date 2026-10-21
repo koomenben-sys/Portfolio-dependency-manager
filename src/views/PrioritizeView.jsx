@@ -6,12 +6,14 @@ import { isLockedPhase, cyclePhase } from '../domain/model';
 import { followsOf } from '../domain/follows';
 import { epicDeps, byId } from '../domain/plan';
 import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../domain/value';
+import { worstAsk, ASK_SEVERITY } from '../components/plan/core';
 import { teamCapacity } from '../domain/capacity';
 import { committedEpicIds } from '../domain/rhythm';
 import { useT } from '../i18n';
 import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, quarterMeta, Dialog, ErrorLine, MustChip, ValueChip, SizeCell, CapacityLine, FollowStar, Menu, MenuLabel, menuItem } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
+import { useTableSort, SortTh, SortedChip } from '../components/plan/sort';
 
 // Screen 1 — Prioriteren (docs/design.md section 19, D26/D28; Release A section 21, D42/D43). One ranked table; drag
 // or use the arrow buttons to reorder; the moved row shows an inline optional reason; unranked epics sit in a collapsed
@@ -60,6 +62,8 @@ export function PrioritizeView() {
   const [err, setErr] = useState(null);
   const [adding, setAdding] = useState(false);
   const [cols, setCols] = useState(readCols);
+  // Generic sorting (D99): a temporary view; reordering pauses while sorted.
+  const { sort, toggle: toggleSort, clear: clearSort, apply: applySort } = useTableSort('prioriteren', actor.id);
   const toggleCol = (id) => setCols((c) => { const n = { ...c, on: { ...c.on, [id]: !c.on[id] } }; writeCols(n); return n; });
   const moveCol = (id, delta) => setCols((c) => {
     const i = c.order.indexOf(id); const j = i + delta;
@@ -112,7 +116,8 @@ export function PrioritizeView() {
   const followedN = plansQ.filter((p) => followed.has(p.epicId)).length;
   // Searching or filtering (team or goal) hides rows, so the visible order is no longer 1..n: reordering pauses.
   const searching = query.trim().length > 0 || filter !== '';
-  const canDrag = mayRank && !searching;
+  const sorted = !!sort;
+  const canDrag = mayRank && !searching && !sorted;
   const [fKind, fId] = filter.split(':');
   const match = (p) => {
     const e = epics.get(p.epicId);
@@ -177,7 +182,8 @@ export function PrioritizeView() {
           }}
           className={`group relative h-row cursor-pointer transition-base focus-ring-inset ${dragging ? 'opacity-40' : ''} ${overId === p.id && dragId !== p.id ? 'shadow-[inset_0_2px_0_0_var(--color-accent-500)]' : ''} ${flashId === p.id ? 'anim-flash' : isMoved ? 'bg-accent-50' : 'hover:bg-surface-2'}`}>
           <td className="w-7 pl-2">
-            {canDrag && inList ? <span title={t('Drag, or Alt+↑/↓')}><GripVertical size={14} className="text-muted group-hover:text-ink" aria-hidden="true" /></span> : null}
+            {canDrag && inList ? <span title={t('Drag, or Alt+↑/↓')}><GripVertical size={14} className="text-muted group-hover:text-ink" aria-hidden="true" /></span>
+              : sorted && mayRank && inList ? <span title={t('Drag works in rank order')}><GripVertical size={14} className="text-faint opacity-50" aria-hidden="true" /></span> : null}
           </td>
           <td className="w-10 px-1 text-center"><RankNo rank={inList ? index + 1 : null} size="sm" /></td>
           <td className="px-3 min-w-0">
@@ -190,7 +196,7 @@ export function PrioritizeView() {
           {shown.map((id) => <td key={id} className={`${COL_CLASS[id]} px-3 ${id === 'team' || id === 'owner' || id === 'goal' ? 'text-label text-muted truncate' : ''}`}>{cell[id]()}</td>)}
           <td className="w-20 px-2">
             {mayRank && (inList ? (
-              <span className={`inline-flex gap-0.5 transition-base ${searching ? 'invisible' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}>
+              <span className={`inline-flex gap-0.5 transition-base ${searching || sorted ? 'invisible' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}>
                 <button className={cls.icon} aria-label={t('Move up')} disabled={index === 0} onClick={() => nudge(p.id, -1)}><ArrowUp size={14} /></button>
                 <button className={cls.icon} aria-label={t('Move down')} disabled={index === order.length - 1} onClick={() => nudge(p.id, 1)}><ArrowDown size={14} /></button>
               </span>
@@ -209,7 +215,18 @@ export function PrioritizeView() {
     );
   };
 
-  const visible = order.filter(match);
+  // Sort accessors per column (D99); the default order is the rank.
+  const accessors = {
+    title: (p) => epics.get(p.epicId)?.title,
+    team: (p) => teams.get(epics.get(p.epicId)?.teamId)?.name,
+    owner: (p) => epics.get(p.epicId)?.ownerName || null,
+    value: (p) => { const e = epics.get(p.epicId); const v = valueScore(model, e?.value, p); return v == null ? null : model === 'simple' ? ({ high: 3, medium: 2, low: 1 }[v] ?? 0) : Number(v); },
+    size: (p) => (p.effortHigh > 0 ? Number(p.effortHigh) : null),
+    deps: (p) => { const d = epicDeps(state, p.epicId, quarter.id); return d.length ? ASK_SEVERITY[worstAsk(d)] * 100 + d.length : null; },
+    goal: (p) => themes.get(epics.get(p.epicId)?.themeId)?.name || null,
+  };
+  const COL_LABEL = { title: t('Epic'), ...Object.fromEntries(COLS.map((c) => [c.id, t(c.label)])) };
+  const visible = applySort(order.filter(match), accessors);
   const visibleUnranked = unranked.filter(match);
   // Uitvoering / Afgesloten (item D, D80): the ranked list splits into "Toegezegd dit kwartaal" and a muted
   // "Niet toegezegd" group; rank numbers stay. Planning shows one list.
@@ -276,6 +293,7 @@ export function PrioritizeView() {
         );
       })()}
 
+      {sort && <p className="mb-3 flex items-center gap-2 min-h-7"><SortedChip sort={sort} labels={COL_LABEL} onClear={clearSort} /></p>}
       {teamCap && <p className="mb-3 flex items-center gap-2 min-h-7" data-tour="team-capacity"><span className="text-label font-medium text-ink">{teams.get(fId)?.name}</span><CapacityLine cap={teamCap} compact /></p>}
 
       {plansQ.length === 0 ? (
@@ -287,8 +305,8 @@ export function PrioritizeView() {
               <tr className="text-caption text-muted text-left border-b border-border">
                 <th className="h-9 w-7" scope="col"><span className="sr-only">{t('Drag')}</span></th>
                 <th className="w-10 px-1 text-center font-medium" scope="col">#</th>
-                <th className="px-3 font-medium" scope="col">{t('Epic')}</th>
-                {shown.map((id) => <th key={id} className={`${COL_CLASS[id]} px-3 font-medium whitespace-nowrap`} scope="col">{t(COLS.find((c) => c.id === id).label)}</th>)}
+                <SortTh col="title" label={t('Epic')} sort={sort} onToggle={toggleSort} className="px-3 font-medium" />
+                {shown.map((id) => <SortTh key={id} col={id} label={t(COLS.find((c) => c.id === id).label)} sort={sort} onToggle={toggleSort} className={`${COL_CLASS[id]} px-3 font-medium whitespace-nowrap`} />)}
                 <th className="w-20 px-2" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
               </tr>
             </thead>
@@ -301,7 +319,7 @@ export function PrioritizeView() {
             <div className="border-t border-border px-3 py-2 bg-surface-2">
               <Disclosure summary={<>{t('Backlog')} <span className="tnum">({unranked.length})</span></>}>
                 <table className="w-full text-body" aria-label={t('Backlog')}>
-                  <tbody className="divide-y divide-border">{visibleUnranked.map((p, i) => renderRow(p, i, false))}</tbody>
+                  <tbody className="divide-y divide-border">{applySort(visibleUnranked, accessors).map((p, i) => renderRow(p, i, false))}</tbody>
                 </table>
               </Disclosure>
             </div>

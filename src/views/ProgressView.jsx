@@ -3,7 +3,7 @@ import { Plus, Lock, Pencil, TriangleAlert } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { isPlanner, isAdmin, canWriteTeam, canChangeImpediment } from '../data/repository';
 import { planFor, byId, daysSince } from '../domain/plan';
-import { hasSignal, inExecution, quarterWeek, openImpediments, signalOf, needsConfirmation, isEscalated, newSinceLock, epicDeadline, weekOf, IMPEDIMENT_STATUSES, IMPEDIMENT_STATUS_META } from '../domain/rhythm';
+import { hasSignal, inExecution, quarterWeek, openImpediments, signalOf, needsConfirmation, isEscalated, newSinceLock, epicDeadline, weekOf, SIGNAL_META, IMPEDIMENT_STATUSES, IMPEDIMENT_STATUS_META } from '../domain/rhythm';
 import { effectiveMust } from '../domain/value';
 import { followsOf, readFollowOnly, writeFollowOnly } from '../domain/follows';
 import { useT } from '../i18n';
@@ -11,6 +11,7 @@ import { cls, ViewHeader, quarterMeta, RankNo, SignalChip, SignalControl, Inline
 import { CloseQuarterDialog } from '../components/plan/CycleActions';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
+import { useTableSort, SortTh, SortedChip } from '../components/plan/sort';
 
 // Step 3 during Uitvoering — Voortgang (docs/design.md section 23, D65; acceptance M5). One top line, then sections
 // that hide when empty: Deadline in gevaar (signals on committed asks), Impediments (not resolved, kind 'impediment'),
@@ -34,6 +35,11 @@ export function ProgressView() {
   const [editing, setEditing] = useState(null); // impediment
   const [closing, setClosing] = useState(false);
   const [selectedId, setSelectedId] = useState(null); // "Deadline in gevaar" row shown on the quarter bar (D96)
+  // Generic sorting per table (D99); the default order is the rank (impediments: escalated first, then oldest).
+  const sortRisk = useTableSort('voortgang-deadline', actor.id);
+  const sortImp = useTableSort('voortgang-impediments', actor.id);
+  const sortNew = useTableSort('voortgang-nieuw', actor.id);
+  const sortOurs = useTableSort('voortgang-toezeggingen', actor.id);
   const [err, setErr] = useState(null);
   const [followOnly, setFollowOnlyState] = useState(() => readFollowOnly(actor.id));
   useEffect(() => { setFollowOnlyState(readFollowOnly(actor.id)); }, [actor.id]);
@@ -56,9 +62,12 @@ export function ProgressView() {
   const deps = state.dependencies.filter((d) => d.quarterId === quarter.id);
   const atRiskAll = deps.filter(hasSignal);
   const impsAll = openImpediments(state, quarter.id);
-  const atRisk = atRiskAll.filter((d) => keep(d.epicId) && inTeam(d)).sort(byRank);
-  const imps = impsAll.filter((i) => keep(i.epicId) && (!teamId || teamOf(i.epicId) === teamId));
-  const fresh = newSinceLock(state, quarter).filter((p) => keep(p.epicId)); // epics added after the lock (D97)
+  const epicTitle = (epicId) => epics.get(epicId)?.title;
+  const teamName = (id) => teams.get(id)?.name;
+  const sigOrder = (d) => SIGNAL_META[signalOf(d)].order;
+  const atRisk = sortRisk.apply(atRiskAll.filter((d) => keep(d.epicId) && inTeam(d)).sort(byRank), { main: (d) => epicTitle(d.epicId), team: (d) => teamName(d.providerTeamId), state: sigOrder, note: (d) => d.signalNote || null });
+  const imps = sortImp.apply(impsAll.filter((i) => keep(i.epicId) && (!teamId || teamOf(i.epicId) === teamId)), { main: (i) => i.title, team: (i) => teamName(teamOf(i.epicId)), state: (i) => IMPEDIMENT_STATUSES.indexOf(i.status), note: (i) => i.actionOwnerName || null });
+  const fresh = sortNew.apply(newSinceLock(state, quarter).filter((p) => keep(p.epicId)), { main: (p) => epicTitle(p.epicId), team: (p) => teamName(teamOf(p.epicId)), state: (p) => epics.get(p.epicId)?.ownerName || null, note: (p) => p.createdAt }); // epics added after the lock (D97)
   const followedInQuarter = state.plans.filter((p) => p.quarterId === quarter.id && followed.has(p.epicId)).length;
   const { week, total } = quarterWeek(quarter, state.settings);
   const executing = inExecution(quarter.phase);
@@ -66,19 +75,23 @@ export function ProgressView() {
   const mayClose = isAdmin(actor) && executing;
   // "Onze toezeggingen" (section 26, D86): every committed ask the chosen team provides (all teams: every committed
   // ask), with the signal control for whoever may write that provider team. Viewers see chips only.
-  const ours = deps.filter((d) => normAsk(d.response) === 'accepted' && keep(d.epicId) && (!teamId || d.providerTeamId === teamId)).sort(byRank);
+  const ours = sortOurs.apply(deps.filter((d) => normAsk(d.response) === 'accepted' && keep(d.epicId) && (!teamId || d.providerTeamId === teamId)).sort(byRank), { main: (d) => d.ask, team: (d) => teamName(d.requesterTeamId), state: sigOrder, note: (d) => d.signalNote || null });
   const maySignal = (d) => executing && canWriteTeam(actor, d.providerTeamId);
   const title = (epicId, className = '') => {
     const e = epics.get(epicId);
     return <button className={`text-left hover:underline focus-ring rounded-control truncate max-w-full ${className}`} onClick={() => setOpenEpic(epicId)}>{e?.title}<FollowStar on={followed.has(epicId)} className="inline ml-1.5 -mt-0.5" /></button>;
   };
   const sectionHead = (label, n) => <h2 className="text-subtitle font-semibold mb-2">{label} <span className="text-muted font-normal tnum">({n})</span></h2>;
-  const head = (main, stateLabel, note) => (
-    <thead><tr className="text-caption text-muted border-b border-border">
-      <th scope="col" className={`${TC.rank} ${TH}`}>#</th><th scope="col" className={`${TC.main} ${TH}`}>{main}</th><th scope="col" className={`${TC.team} ${TH}`}>{t('Team')}</th>
-      <th scope="col" className={`${TC.state} ${TH}`}>{stateLabel}</th><th scope="col" className={`${TC.note} ${TH}`}>{note}</th>
-    </tr></thead>
-  );
+  const head = (main, stateLabel, note, sort) => {
+    const labels = { main, team: t('Team'), state: stateLabel, note };
+    const th = (col, extra) => <SortTh col={col} label={labels[col]} sort={sort.sort} onToggle={sort.toggle} className={`${TC[col]} ${TH} ${extra || ''}`} />;
+    return (
+      <thead>
+        {sort.sort && <tr><td colSpan={5} className="px-3 pt-2"><SortedChip sort={sort.sort} labels={labels} onClear={sort.clear} /></td></tr>}
+        <tr className="text-caption text-muted border-b border-border"><th scope="col" className={`${TC.rank} ${TH}`}>#</th>{th('main')}{th('team')}{th('state')}{th('note')}</tr>
+      </thead>
+    );
+  };
   const table = (label, children) => (
     <div className={`${cls.card} panel-table overflow-x-auto`}><table className="w-full table-fixed min-w-[900px] text-body" aria-label={label}>{children}</table></div>
   );
@@ -116,7 +129,7 @@ export function ProgressView() {
           {sectionHead(t('Deadline at risk'), atRisk.length)}
           {table(t('Deadline at risk'), (
             <>
-              {head(t('Epic'), t('Signal'), t('Note'))}
+              {head(t('Epic'), t('Signal'), t('Note'), sortRisk)}
               <tbody className="divide-y divide-border">
                 {atRisk.map((d) => (
                   <SignalTr key={d.id} dep={d} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.providerTeamId)?.name} may={maySignal(d)} act={act}
@@ -134,7 +147,7 @@ export function ProgressView() {
           {sectionHead(t('Impediments'), imps.length)}
           {table(t('Impediments'), (
             <>
-              {head(t('Impediment'), t('Status'), t('Action holder'))}
+              {head(t('Impediment'), t('Status'), t('Action holder'), sortImp)}
               <tbody className="divide-y divide-border">
                 {imps.map((i) => <ImpedimentTr key={i.id} imp={i} epic={epics.get(i.epicId)} rank={planFor(state, i.epicId, quarter.id)?.rank} title={title} act={act} onEdit={isPlanner(actor) ? () => setEditing(i) : null} />)}
               </tbody>
@@ -148,7 +161,7 @@ export function ProgressView() {
           {sectionHead(t('New unplanned work'), fresh.length)}
           {table(t('New unplanned work'), (
             <>
-              {head(t('Epic'), t('Owner'), t('Added'))}
+              {head(t('Epic'), t('Owner'), t('Added'), sortNew)}
               <tbody className="divide-y divide-border">
                 {fresh.map((p) => {
                   const e = epics.get(p.epicId);
@@ -173,7 +186,7 @@ export function ProgressView() {
           <Disclosure defaultOpen={ours.length <= 5} summary={<>{t('Our commitments')} <span className="tnum">({ours.length})</span></>}>
             {ours.length === 0 ? <div className={cls.card}><EmptyLine>{t('No commitments.')}</EmptyLine></div> : table(t('Our commitments'), (
               <>
-                {head(t('Ask'), t('Signal'), t('Note'))}
+                {head(t('Ask'), t('Signal'), t('Note'), sortOurs)}
                 <tbody className="divide-y divide-border">
                   {ours.map((d) => (
                     <SignalTr key={d.id} dep={d} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)?.name} may={maySignal(d)} act={act}
