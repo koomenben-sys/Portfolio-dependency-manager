@@ -2,6 +2,9 @@
 // so ages, deadlines and stale flags always look right. Acceptance criteria A2.
 // 2026-10-17 "less is more" reset (docs/design.md section 19): six teams, 16 epics in 2027 Q1 and 13 asks,
 // so the three core screens read calmly: the Afstemmen list has four team pairs, the matrix is 6 x 6.
+// 2026-10-21 (section 25, item K): every phase has data. 2026 Q4 (Uitvoering) carries 16 plans incl. two not
+// committed and one backlog epic, 17 asks across all teams (13 committed, 2 can't, 2 discuss), three signals
+// (two In gevaar, one Gaat niet halen with a note) and owners; 2026 Q3 (Afgesloten) has delivered flags and asks.
 import { buildBaseline } from '../domain/plan';
 
 const DAY = 86400000;
@@ -85,8 +88,14 @@ const E = [
   [32, 't-dat', 'Regulatory reporting DNB (quarterly)', 'th-reg', '', 'Fatima El Amrani', 30],
 ];
 const eid = (n) => `e-${String(n).padStart(2, '0')}`;
+// Eigenaar (item E): product owner / project manager per epic (free text); a few epics have none yet.
+const TEAM_OWNER = { 't-pay': 'Daan Vos', 't-por': 'Eva Jansen', 't-clm': 'Tom de Vries', 't-pol': 'Nienke Bos', 't-dat': 'Fatima El Amrani', 't-cld': 'Mark van Dijk' };
+const OWNER = { 3: 'Joris Smit', 11: 'Hans Peters (PM kernmigratie)', 17: 'Hans Peters (PM kernmigratie)', 12: 'Nienke Bos', 19: 'Ilse Koning (PM DORA)', 21: 'Ilse Koning (PM DORA)', 20: '', 23: '', 27: '', 28: '' };
+const ownerOf = (n, teamId) => (OWNER[n] ?? TEAM_OWNER[teamId]);
+const plannerOf = (teamId) => PERSONAS.find((p) => p.teamId === teamId)?.name || '';
 // Value (model Eenvoudig, D43) for the 2027 Q1 epics: epic -> H/M/L.
-const VALUE = { 7: 'high', 4: 'high', 21: 'high', 12: 'medium', 1: 'high', 11: 'medium', 16: 'medium', 25: 'medium', 14: 'high', 8: 'medium', 3: 'low', 17: 'medium', 2: 'low', 15: 'medium', 13: 'low', 18: 'low' };
+const VALUE = { 7: 'high', 4: 'high', 21: 'high', 12: 'medium', 1: 'high', 11: 'medium', 16: 'medium', 25: 'medium', 14: 'high', 8: 'medium', 3: 'low', 17: 'medium', 2: 'low', 15: 'medium', 13: 'low', 18: 'low',
+  32: 'high', 30: 'medium', 29: 'medium', 31: 'low', 23: 'medium', 20: 'low', 10: 'medium', 22: 'high', 9: 'high', 28: 'low' };
 const VALUE_NOTE = { 7: 'Grootste klantirritatie: schade melden duurt 4 dagen', 21: 'Toezichthouder; boete bij te laat', 3: 'Alleen verkenning dit kwartaal' };
 // OnePagers (D44): template, link, or both.
 const ONE_PAGER = {
@@ -95,9 +104,9 @@ const ONE_PAGER = {
   11: { problem: 'Het oude kernsysteem gaat per eind 2027 uit onderhoud; elke maand uitstel vergroot de kans op een niet-ondersteunde situatie.', outcome: 'Golf 2 (autoproducten) draait in het nieuwe kernsysteem; de oude schermen voor auto zijn uit.', outOfScope: 'Woon- en reisproducten volgen in golf 3. Risico: leverancierrelease schuift; netwerkconnectiviteit nog niet toegezegd.' },
 };
 const ONE_PAGER_URL = { 4: 'https://intranet.oranje.example/onepagers/self-service-polis', 19: 'https://intranet.oranje.example/onepagers/dora-ict-register' };
-const epics = E.map(([n, teamId, title, themeId, label, ownerName, reg]) => ({
+const epics = E.map(([n, teamId, title, themeId, label, _planner, reg]) => ({
   id: eid(n), refCode: `EP-${String(n).padStart(4, '0')}`, teamId, themeId: themeId || null, title, description: '',
-  ownerName, label, regulatory: reg != null, regulatoryDeadline: reg != null ? inDays(reg) : null,
+  ownerName: ownerOf(n, teamId), label, regulatory: reg != null, regulatoryDeadline: reg != null ? inDays(reg) : null,
   regulation: reg == null ? '' : /DORA/.test(title) ? 'DORA (DNB)' : /AVG/.test(title) ? 'AVG / GDPR (AP)' : /IFRS/.test(title) ? 'IFRS 17' : /WCAG/.test(title) ? 'WCAG 2.2 / EAA' : /PSD3/.test(title) ? 'PSD3' : /DNB/.test(title) ? 'DNB reporting' : 'Regulatory',
   externalSource: n % 3 === 0 || n === 7 || n === 17 ? 'azure_devops' : null,
   externalId: n % 3 === 0 || n === 7 || n === 17 ? String(48000 + n * 7) : null,
@@ -119,12 +128,14 @@ const plans = P1.map(([n, rank, effortLow, effortHigh, commitment, confidence, s
   id: `p1-${i + 1}`, epicId: eid(n), quarterId: 'q-27-1', rank, effortLow, effortHigh, commitment, confidence, size: size || null, delivered: false,
   updatedAt: ago(1 + (i % 9)),
 }));
-// Plans for 2026 Q4 (active): [epic, rank, low, high, commitment, confidence]
+// Plans for 2026 Q4 (active): [epic, rank, low, high, commitment, confidence]. Ranks 1-12 committed; 14 and 15 are
+// not committed (item D: "Niet toegezegd"); epic 20 is unranked (item I: "Backlog"). Rank 13 is added after the lock below.
 const P0 = [
   [7, 1, 8, 10, 'committed', 'medium'], [21, 2, 5, 7, 'committed', 'medium'], [16, 3, 4, 6, 'committed', 'high'],
   [32, 4, 3, 4, 'committed', 'high'], [11, 5, 12, 14, 'committed', 'medium'], [17, 6, 10, 12, 'committed', 'low'],
   [4, 7, 8, 10, 'committed', 'high'], [1, 8, 6, 8, 'committed', 'medium'], [30, 9, 6, 8, 'committed', 'medium'],
   [25, 10, 6, 8, 'committed', 'medium'], [29, 11, 5, 6, 'committed', 'high'], [31, 12, 3, 4, 'committed', 'high'],
+  [13, 14, 4, 8, 'not_committed', 'low'], [18, 15, 4, 8, 'discuss', 'low'], [20, null, 2, 4, 'draft', 'medium'],
 ];
 const plans0 = P0.map(([n, rank, effortLow, effortHigh, commitment, confidence], i) => ({
   id: `p0-${i + 1}`, epicId: eid(n), quarterId: 'q-26-4', rank, effortLow, effortHigh, commitment, confidence, size: null, delivered: false,
@@ -161,18 +172,39 @@ const D = [
   [21, 7, 't-cld', 'q-26-4', 'Pentest of the intake API', 1, 2, 'accepted', '', 35, 'S'],
   // Section 23 (M3/M5): one ask created after 2026 Q4 was locked (lockedAt = 30 days ago) -> "na vastzetten".
   [22, 23, 't-dat', 'q-26-4', 'Log export as remediation evidence', 1, 2, 'accepted', '', 8, 'S'],
+  // Section 25 (item K): the running quarter has asks across every team; answers are fixed since the lock.
+  [23, 21, 't-dat', 'q-26-4', 'Logging pipeline for incident reporting (phase 1)', 2, 4, 'accepted', '', 38, 'M'],
+  [24, 16, 't-clm', 'q-26-4', 'Claims data retention rules', 1, 2, 'accepted', '', 36, 'S'],
+  [25, 32, 't-pol', 'q-26-4', 'Policy figures for the DNB quarterly report', 1, 2, 'accepted', '', 37, 'S'],
+  [26, 4, 't-pol', 'q-26-4', 'Address change API', 2, 4, 'accepted', '', 40, 'M'],
+  [27, 1, 't-cld', 'q-26-4', 'Fraud rules for instant payouts (phase 1)', 2, 4, 'accepted', '', 39, 'M'],
+  [28, 1, 't-pol', 'q-26-4', 'Payout account data from policy admin', 1, 2, 'needs_priority_call', 'Same engineers as core migration wave 2', 34, 'S'],
+  [29, 30, 't-cld', 'q-26-4', 'Firewall rules for the new PSP', 1, 2, 'accepted', '', 41, 'S'],
+  [30, 30, 't-dat', 'q-26-4', 'Reconciliation data feed for the new PSP', 2, 4, 'declined', 'No capacity next to the DNB reporting', 33, 'M'],
+  [31, 25, 't-pol', 'q-26-4', 'Policy lookup in the mobile claims flow', 1, 2, 'accepted', '', 36, 'S'],
+  [32, 17, 't-dat', 'q-26-4', 'Network telemetry into the data platform', 1, 2, 'accepted', '', 36, 'S'],
+  [33, 29, 't-dat', 'q-26-4', 'Weather feed for storm surge forecasting', 1, 2, 'accepted', '', 35, 'S'],
+  [34, 18, 't-dat', 'q-26-4', 'Data platform workloads moved to the new cluster', 4, 8, 'declined', 'Not before the DNB reporting is out', 32, 'L'],
+  [35, 31, 't-dat', 'q-26-4', 'Premium totals for the year-end statements', 1, 2, 'needs_priority_call', 'Same sprint as the DNB report', 33, 'S'],
+  // 2026 Q3 (Afgesloten): the agreements of the closed quarter.
+  [36, 10, 't-pol', 'q-26-3', 'Inventory of legacy claims screens still in use', 1, 2, 'accepted', '', 125, 'S'],
+  [37, 9, 't-dat', 'q-26-3', 'Fraud model scoring API', 2, 4, 'accepted', '', 122, 'M'],
+  [38, 22, 't-dat', 'q-26-3', 'Secrets rotation for the data pipelines', 1, 2, 'accepted', '', 120, 'S'],
 ];
 const dependencies = D.map(([n, epicN, provider, quarterId, ask, effortLow, effortHigh, response, responseReason, created, size, certainty]) => ({
   id: `d-${n}`, refCode: `DEP-${String(n).padStart(4, '0')}`, epicId: eid(epicN),
   requesterTeamId: E.find((x) => x[0] === epicN)[1], providerTeamId: provider, quarterId, ask,
   ifDeclined: '', effortLow, effortHigh, size: size || null, certainty: certainty || 'medium', response, responseReason,
   signal: 'on_track', signalNote: '', signalAt: null, confirmedAt: null,
-  requesterName: E.find((x) => x[0] === epicN)[5], neededBy: null,
+  requesterName: plannerOf(E.find((x) => x[0] === epicN)[1]), neededBy: null,
   grantedLow: null, grantedHigh: null, deferredToQuarterId: null, createdAt: ago(created),
   respondedAt: response === 'proposed' ? null : ago(Math.max(1, created - 3)),
 }));
-// Release B (D55): in the running quarter Platform & Security flags one committed ask of Claims.
+// Release B (D55): in the running quarter Platform & Security flags one committed ask of Claims; section 25 adds
+// Polisadministratie: Gaat niet halen on the DNB figures (with a line) and In gevaar on the address change API.
 Object.assign(dependencies.find((d) => d.id === 'd-21'), { signal: 'at_risk', signalNote: 'Pentest schuift', signalAt: ago(2) });
+Object.assign(dependencies.find((d) => d.id === 'd-25'), { signal: 'wont_make', signalNote: 'Extract geblokkeerd door kernmigratie; cijfers pas na de deadline', signalAt: ago(1) });
+Object.assign(dependencies.find((d) => d.id === 'd-26'), { signal: 'at_risk', signalNote: 'Twee engineers op IFRS 17', signalAt: ago(4) });
 
 const votes = [
   { id: 'v1', teamId: 't-pay', quarterId: 'q-27-1', vote: 4, reason: '', votedAt: ago(1) },
@@ -192,7 +224,7 @@ const checkIns = [
   [11, 'medium', 'Vendor release slipping', 5], [17, 'low', 'Waiting on firewall change approval', 8],
   [4, 'high', 'Beta with 500 customers', 10], [1, 'medium', 'Sandbox integration done', 15],
   [30, 'medium', 'Cutover rehearsal planned', 22], [25, 'medium', 'Waiting on test devices', 4],
-].map(([n, confidence, note, d], i) => ({ id: `ci-${i + 1}`, epicId: eid(n), quarterId: 'q-26-4', confidence, note, authorName: E.find((x) => x[0] === n)[5], createdAt: ago(d) }));
+].map(([n, confidence, note, d], i) => ({ id: `ci-${i + 1}`, epicId: eid(n), quarterId: 'q-26-4', confidence, note, authorName: plannerOf(E.find((x) => x[0] === n)[1]), createdAt: ago(d) }));
 // Epics 29 and 31 intentionally have no check-in (stale).
 
 // Section 23 (M5): in 2026 Q4 two open impediments (IMP-0001 older than 7 days, IMP-0002 fresh); risks stay beta.
@@ -230,5 +262,7 @@ p0.commitment = 'at_risk';
 state.events.push({ id: 'ev-3', at: ago(7), actorId: 'u-pay', actorName: 'Joris Smit', action: 'commitment_changed', entity: 'plans', entityId: 'p0-9', quarterId: 'q-26-4', reason: 'PSP vendor delivered late', before: { commitment: 'committed' }, after: { commitment: 'at_risk' } });
 state.plans.push({ id: 'p0-13', epicId: eid(23), quarterId: 'q-26-4', rank: 13, effortLow: 2, effortHigh: 3, commitment: 'committed', confidence: 'medium', size: null, delivered: false, updatedAt: ago(10) });
 state.events.push({ id: 'ev-4', at: ago(2), actorId: 'u-cld', actorName: 'Mark van Dijk', action: 'signal_set', entity: 'dependencies', entityId: 'd-21', quarterId: 'q-26-4', reason: 'Pentest schuift', before: { signal: 'on_track' }, after: { signal: 'at_risk', note: 'Pentest schuift' } });
+state.events.push({ id: 'ev-5', at: ago(4), actorId: 'u-pol', actorName: 'Pieter Mulder', action: 'signal_set', entity: 'dependencies', entityId: 'd-26', quarterId: 'q-26-4', reason: 'Twee engineers op IFRS 17', before: { signal: 'on_track' }, after: { signal: 'at_risk', note: 'Twee engineers op IFRS 17' } });
+state.events.push({ id: 'ev-6', at: ago(1), actorId: 'u-pol', actorName: 'Pieter Mulder', action: 'signal_set', entity: 'dependencies', entityId: 'd-25', quarterId: 'q-26-4', reason: 'Extract geblokkeerd door kernmigratie; cijfers pas na de deadline', before: { signal: 'on_track' }, after: { signal: 'wont_make', note: 'Extract geblokkeerd door kernmigratie; cijfers pas na de deadline' } });
 
 export const seedState = () => JSON.parse(JSON.stringify(state));
