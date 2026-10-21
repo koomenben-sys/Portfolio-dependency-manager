@@ -1,7 +1,7 @@
 -- ============================================================================
 -- db/tests/rls_test.sql  -  row-level security and tenant-isolation test (BACKLOG P1, docs/design.md section 18)
 -- ----------------------------------------------------------------------------
--- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-011).
+-- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-012).
 -- The result grid shows one row per check with PASS / FAIL; the first row is the total.
 -- Plain SQL, no extension needed (no pgTAP). Re-runnable.
 --
@@ -394,6 +394,14 @@ begin
     format('with x as (update epic_follows set epic_id = %s where org_id = %s and epic_id = %s returning 1) select count(*) from x', EA2, A, EA1), '0');
   perform pg_temp.rls_check('follows', 'admin of B cannot follow an epic of A', u_other,
     format('with x as (insert into epic_follows (org_id, user_id, epic_id) values (%s, %L, %s) returning 1) select count(*) from x', A, u_other, EA1), 'error:row-level security');
+
+  -- 13. Eigenaar (012): owner_name follows epics_write (own team)
+  perform pg_temp.rls_check('owner', 'planner sets the owner on own team''s epic', u_planner,
+    format('with x as (update epics set owner_name = ''PO'' where id = %s returning 1) select count(*) from x', EA1), '1');
+  perform pg_temp.rls_check('owner', 'planner cannot set the owner on another team''s epic (0 rows)', u_planner,
+    format('with x as (update epics set owner_name = ''PO'' where id = %s returning 1) select count(*) from x', EA2), '0');
+  perform pg_temp.rls_check('owner', 'viewer cannot set an owner (0 rows)', u_viewer,
+    format('with x as (update epics set owner_name = ''PO'' where id = %s returning 1) select count(*) from x', EA1), '0');
 end $$;
 
 

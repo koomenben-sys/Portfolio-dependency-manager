@@ -112,6 +112,13 @@ export function SimpleEpicPanel({ epicId, onClose }) {
                 </select>
               ) : <span>{goalName(theme)}</span>}
             </dd>
+            {/* Eigenaar (item E): project manager / product owner, free text; editable by whoever may edit the epic. */}
+            <dt className="text-muted text-label">{t('Owner')}</dt>
+            <dd>
+              {mayEdit
+                ? <input className={cls.input} defaultValue={epic.ownerName || ''} aria-label={t('Owner')} placeholder={t('Name')} onBlur={(e) => e.target.value.trim() !== (epic.ownerName || '') && saveEpic({ ownerName: e.target.value.trim() })} />
+                : <span>{epic.ownerName || '–'}</span>}
+            </dd>
             {model !== 'none' && (
               <>
                 <dt className="text-muted text-label">{t('Value')}</dt>

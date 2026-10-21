@@ -23,6 +23,7 @@ const TOP_N = 10;
 // Kolomkeuze (section 24, D78): optional columns, per user per device. Title and rank always show.
 const COLS = [
   { id: 'team', label: 'Team', on: true },
+  { id: 'owner', label: 'Owner', on: true },
   { id: 'value', label: 'Value', on: true, needsModel: true },
   { id: 'depCount', label: 'Number of dependencies', on: false },
   { id: 'deps', label: 'Dependencies', on: true },
@@ -158,6 +159,7 @@ export function PrioritizeView() {
             </div>
           </td>
           {show('team') && <td className="w-44 pr-3 text-label text-muted truncate">{teams.get(e.teamId)?.name}</td>}
+          {show('owner') && <td className="w-36 pr-3 text-label text-muted truncate">{e.ownerName}</td>}
           {show('value') && <td className="w-14 pr-2"><ValueChip model={model} score={valueScore(model, e.value, p)} /></td>}
           {show('depCount') && <td className="w-16 pr-3 text-label text-muted tnum">{deps.length || ''}</td>}
           {show('deps') && <td className="w-64 pr-3"><WorstIssue deps={deps} teams={teams} /></td>}
@@ -259,6 +261,7 @@ export function PrioritizeView() {
                 <th className="w-10 pr-2 font-medium" scope="col"><span className="inline-flex w-6 justify-center">#</span></th>
                 <th className="font-medium" scope="col">{t('Epic')}</th>
                 {show('team') && <th className="w-44 font-medium" scope="col">{t('Team')}</th>}
+                {show('owner') && <th className="w-36 font-medium" scope="col">{t('Owner')}</th>}
                 {show('value') && <th className="w-14 font-medium" scope="col">{t('Value')}</th>}
                 {show('depCount') && <th className="w-16 font-medium" scope="col" title={t('Number of dependencies')}>{t('Count')}</th>}
                 {show('deps') && <th className="w-64 font-medium" scope="col">{t('Dependencies')}</th>}
