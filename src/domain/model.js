@@ -73,6 +73,8 @@ export const needsTalk = (response) => response === 'declined' || response === '
 // session is a moment; "Plan vastzetten" ends it). The steps in the nav follow this word (App.jsx, D64).
 export const CYCLE = { prep: 'Planning', draft: 'Planning', negotiate: 'Planning', review: 'Planning', vote: 'Planning', locked: 'Execution', active: 'Execution', closed: 'Closed' };
 export const cyclePhase = (phase) => CYCLE[phase] || 'Planning';
+// Header chip per cycle phase (owner feedback 2026-10-21, item B): label key + tone. Execution reads "In uitvoering".
+export const PHASE_CHIP = { Planning: { label: 'Planning', tone: 'neutral' }, Execution: { label: 'In execution', tone: 'ok' }, Closed: { label: 'Closed', tone: 'neutral' } };
 // Step ids per cycle phase (M2). Step 1 keeps its name; 2 and 3 change meaning with the phase.
 export const STEPS = {
   Planning: ['prioriteren', 'afhankelijkheden', 'afstemmen'],
@@ -80,6 +82,8 @@ export const STEPS = {
   Closed: ['prioriteren', 'afgestemd', 'resultaat'],
 };
 export const STEP_LABEL = { prioriteren: 'Prioritise', afhankelijkheden: 'Dependencies', afgestemd: 'Agreed', afstemmen: 'Align', voortgang: 'Progress', resultaat: 'Result' };
+// Step 1 is "Prioriteren" while planning and "Prioriteiten" once the list is fixed (owner feedback 2026-10-21, item C).
+export const stepLabel = (viewId, phase) => (viewId === 'prioriteren' && cyclePhase(phase) !== 'Planning' ? 'Priorities' : STEP_LABEL[viewId]);
 const STEP_NO = { prioriteren: 0, afhankelijkheden: 1, afgestemd: 1, afstemmen: 2, voortgang: 2, resultaat: 2, afsluiten: 2 };
 // A step hash that does not belong to the quarter's phase opens that phase's step with the same number (M2, M6).
 export function stepForPhase(viewId, phase) {

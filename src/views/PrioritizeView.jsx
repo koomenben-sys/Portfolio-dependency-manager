@@ -7,6 +7,7 @@ import { followsOf } from '../domain/follows';
 import { epicDeps, byId } from '../domain/plan';
 import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../domain/value';
 import { teamCapacity } from '../domain/capacity';
+import { committedEpicIds } from '../domain/rhythm';
 import { useT } from '../i18n';
 import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip, CapacityLine, FollowStar, Menu, MenuLabel, menuItem } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
@@ -14,7 +15,7 @@ import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 
 // Screen 1 — Prioriteren (docs/design.md section 19, D26/D28; Release A section 21, D42/D43). One ranked table; drag
 // or use the arrow buttons to reorder; the moved row shows an inline optional reason; unranked epics sit in a collapsed
-// group. Above the table one strategy line (top-10 per goal) that filters; one filter select for teams and goals.
+// "Backlog (n)" group (item I). Above the table one strategy line (top-10 per goal) that filters; one filter select for teams and goals.
 // Release B (section 22): a compact capacity line when filtered to one team (L3) and the worst signal in the
 // dependency cell (L8, inside WorstIssue). Section 23: read-only once the quarter is Afgesloten (M4); "Gevolgd (n)"
 // at the top of the filter and a small star after followed titles (M8).
@@ -22,14 +23,15 @@ const TOP_N = 10;
 // Kolomkeuze (section 24, D78): optional columns, per user per device. Title and rank always show.
 const COLS = [
   { id: 'team', label: 'Team', on: true },
+  { id: 'owner', label: 'Owner', on: true },
   { id: 'value', label: 'Value', on: true, needsModel: true },
-  { id: 'depCount', label: 'Number of dependencies', on: false },
   { id: 'deps', label: 'Dependencies', on: true },
-  { id: 'goal', label: 'Goal', on: false },
+  { id: 'goal', label: 'Strategic goal', on: false },
 ];
 const COLS_KEY = 'kp.prioCols';
 const defaultCols = () => Object.fromEntries(COLS.map((c) => [c.id, c.on]));
-const readCols = () => { try { return { ...defaultCols(), ...JSON.parse(localStorage.getItem(COLS_KEY) || '{}') }; } catch { return defaultCols(); } };
+// Stored choices for columns that no longer exist (Aantal merged into Afhankelijkheden, item F) are dropped.
+const readCols = () => { try { const saved = JSON.parse(localStorage.getItem(COLS_KEY) || '{}'); return { ...defaultCols(), ...Object.fromEntries(Object.entries(saved).filter(([k]) => COLS.some((c) => c.id === k))) }; } catch { return defaultCols(); } };
 const writeCols = (v) => { try { localStorage.setItem(COLS_KEY, JSON.stringify(v)); } catch { /* private mode */ } };
 export function PrioritizeView() {
   const { state, actor, quarter, run } = usePlan();
@@ -81,9 +83,10 @@ export function PrioritizeView() {
   const order = pending ? pending.order.map((id) => plansQ.find((p) => p.id === id)).filter(Boolean) : rankedBase;
   const orderIds = new Set(order.map((p) => p.id));
   const unranked = plansQ.filter((p) => !orderIds.has(p.id));
-  const closed = quarter.phase === 'closed'; // Afgesloten: no drag, no arrows, no "+ Epic" (M4)
+  const planning = cyclePhase(quarter.phase) === 'Planning';
+  const closed = quarter.phase === 'closed'; // Afgesloten: no drag, no arrows (M4)
   const mayRank = canRank(actor) && !closed;
-  const mayAdd = isPlanner(actor) && !closed;
+  const mayAdd = isPlanner(actor) && planning; // "+ Epic" only while planning (item G)
   const followed = followsOf(state, actor.id);
   const followedN = plansQ.filter((p) => followed.has(p.epicId)).length;
   // Searching or filtering (team or goal) hides rows, so the visible order is no longer 1..n: reordering pauses.
@@ -125,7 +128,7 @@ export function PrioritizeView() {
   };
 
   // Plain render function (not a component) so the inline reason input keeps focus across re-renders.
-  const renderRow = (p, index, inList) => {
+  const renderRow = (p, index, inList, muted = false) => {
     const e = epics.get(p.epicId); if (!e) return null;
     const deps = epicDeps(state, e.id, quarter.id);
     const isMoved = pending?.movedId === p.id;
@@ -150,15 +153,15 @@ export function PrioritizeView() {
           <td className="w-10 pr-2"><RankNo rank={inList ? index + 1 : null} size="sm" /></td>
           <td className="pr-3 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-body text-ink truncate">{e.title}</span>
+              <span className={`text-body truncate ${muted ? 'text-muted' : 'text-ink'}`}>{e.title}</span>
               <FollowStar on={followed.has(e.id)} />
               <MustChip must={effectiveMust(e, themes.get(e.themeId))} className="shrink-0" />
             </div>
           </td>
           {show('team') && <td className="w-44 pr-3 text-label text-muted truncate">{teams.get(e.teamId)?.name}</td>}
+          {show('owner') && <td className="w-36 pr-3 text-label text-muted truncate">{e.ownerName}</td>}
           {show('value') && <td className="w-14 pr-2"><ValueChip model={model} score={valueScore(model, e.value, p)} /></td>}
-          {show('depCount') && <td className="w-16 pr-3 text-label text-muted tnum">{deps.length || ''}</td>}
-          {show('deps') && <td className="w-64 pr-3"><WorstIssue deps={deps} teams={teams} /></td>}
+          {show('deps') && <td className="w-72 pr-3"><WorstIssue deps={deps} teams={teams} /></td>}
           {show('goal') && <td className="w-44 pr-3 text-label text-muted truncate">{themes.get(e.themeId)?.name}</td>}
           <td className="w-20 pr-2">
             {mayRank && (inList ? (
@@ -183,10 +186,20 @@ export function PrioritizeView() {
 
   const visible = order.filter(match);
   const visibleUnranked = unranked.filter(match);
+  // Uitvoering / Afgesloten (item D, D80): the ranked list splits into "Toegezegd dit kwartaal" and a muted
+  // "Niet toegezegd" group; rank numbers stay. Planning shows one list.
+  const committed = planning ? null : committedEpicIds(state, quarter.id);
+  const groups = committed ? [
+    { key: 'yes', label: 'Committed this quarter', rows: visible.filter((p) => committed.has(p.epicId)), muted: false },
+    { key: 'no', label: 'Not committed', rows: visible.filter((p) => !committed.has(p.epicId)), muted: true },
+  ].filter((g) => g.rows.length > 0) : null;
+  const groupRow = (g) => (
+    <tr key={`g-${g.key}`} className="bg-surface-2"><th colSpan={nCols} scope="rowgroup" className={`h-8 px-3 text-left text-caption font-medium tnum ${g.muted ? 'text-faint' : 'text-muted'}`}>{t(g.label)} ({g.rows.length})</th></tr>
+  );
 
   return (
     <div className="pr-0" data-tour="prioritize">
-      <ViewHeader title={t('Prioritise')} meta={t('{n} epics', { n: plansQ.length })} right={
+      <ViewHeader title={t(planning ? 'Prioritise' : 'Priorities')} meta={t('{n} epics', { n: plansQ.length })} right={
         <>
           <label className="sr-only" htmlFor="prio-filter">{t('Filter')}</label>
           <select id="prio-filter" className={`${cls.input} !w-auto max-w-[220px]`} value={filter} onChange={(e) => setFilter(e.target.value)}>
@@ -209,7 +222,7 @@ export function PrioritizeView() {
         </>
       } />
 
-      {goals.length > 0 && strategy.top > 0 && cyclePhase(quarter.phase) === 'Planning' && (() => {
+      {goals.length > 0 && strategy.top > 0 && planning && (() => {
         // Iteration 1 (item 1): goals with epics in the top N first ("Klantcontact 5"), empty goals muted at the end.
         const goalBtn = (id, label, n, muted) => {
           const active = filter === `goal:${id}`;
@@ -247,22 +260,22 @@ export function PrioritizeView() {
                 <th className="w-10 pr-2 font-medium" scope="col"><span className="inline-flex w-6 justify-center">#</span></th>
                 <th className="font-medium" scope="col">{t('Epic')}</th>
                 {show('team') && <th className="w-44 font-medium" scope="col">{t('Team')}</th>}
+                {show('owner') && <th className="w-36 font-medium" scope="col">{t('Owner')}</th>}
                 {show('value') && <th className="w-14 font-medium" scope="col">{t('Value')}</th>}
-                {show('depCount') && <th className="w-16 font-medium" scope="col" title={t('Number of dependencies')}>{t('Count')}</th>}
-                {show('deps') && <th className="w-64 font-medium" scope="col">{t('Dependencies')}</th>}
-                {show('goal') && <th className="w-44 font-medium" scope="col">{t('Goal')}</th>}
+                {show('deps') && <th className="w-72 font-medium" scope="col">{t('Dependencies')}</th>}
+                {show('goal') && <th className="w-44 font-medium" scope="col">{t('Strategic goal')}</th>}
                 <th className="w-20" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
               </tr>
             </thead>
             <tbody ref={tbodyRef} className="divide-y divide-border">
-              {visible.map((p) => renderRow(p, order.indexOf(p), true))}
+              {groups ? groups.map((g) => [groupRow(g), ...g.rows.map((p) => renderRow(p, order.indexOf(p), true, g.muted))]) : visible.map((p) => renderRow(p, order.indexOf(p), true))}
               {visible.length === 0 && <tr><td colSpan={nCols}><EmptyLine>{searching ? t('No match.') : t('Nothing ranked yet.')}</EmptyLine></td></tr>}
             </tbody>
           </table>
           {unranked.length > 0 && (
             <div className="border-t border-border px-3 py-2 bg-surface-2">
-              <Disclosure summary={<>{t('Not prioritised yet')} <span className="tnum">({unranked.length})</span></>}>
-                <table className="w-full text-body" aria-label={t('Not prioritised yet')}>
+              <Disclosure summary={<>{t('Backlog')} <span className="tnum">({unranked.length})</span></>}>
+                <table className="w-full text-body" aria-label={t('Backlog')}>
                   <tbody className="divide-y divide-border">{visibleUnranked.map((p, i) => renderRow(p, i, false))}</tbody>
                 </table>
               </Disclosure>

@@ -1,7 +1,7 @@
 -- ============================================================================
 -- db/tests/rls_test.sql  -  row-level security and tenant-isolation test (BACKLOG P1, docs/design.md section 18)
 -- ----------------------------------------------------------------------------
--- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-011).
+-- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-012).
 -- The result grid shows one row per check with PASS / FAIL; the first row is the total.
 -- Plain SQL, no extension needed (no pgTAP). Re-runnable.
 --
@@ -31,6 +31,7 @@ truncate rls_results restart identity;
 -- a005 viewer A + can_rank         00a6 plan A1  00a7 plan A2  00b6 plan B1
 -- a006 invitee (no membership)     00a8 ask: epic A1 -> team A2
 -- b001 admin B                     00a9 invitation for a006    00ab goal (programme, Moet) in A
+--                                  00ac quarter A, locked      00ad plan A1 in it   00ae ask A1 -> A2 in it (accepted)
 
 create or replace function pg_temp.rls_cleanup() returns void language plpgsql as $$
 declare _orgs uuid[] := array['00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000b0']::uuid[];
@@ -102,6 +103,7 @@ insert into memberships (user_id, org_id, role, team_id, can_rank) values
 insert into quarters (org_id, id, year, q, phase) values
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000a3', 2099, 1, 'negotiate'),
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000aa', 2099, 2, 'prep'),
+  ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000ac', 2098, 4, 'locked'),
   ('00000000-0000-4000-8000-0000000000b0', '00000000-0000-4000-8000-0000000000b3', 2099, 1, 'negotiate');
 insert into epics (org_id, id, ref_code, team_id, title) values
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000a4', 'RLS-EP-1', '00000000-0000-4000-8000-0000000000a1', 'A1 epic'),
@@ -109,11 +111,16 @@ insert into epics (org_id, id, ref_code, team_id, title) values
   ('00000000-0000-4000-8000-0000000000b0', '00000000-0000-4000-8000-0000000000b4', 'RLS-EP-1', '00000000-0000-4000-8000-0000000000b1', 'B1 epic');
 insert into epic_plans (org_id, id, epic_id, quarter_id, strategic_rank, effort_low, effort_high) values
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000a6', '00000000-0000-4000-8000-0000000000a4', '00000000-0000-4000-8000-0000000000a3', 1, 2, 4),
+  ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000ad', '00000000-0000-4000-8000-0000000000a4', '00000000-0000-4000-8000-0000000000ac', 1, 2, 4),
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000a7', '00000000-0000-4000-8000-0000000000a5', '00000000-0000-4000-8000-0000000000a3', 2, 2, 4),
   ('00000000-0000-4000-8000-0000000000b0', '00000000-0000-4000-8000-0000000000b6', '00000000-0000-4000-8000-0000000000b4', '00000000-0000-4000-8000-0000000000b3', 1, 2, 4);
 insert into dependencies (org_id, id, ref_code, epic_id, requester_team_id, provider_team_id, quarter_id, ask, effort_low, effort_high) values
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000a8', 'RLS-DEP-1', '00000000-0000-4000-8000-0000000000a4',
    '00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-0000000000a2', '00000000-0000-4000-8000-0000000000a3', 'RLS ask', 1, 2);
+-- Locked quarter (012): one accepted ask; asks and answers are fixed there, signals are not.
+insert into dependencies (org_id, id, ref_code, epic_id, requester_team_id, provider_team_id, quarter_id, ask, effort_low, effort_high, response) values
+  ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000ae', 'RLS-DEP-2', '00000000-0000-4000-8000-0000000000a4',
+   '00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-0000000000a2', '00000000-0000-4000-8000-0000000000ac', 'RLS locked ask', 1, 2, 'accepted');
 insert into themes (org_id, id, name, type, must, must_deadline) values
   ('00000000-0000-4000-8000-0000000000a0', '00000000-0000-4000-8000-0000000000ab', 'RLS goal', 'program', true, '2099-03-01');
 insert into invitations (org_id, id, email, role) values
@@ -132,6 +139,7 @@ declare
   PA1 text := '''00000000-0000-4000-8000-0000000000a6'''; PA2 text := '''00000000-0000-4000-8000-0000000000a7'''; PB1 text := '''00000000-0000-4000-8000-0000000000b6''';
   QA text := '''00000000-0000-4000-8000-0000000000a3'''; QA2 text := '''00000000-0000-4000-8000-0000000000aa'''; DA text := '''00000000-0000-4000-8000-0000000000a8''';
   GA text := '''00000000-0000-4000-8000-0000000000ab''';
+  QL text := '''00000000-0000-4000-8000-0000000000ac'''; DL text := '''00000000-0000-4000-8000-0000000000ae''';
   u_admin   uuid := '00000000-0000-4000-8000-00000000a001';
   u_planner uuid := '00000000-0000-4000-8000-00000000a002';
   u_prov    uuid := '00000000-0000-4000-8000-00000000a003';
@@ -394,6 +402,32 @@ begin
     format('with x as (update epic_follows set epic_id = %s where org_id = %s and epic_id = %s returning 1) select count(*) from x', EA2, A, EA1), '0');
   perform pg_temp.rls_check('follows', 'admin of B cannot follow an epic of A', u_other,
     format('with x as (insert into epic_follows (org_id, user_id, epic_id) values (%s, %L, %s) returning 1) select count(*) from x', A, u_other, EA1), 'error:row-level security');
+
+  -- 13. Eigenaar (012): owner_name follows epics_write (own team)
+  perform pg_temp.rls_check('owner', 'planner sets the owner on own team''s epic', u_planner,
+    format('with x as (update epics set owner_name = ''PO'' where id = %s returning 1) select count(*) from x', EA1), '1');
+  perform pg_temp.rls_check('owner', 'planner cannot set the owner on another team''s epic (0 rows)', u_planner,
+    format('with x as (update epics set owner_name = ''PO'' where id = %s returning 1) select count(*) from x', EA2), '0');
+  perform pg_temp.rls_check('owner', 'viewer cannot set an owner (0 rows)', u_viewer,
+    format('with x as (update epics set owner_name = ''PO'' where id = %s returning 1) select count(*) from x', EA1), '0');
+
+  -- 14. Asks fixed after the lock (012, D83): no add, edit, answer or remove in a locked quarter; signals stay
+  perform pg_temp.rls_check('locked', 'requester cannot add an ask in a locked quarter', u_planner,
+    format('with x as (insert into dependencies (org_id, epic_id, provider_team_id, quarter_id, ask) values (%s, %s, %s, %s, ''late'') returning 1) select count(*) from x', A, EA1, TA2, QL), 'error:Asks are fixed');
+  perform pg_temp.rls_check('locked', 'requester cannot edit an ask in a locked quarter', u_planner,
+    format('with x as (update dependencies set ask = ''changed'' where id = %s returning 1) select count(*) from x', DL), 'error:Asks are fixed');
+  perform pg_temp.rls_check('locked', 'requester cannot remove an ask in a locked quarter', u_planner,
+    format('with x as (delete from dependencies where id = %s returning 1) select count(*) from x', DL), 'error:Asks are fixed');
+  perform pg_temp.rls_check('locked', 'provider cannot change the answer in a locked quarter', u_prov,
+    format('with x as (update dependencies set response = ''declined'', response_reason = ''no'' where id = %s returning 1) select count(*) from x', DL), 'error:Answers are fixed');
+  perform pg_temp.rls_check('locked', 'admin cannot change the answer in a locked quarter either', u_admin,
+    format('with x as (update dependencies set response = ''declined'', response_reason = ''no'' where id = %s returning 1) select count(*) from x', DL), 'error:Answers are fixed');
+  perform pg_temp.rls_check('locked', 'provider still sets a signal in a locked quarter', u_prov,
+    format('with x as (update dependencies set signal = ''at_risk'', signal_note = ''rls'', signal_at = now() where id = %s returning 1) select count(*) from x', DL), '1');
+  perform pg_temp.rls_check('locked', 'provider still confirms in a locked quarter', u_prov,
+    format('with x as (update dependencies set confirmed_at = now() where id = %s returning 1) select count(*) from x', DL), '1');
+  perform pg_temp.rls_check('locked', 'requester still cannot set a signal in a locked quarter', u_planner,
+    format('with x as (update dependencies set signal = ''at_risk'' where id = %s returning 1) select count(*) from x', DL), 'error:Only the provider team can set a signal');
 end $$;
 
 
