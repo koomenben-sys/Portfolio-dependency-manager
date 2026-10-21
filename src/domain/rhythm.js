@@ -84,6 +84,24 @@ export function worstSignal(deps) {
 }
 export const inExecution = (phase) => phase === 'locked' || phase === 'active';
 
+// "Toegezegd dit kwartaal" (owner feedback 2026-10-21, item D; docs/design.md section 25, D80). An epic counts as
+// committed when its plan commitment is committed or at_risk, or when it has asks and every ask is accepted
+// (a draft or discuss plan whose providers all said yes). not_committed never counts; a plan without asks that is
+// still draft / discuss does not count either (nobody said yes). closeRows() keeps its baseline-based rule.
+export function isCommitted(plan, asks) {
+  if (!plan || plan.commitment === 'not_committed') return false;
+  if (plan.commitment === 'committed' || plan.commitment === 'at_risk') return true;
+  return asks.length > 0 && asks.every((d) => normAsk(d.response) === 'accepted');
+}
+export function committedEpicIds(state, quarterId) {
+  const out = new Set();
+  for (const p of state.plans) {
+    if (p.quarterId !== quarterId) continue;
+    if (isCommitted(p, state.dependencies.filter((d) => d.quarterId === quarterId && d.epicId === p.epicId))) out.add(p.epicId);
+  }
+  return out;
+}
+
 // Cadence (L9): { mode: 'exception' | 'sprint', weeks: 1..4 }.
 export const DEFAULT_CADENCE = { mode: 'exception', weeks: 2 };
 export const cadenceOf = (settings) => ({ ...DEFAULT_CADENCE, ...(settings?.cadence || {}) });

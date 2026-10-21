@@ -7,6 +7,7 @@ import { followsOf } from '../domain/follows';
 import { epicDeps, byId } from '../domain/plan';
 import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../domain/value';
 import { teamCapacity } from '../domain/capacity';
+import { committedEpicIds } from '../domain/rhythm';
 import { useT } from '../i18n';
 import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, Dialog, ErrorLine, MustChip, ValueChip, CapacityLine, FollowStar, Menu, MenuLabel, menuItem } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
@@ -126,7 +127,7 @@ export function PrioritizeView() {
   };
 
   // Plain render function (not a component) so the inline reason input keeps focus across re-renders.
-  const renderRow = (p, index, inList) => {
+  const renderRow = (p, index, inList, muted = false) => {
     const e = epics.get(p.epicId); if (!e) return null;
     const deps = epicDeps(state, e.id, quarter.id);
     const isMoved = pending?.movedId === p.id;
@@ -151,7 +152,7 @@ export function PrioritizeView() {
           <td className="w-10 pr-2"><RankNo rank={inList ? index + 1 : null} size="sm" /></td>
           <td className="pr-3 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-body text-ink truncate">{e.title}</span>
+              <span className={`text-body truncate ${muted ? 'text-muted' : 'text-ink'}`}>{e.title}</span>
               <FollowStar on={followed.has(e.id)} />
               <MustChip must={effectiveMust(e, themes.get(e.themeId))} className="shrink-0" />
             </div>
@@ -184,6 +185,16 @@ export function PrioritizeView() {
 
   const visible = order.filter(match);
   const visibleUnranked = unranked.filter(match);
+  // Uitvoering / Afgesloten (item D, D80): the ranked list splits into "Toegezegd dit kwartaal" and a muted
+  // "Niet toegezegd" group; rank numbers stay. Planning shows one list.
+  const committed = planning ? null : committedEpicIds(state, quarter.id);
+  const groups = committed ? [
+    { key: 'yes', label: 'Committed this quarter', rows: visible.filter((p) => committed.has(p.epicId)), muted: false },
+    { key: 'no', label: 'Not committed', rows: visible.filter((p) => !committed.has(p.epicId)), muted: true },
+  ].filter((g) => g.rows.length > 0) : null;
+  const groupRow = (g) => (
+    <tr key={`g-${g.key}`} className="bg-surface-2"><th colSpan={nCols} scope="rowgroup" className={`h-8 px-3 text-left text-caption font-medium tnum ${g.muted ? 'text-faint' : 'text-muted'}`}>{t(g.label)} ({g.rows.length})</th></tr>
+  );
 
   return (
     <div className="pr-0" data-tour="prioritize">
@@ -256,7 +267,7 @@ export function PrioritizeView() {
               </tr>
             </thead>
             <tbody ref={tbodyRef} className="divide-y divide-border">
-              {visible.map((p) => renderRow(p, order.indexOf(p), true))}
+              {groups ? groups.map((g) => [groupRow(g), ...g.rows.map((p) => renderRow(p, order.indexOf(p), true, g.muted))]) : visible.map((p) => renderRow(p, order.indexOf(p), true))}
               {visible.length === 0 && <tr><td colSpan={nCols}><EmptyLine>{searching ? t('No match.') : t('Nothing ranked yet.')}</EmptyLine></td></tr>}
             </tbody>
           </table>

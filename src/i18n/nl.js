@@ -1052,4 +1052,5 @@ export const nl = {
   // Uitvoering feedback (section 25)
   'In execution': 'In uitvoering',
   'Priorities': 'Prioriteiten',
+  'Committed this quarter': 'Toegezegd dit kwartaal',
 };
