@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Check, Lock } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
-import { isPlanner, isAdmin } from '../data/repository';
+import { isPlanner, isAdmin, canWriteTeam } from '../data/repository';
 import { IMPEDIMENT_AGING_DAYS } from '../domain/model';
 import { planFor, byId, daysSince } from '../domain/plan';
-import { hasSignal, inExecution, quarterWeek, openImpediments } from '../domain/rhythm';
+import { hasSignal, inExecution, quarterWeek, openImpediments, signalOf } from '../domain/rhythm';
 import { followsOf, readFollowOnly, writeFollowOnly } from '../domain/follows';
 import { useT } from '../i18n';
-import { cls, ViewHeader, quarterMeta, RankNo, StatusChip, SignalChip, EmptyLine, ErrorLine, Dialog, FollowStar, FollowOnlyToggle, isPostLock } from '../components/plan/core';
+import { cls, ViewHeader, quarterMeta, RankNo, StatusChip, SignalChip, SignalControl, InlineReason, EmptyLine, ErrorLine, Dialog, FollowStar, FollowOnlyToggle, isPostLock } from '../components/plan/core';
 import { CloseQuarterDialog } from '../components/plan/CycleActions';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
@@ -78,7 +78,7 @@ export function ProgressView() {
                 <RankNo rank={planFor(state, d.epicId, quarter.id)?.rank} size="sm" />
                 {title(d.epicId, 'text-body font-medium min-w-0 flex-1')}
                 <span className="w-40 shrink-0 text-label text-muted truncate">{teams.get(d.providerTeamId)?.name}</span>
-                <SignalChip dep={d} />
+                {inExecution(quarter.phase) && canWriteTeam(actor, d.providerTeamId) ? <SignalRow dep={d} act={act} /> : <SignalChip dep={d} />}
               </li>
             ))}
           </ul>
@@ -134,6 +134,29 @@ export function ProgressView() {
       {openEpic && <SimpleEpicPanel epicId={openEpic} onClose={() => setOpenEpic(null)} />}
       {raising && <ImpedimentDialog onClose={() => setRaising(false)} />}
       {closing && <CloseQuarterDialog quarter={quarter} onClose={() => setClosing(false)} onDone={() => { window.location.hash = 'resultaat'; }} />}
+    </div>
+  );
+}
+
+// The provider changes a signal here (section 26: signals belong on Voortgang, not on Afgestemd). Op koers clears
+// the note; In gevaar / Gaat niet halen open an optional one-line note (L7).
+function SignalRow({ dep, act }) {
+  const t = useT();
+  const [noteFor, setNoteFor] = useState(null);
+  const signal = signalOf(dep);
+  const pickSignal = async (s) => {
+    if (s === signal && noteFor == null) return;
+    if (s === 'on_track') { setNoteFor(null); await act('setSignal', dep.id, s, ''); return; }
+    setNoteFor(s);
+  };
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <SignalControl value={signal} onPick={pickSignal} />
+      {noteFor == null && dep.signalNote && <span className="text-label text-muted truncate max-w-[320px]">{dep.signalNote}</span>}
+      {noteFor && (
+        <InlineReason label={t('Note (optional)')} defaultValue={dep.signalNote || ''} placeholder={t('One line, e.g. what shifts')}
+          onSave={async (note) => { const r = await act('setSignal', dep.id, noteFor, note); if (r.ok) setNoteFor(null); }} onCancel={() => setNoteFor(null)} />
+      )}
     </div>
   );
 }

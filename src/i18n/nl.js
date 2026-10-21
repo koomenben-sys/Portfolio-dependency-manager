@@ -1055,4 +1055,13 @@ export const nl = {
   'Answers are fixed once the plan is locked': 'Antwoorden staan vast na het vastzetten',
   // Page titles, team block, size column (section 26)
   'locked on {d}': 'vastgezet op {d}',
+  'Choose team': 'Team kiezen',
+  'Priority of the epic': 'Prioriteit van de epic',
+  'Agreed on {d}': 'Afgestemd op {d}',
+  'read-only': 'alleen-lezen',
+  '{a} of {b} pw committed': '{a} van {b} pw toegezegd',
+  '{a} of {b} pw requested': '{a} van {b} pw gevraagd',
+  '1 vacancy': '1 vacature',
+  '{n} vacancies': '{n} vacatures',
+  'tight from 80%': 'krap vanaf 80%',
 };

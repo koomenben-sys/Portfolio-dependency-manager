@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, Lock } from 'lucide-react';
 import { usePlan } from '../context/PlanContext';
 import { canWriteTeam } from '../data/repository';
 import { isLockedPhase, REASON_REQUIRED, ASK_META, cyclePhase } from '../domain/model';
 import { followsOf, readFollowOnly, writeFollowOnly } from '../domain/follows';
 import { teamCapacity } from '../domain/capacity';
 import { planFor, phaseAllows, byId } from '../domain/plan';
-import { CERTAINTIES, CERTAINTY_META, sizeRange, signalOf, needsConfirmation } from '../domain/rhythm';
+import { CERTAINTIES, CERTAINTY_META, sizeRange } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, ErrorLine, Disclosure, Dialog, toneClass, normAsk, SizePicker, SizeText, SignalChip, SignalControl, SignalIcon, CapacityLine, FollowStar, FollowOnlyToggle, PostLockMark } from '../components/plan/core';
+import { cls, RankNo, StatusChip, Tabs, InlineReason, AnswerControl, AskIcon, EmptyLine, ViewHeader, quarterMeta, fmtDay, ErrorLine, Disclosure, Dialog, toneClass, normAsk, SizePicker, FollowStar, FollowOnlyToggle, PostLockMark } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
 import { useTourNudge } from '../components/plan/TourPanel';
@@ -16,19 +16,24 @@ import { useTourNudge } from '../components/plan/TourPanel';
 // Screen 2 — Afhankelijkheden, per team like the Feb version (docs/design.md section 19, D26/D29/D31; iteration 1).
 // "Wij vragen": our epics in rank order with their asks and an inline "+ Verzoek".
 // "Aan ons gevraagd": asks to this team ordered by the requesting epic's rank, answered with one click.
-// Release B (section 22): the team's capacity line + a four-field dialog (L2/L3), size and certainty on the ask
-// form (L1/L4), the provider's signal on committed asks in "Aan ons gevraagd" and the read-only signal in "Wij vragen" (L7/L8).
+// Release B (section 22): size and certainty on the ask form (L1/L4), the four-field capacity dialog (L2).
 // Section 23 (M3): the same screen is step 2 "Afgestemd" once the quarter runs — an "Alleen gevolgd" toggle filters on
-// followed epics (M8). Section 25 (D83): asks and answers are fixed from the lock on; only the provider's signal stays
-// editable until the quarter closes. Older asks created after a lock still carry the "na vastzetten" label.
+// followed epics (M8). Section 25 (D83): asks and answers are fixed from the lock on.
+// Section 26 (D86, "Optie 1"): the title row carries the team selector on the right; below it one team block with the
+// capacity band, percentage and bar; in Uitvoering / Afgesloten a read-only line. Signals left this screen (Voortgang).
 const COUNT_ORDER = ['declined', 'needs_priority_call', 'proposed', 'accepted'];
+const teamKey = (actorId) => `kp.team.${actorId}`;
+const readTeam = (actorId) => { try { return localStorage.getItem(teamKey(actorId)) || ''; } catch { return ''; } };
+const writeTeam = (actorId, teamId) => { try { localStorage.setItem(teamKey(actorId), teamId); } catch { /* private mode */ } };
 
 export function DependenciesView() {
   const { state, actor, quarter, run } = usePlan();
   const t = useT();
-  const firstTeam = actor.teamId || state.teams[0]?.id || '';
-  const [teamId, setTeamId] = useState(firstTeam);
-  useEffect(() => { setTeamId(actor.teamId || state.teams[0]?.id || ''); }, [actor.id]);
+  // The chosen team is remembered per person on this device; an own team wins the first time, then the last choice.
+  const pickTeam = () => { const saved = readTeam(actor.id); return (saved && state.teams.some((x) => x.id === saved) ? saved : actor.teamId) || state.teams[0]?.id || ''; };
+  const [teamId, setTeamIdState] = useState(pickTeam);
+  useEffect(() => { setTeamIdState(pickTeam()); }, [actor.id]);
+  const setTeamId = (id) => { setTeamIdState(id); writeTeam(actor.id, id); };
   const [tab, setTab] = useState('outgoing');
   const [filter, setFilter] = useState(null); // one of COUNT_ORDER, from the count chips
   useTourNudge(useCallback((d) => { if (d.tab) setTab(d.tab); }, []));
@@ -42,6 +47,7 @@ export function DependenciesView() {
   const followed = followsOf(state, actor.id);
   const setFollowOnly = (on) => { setFollowOnlyState(on); writeFollowOnly(actor.id, on); };
   const epics = byId(state.epics); const teams = byId(state.teams);
+  const team = teams.get(teamId);
   const deps = state.dependencies.filter((d) => d.quarterId === quarter.id);
   const outgoing = deps.filter((d) => d.requesterTeamId === teamId);
   const incoming = deps.filter((d) => d.providerTeamId === teamId);
@@ -54,8 +60,8 @@ export function DependenciesView() {
   const asksOf = (p) => outgoing.filter((d) => d.epicId === p.epicId);
   const withAsks = ourPlans.filter((p) => asksOf(p).some(inFilter));
   const withoutAsks = ourPlans.filter((p) => asksOf(p).length === 0);
-  const mayWrite = canWriteTeam(actor, teamId) && quarter.phase !== 'closed'; // capacity and signals
-  // Asks and answers are fixed once the plan is locked (item J, D83): Afgestemd is read-only, signals stay editable.
+  const mayWrite = canWriteTeam(actor, teamId) && quarter.phase !== 'closed'; // capacity
+  // Asks and answers are fixed once the plan is locked (item J, D83): Afgestemd is read-only.
   const mayAsk = mayWrite && phaseAllows(quarter.phase, 'ask');
   const answersOpen = phaseAllows(quarter.phase, 'answer');
   const mayAnswer = mayWrite && answersOpen;
@@ -66,24 +72,28 @@ export function DependenciesView() {
 
   return (
     <div data-tour="dependencies">
-      <ViewHeader title={t(agreed ? 'Agreed' : 'Dependencies')} meta={
-        <span className="inline-flex items-center gap-2 text-title text-muted"><span aria-hidden="true">·</span>
-          <label><span className="sr-only">{t('Team')}</span>
-            <select className="h-8 pl-1 pr-6 rounded-control bg-transparent text-title font-semibold text-ink hover:bg-surface-2 focus-ring cursor-pointer" value={teamId} onChange={(e) => { setTeamId(e.target.value); setFilter(null); }} data-tour="team-select">{state.teams.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
-          </label>
-        </span>
+      <ViewHeader title={t(agreed ? 'Agreed' : 'Dependencies')} meta={quarterMeta(quarter, t)} right={
+        <label className="flex items-center gap-2.5 text-label text-muted w-full sm:w-auto">{t('Choose team')}
+          <select className={`${cls.input} !h-10 sm:!w-60 text-subtitle font-medium text-ink`} value={teamId} onChange={(e) => { setTeamId(e.target.value); setFilter(null); }} data-tour="team-select">{state.teams.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+        </label>
       } />
+      <TeamBlock team={team} cap={capacity} agreed={agreed} onEdit={mayWrite ? () => setCapDialog(true) : undefined} />
+      {agreed && (
+        <div className="mt-3 min-h-9 px-3 py-1.5 rounded-control bg-surface-2 text-label text-muted flex items-center gap-2">
+          <Lock size={14} aria-hidden="true" className="shrink-0" />
+          <span>{quarter.lockedAt ? t('Agreed on {d}', { d: fmtDay(quarter.lockedAt, t.lang) }) : t('Agreed')} · {t('read-only')}</span>
+        </div>
+      )}
       {/* Below xl: two tabs. From xl (section 24, D77): both directions side by side, each with its own heading, count and chips. */}
-      <div className="xl:hidden"><Tabs ariaLabel={t('Direction')} value={tab} onChange={(v) => { setTab(v); setFilter(null); }} items={[{ id: 'outgoing', label: t('We ask'), count: outgoing.length }, { id: 'incoming', label: t('Asked of us'), count: incoming.length }]} /></div>
+      <div className="xl:hidden mt-5"><Tabs ariaLabel={t('Direction')} value={tab} onChange={(v) => { setTab(v); setFilter(null); }} items={[{ id: 'outgoing', label: t('We ask'), count: outgoing.length }, { id: 'incoming', label: t('Asked of us'), count: incoming.length }]} /></div>
       <ErrorLine error={err} />
 
-      <div className="mt-4 flex items-center gap-3 flex-wrap min-h-7">
+      <div className="mt-4 flex items-center gap-3 flex-wrap empty:hidden">
         <div className="xl:hidden"><CountChips deps={tab === 'outgoing' ? outgoing : incoming} value={filter} onChange={setFilter} /></div>
         {agreed && <FollowOnlyToggle on={followOnly} onChange={setFollowOnly} count={followedInQuarter} />}
-        <CapacityLine cap={capacity} onEdit={mayWrite ? () => setCapDialog(true) : undefined} className="ml-auto" />
       </div>
 
-      <div className="xl:grid xl:grid-cols-2 xl:gap-6 xl:items-start">
+      <div className="xl:grid xl:grid-cols-2 xl:gap-6 xl:items-start xl:mt-5">
         <section className={tab === 'outgoing' ? '' : 'hidden xl:block'} aria-label={t('We ask')}>
           <ColumnHead label={t('We ask')} deps={outgoing} filter={filter} onFilter={setFilter} />
           <div className="mt-4 space-y-3" data-tour="outgoing">
@@ -103,7 +113,7 @@ export function DependenciesView() {
             {!answersOpen && !agreed && incoming.length > 0 && <p className="text-caption text-muted mb-2">{t('Answers open from Negotiate.')}</p>}
             {incoming.length === 0 ? <div className={cls.card}><EmptyLine>{t('Nothing asked of this team.')}</EmptyLine></div> : (
               <ul className={`${cls.card} divide-y divide-border overflow-hidden`}>
-                {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} maySignal={mayWrite} act={act} followed={followed.has(d.epicId)} onOpen={() => setOpenEpic(d.epicId)} />)}
+                {incomingSorted.map((d) => <IncomingRow key={d.id} dep={d} epic={epics.get(d.epicId)} rank={planFor(state, d.epicId, quarter.id)?.rank} team={teams.get(d.requesterTeamId)} mayAnswer={mayAnswer} act={act} followed={followed.has(d.epicId)} onOpen={() => setOpenEpic(d.epicId)} />)}
                 {incomingSorted.length === 0 && <li><EmptyLine>{t(agreed && followOnly ? 'No followed epics here.' : 'Nothing here.')}</EmptyLine></li>}
               </ul>
             )}
@@ -111,8 +121,50 @@ export function DependenciesView() {
         </section>
       </div>
       {openEpic && <SimpleEpicPanel epicId={openEpic} onClose={() => setOpenEpic(null)} />}
-      {capDialog && <CapacityDialog teamId={teamId} team={teams.get(teamId)} cap={capacity.cap} locked={locked} act={act} onClose={() => setCapDialog(false)} />}
+      {capDialog && <CapacityDialog teamId={teamId} team={team} cap={capacity.cap} locked={locked} act={act} onClose={() => setCapDialog(false)} />}
     </div>
+  );
+}
+
+// One team block (D86, Optie 1): "Team <naam>", a Capaciteit chip tinted by the load band, the percentage, a bar with
+// the 80% marker and one line "38 van 56 pw toegezegd · run 20% · 1 vacature". Planning says "gevraagd".
+const BAND_TONE = { ok: 'ok', warn: 'warn', over: 'danger', none: 'neutral' };
+const BAND_BAR = { ok: 'bg-accent', warn: 'bg-warn', over: 'bg-danger', none: 'bg-faint' };
+const BAND_TOP = { ok: 'border-t-ok', warn: 'border-t-warn', over: 'border-t-danger', none: 'border-t-border-strong' };
+const fmtPw1 = (n, lang) => (Math.round(n * 10) / 10).toString().replace('.', lang === 'nl' ? ',' : '.');
+function TeamBlock({ team, cap, agreed, onEdit }) {
+  const t = useT();
+  const band = cap.cap ? cap.band : 'none';
+  const pct = Math.min(100, Math.max(0, cap.pct || 0));
+  const edit = onEdit && <button type="button" className={cls.icon} onClick={onEdit} aria-label={t('Edit capacity')} title={t('Edit capacity')}><Pencil size={14} /></button>;
+  return (
+    <section className={`${cls.card} border-t-[3px] ${BAND_TOP[band]} px-5 py-4`} aria-label={`${t('Team')} ${team?.name || ''}`} data-tour="team-capacity">
+      <div className="flex items-baseline gap-x-3.5 gap-y-1 flex-wrap">
+        <h2 className="text-hero text-ink leading-none">{t('Team')} {team?.name}</h2>
+        <span className={`inline-flex items-center h-6 px-2 rounded-control text-caption font-semibold ${toneClass(BAND_TONE[band])}`}>{t('Capacity')}</span>
+        {!cap.cap && <span className="ml-auto">{onEdit ? <button type="button" className={cls.ghost} onClick={onEdit}>{t('Fill in capacity')}</button> : <span className="text-label text-muted">–</span>}</span>}
+      </div>
+      {cap.cap && (
+        <div className="mt-3.5 flex items-center gap-4 flex-wrap">
+          <span className="text-[28px] leading-none font-medium tnum text-ink">{cap.pct}%</span>
+          <div className="flex-1 basis-[280px] max-w-[520px] min-w-0">
+            <div aria-hidden="true" className="relative h-2 bg-surface-2 rounded-control">
+              <div className={`absolute left-0 top-0 bottom-0 rounded-control ${BAND_BAR[band]}`} style={{ width: `${pct}%` }} />
+              <div className="absolute top-[-4px] bottom-[-4px] border-l-2 border-ink" style={{ left: '80%' }} />
+            </div>
+            <div className="mt-1.5 flex justify-between gap-3 flex-wrap text-caption text-muted tnum">
+              <span>
+                {t(agreed ? '{a} of {b} pw committed' : '{a} of {b} pw requested', { a: fmtPw1(cap.requested, t.lang), b: fmtPw1(cap.available, t.lang) })}
+                {' · '}{t('run')} {cap.reservePct}%
+                {cap.fteVacant > 0 && <> · {cap.fteVacant === 1 ? t('1 vacancy') : t('{n} vacancies', { n: fmtPw1(cap.fteVacant, t.lang) })}</>}
+              </span>
+              <span>{t('tight from 80%')}</span>
+            </div>
+          </div>
+          {edit}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -153,8 +205,8 @@ function CapacityDialog({ teamId, team, cap, locked, act, onClose }) {
 // xl ledger heading: "Wij vragen 5" + the count chips of that direction (D77). Hidden below xl, where the tabs do this.
 function ColumnHead({ label, deps, filter, onFilter }) {
   return (
-    <div className="hidden xl:flex items-center gap-3 h-9 border-b border-border">
-      <h2 className="inline-flex items-center gap-1.5 text-label font-medium text-ink">{label}<span className="tnum rounded-full px-1.5 h-5 min-w-5 inline-flex items-center justify-center text-micro font-semibold bg-surface-2 text-muted">{deps.length}</span></h2>
+    <div className="hidden xl:flex items-center gap-3 h-10 border-b border-ink">
+      <h2 className="inline-flex items-center gap-2 text-subtitle text-ink">{label}<span className="tnum text-muted font-normal">{deps.length}</span></h2>
       <CountChips deps={deps} value={filter} onChange={onFilter} />
     </div>
   );
@@ -189,20 +241,19 @@ function EpicAsks({ plan, epic, asks, teams, mayWrite, locked, act, followed, on
   const others = state.teams.filter((x) => x.id !== epic.teamId);
   return (
     <section className={cls.card} aria-label={epic.title}>
-      <header className="flex items-center gap-3 px-3 h-11 border-b border-border">
-        <RankNo rank={plan.rank} size="sm" />
+      <header className="flex items-center gap-3 px-3 h-12 border-b border-border">
+        <RankNo rank={plan.rank} hash />
         <button className="min-w-0 flex-1 text-left text-body font-medium sm:truncate hover:underline focus-ring rounded-control" onClick={onOpen}>{epic.title}<FollowStar on={followed} className="inline ml-1.5 -mt-0.5" /></button>
         {mayWrite && !adding && <button className={cls.ghost} onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" />{t('Ask')}</button>}
       </header>
       <ul className="divide-y divide-border">
         {asks.map((d) => (
           <li key={d.id} className="group px-3 py-2">
-            <div className="flex items-center gap-3 min-h-8">
+            <div className="flex items-center gap-3 min-h-9 flex-wrap md:flex-nowrap">
               <span className="w-28 sm:w-40 shrink-0 text-label text-muted sm:truncate">{teams.get(d.providerTeamId)?.name}</span>
-              <span className="flex-1 min-w-0 text-body sm:truncate">{d.ask}{(d.size || d.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={d.size} low={d.effortLow} high={d.effortHigh} /></span>}{d.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</span>
+              <span className="flex-1 min-w-[160px] text-body sm:truncate">{d.ask}{d.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</span>
               <PostLockMark dep={d} quarter={quarter} />
-              <SignalChip dep={d} />
-              <StatusChip response={d.response} />
+              <span className="w-28 shrink-0 inline-flex"><StatusChip response={d.response} /></span>
               {mayWrite && removing !== d.id && <button className={`${cls.icon} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} aria-label={`${t('Remove ask')} ${d.refCode}`} onClick={() => setRemoving(d.id)}><Trash2 size={14} /></button>}
             </div>
             {d.responseReason && <p className="pl-[172px] text-label text-muted">{d.responseReason}</p>}
@@ -253,21 +304,11 @@ function NewAskRow({ epic, quarter, others, locked, act, onDone }) {
 }
 
 // An ask to our team: rank · requesting team · what · for epic · Toezeggen / Bespreken / Kan niet.
-// Only "Kan niet" opens an inline reason (item 10); the other two answer in one click.
-function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, followed, onOpen }) {
-  const { state, quarter } = usePlan();
+// Only "Kan niet" opens an inline reason (item 10); the other two answer in one click. Read-only: the answer chip.
+function IncomingRow({ dep, epic, rank, team, mayAnswer, act, followed, onOpen }) {
+  const { quarter } = usePlan();
   const t = useT();
   const [reasonFor, setReasonFor] = useState(null); // response awaiting an inline reason
-  const [noteFor, setNoteFor] = useState(null); // signal awaiting its optional note (L7)
-  const [sigOpen, setSigOpen] = useState(false); // Op koers stays one quiet button until clicked (D61)
-  const committed = normAsk(dep.response) === 'accepted';
-  const signal = signalOf(dep);
-  const pickSignal = async (s) => {
-    if (s === signal && noteFor == null) return;
-    if (s === 'on_track') { setNoteFor(null); await act('setSignal', dep.id, s, ''); return; }
-    setNoteFor(s);
-  };
-  const confirmDue = maySignal && needsConfirmation(dep, quarter, state.settings);
   const pick = async (response) => {
     if (response === dep.response) return;
     if (REASON_REQUIRED.has(response)) { setReasonFor(response); return; }
@@ -278,17 +319,14 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, followe
   return (
     <li className="group px-3 py-2 rounded-row">
       <div className="flex items-center gap-3 min-h-9 flex-wrap md:flex-nowrap">
-        <RankNo rank={rank} size="sm" />
+        <RankNo rank={rank} hash />
         <span className="w-28 sm:w-40 shrink-0 text-label text-muted sm:truncate">{team?.name}</span>
-        <div className="flex-1 min-w-[200px]">
-          <div id={labelId} className="text-body">{dep.ask}{(dep.size || dep.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={dep.size} low={dep.effortLow} high={dep.effortHigh} /></span>}{dep.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</div>
+        <div className="flex-1 min-w-[160px]">
+          <div id={labelId} className="text-body">{dep.ask}{dep.certainty === 'low' && <span className="text-caption text-faint"> · {t('low certainty')}</span>}</div>
           <div className="text-caption text-muted truncate">{t('for')} <button className="hover:underline text-accent focus-ring rounded-control" onClick={onOpen}>{epic?.title}</button><FollowStar on={followed} className="inline ml-1" /></div>
         </div>
         <PostLockMark dep={dep} quarter={quarter} />
-        {committed && maySignal && signal === 'on_track' && !sigOpen && noteFor == null && !confirmDue && (
-          <button type="button" className={`${cls.quiet} opacity-0 group-hover:opacity-100 focus:opacity-100 transition-base`} onClick={() => setSigOpen(true)} aria-label={`${t('Signal')}: ${t('On track')}`}><SignalIcon signal="on_track" />{t('Signal')}</button>
-        )}
-                {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <StatusChip response={dep.response} />}
+        {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <span className="w-28 shrink-0 inline-flex"><StatusChip response={dep.response} /></span>}
         {mayAnswer && (dep.response === 'partial' || dep.response === 'deferred') && <StatusChip response={dep.response} />}
       </div>
       {dep.responseReason && reasonFor == null && <p className="pl-[172px] text-label text-muted mt-0.5">{dep.responseReason}</p>}
@@ -298,17 +336,6 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, maySignal, act, followe
             onSave={async (reason) => { const r = await act('answerDependency', dep.id, { response: reasonFor, reason }); if (r.ok) setReasonFor(null); }} onCancel={() => setReasonFor(null)} />
         </div>
       )}
-      {committed && (maySignal ? (signal === 'on_track' && !sigOpen && noteFor == null && !confirmDue ? null : (
-        <div className="pl-[172px] pt-1.5 flex items-center gap-2 flex-wrap">
-          <SignalControl value={signal} onPick={(k) => { setSigOpen(false); pickSignal(k); }} labelledBy={labelId} />
-          {noteFor == null && dep.signalNote && signal !== 'on_track' && <span className="text-label text-muted truncate max-w-[320px]">{dep.signalNote}</span>}
-          {confirmDue && noteFor == null && <button type="button" className={cls.quiet} onClick={() => act('confirmSignal', dep.id)} title={t('Still on track, no change')}>{t('Confirm')}</button>}
-          {noteFor && (
-            <InlineReason label={t('Note (optional)')} defaultValue={dep.signalNote || ''} placeholder={t('One line, e.g. what shifts')}
-              onSave={async (note) => { const r = await act('setSignal', dep.id, noteFor, note); if (r.ok) setNoteFor(null); }} onCancel={() => setNoteFor(null)} />
-          )}
-        </div>
-      )) : signal !== 'on_track' && <div className="pl-[172px] pt-1"><SignalChip dep={dep} /></div>)}
     </li>
   );
 }

@@ -39,12 +39,13 @@ const ASK_ICON = { proposed: Clock, accepted: Check, partial: CircleDot, deferre
 export const AskIcon = ({ response, size = 14, className = '' }) => { const I = ASK_ICON[response] || Clock; return <I size={size} strokeWidth={2.25} className={className} aria-hidden="true" />; };
 
 // Status = icon + short label + pastel colour; never colour alone.
+// Section 26 (D86): 28px high with a 13px label so the answer reads from a distance (team pages, Afstemmen, Voortgang).
 export function StatusChip({ response, compact = false, className = '' }) {
   const t = useT();
   const m = ASK_META[response] || ASK_META.proposed;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(m.tone)} ${className}`}>
-      <AskIcon response={response} size={12} />{!compact && <span>{t(m.label)}</span>}
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 h-7 text-label font-semibold whitespace-nowrap ${toneClass(m.tone)} ${className}`}>
+      <AskIcon response={response} size={13} />{!compact && <span>{t(m.label)}</span>}
     </span>
   );
 }
@@ -80,11 +81,13 @@ export function ValueChip({ model, score }) {
 }
 
 // Strategic rank as a quiet tabular number; one neutral style for every rank (iteration 1, item 4).
-export function RankNo({ rank, size = 'md' }) {
+// `hash`: the team-page variant "#8" (section 26, D86), 28px high, titled "Prioriteit van de epic".
+export function RankNo({ rank, size = 'md', hash = false }) {
   const t = useT();
-  const dim = size === 'sm' ? 'w-6 h-6 text-caption' : 'w-7 h-7 text-label';
+  const dim = hash ? 'h-7 min-w-[34px] px-1 text-label' : size === 'sm' ? 'w-6 h-6 text-caption' : 'w-7 h-7 text-label';
   const look = rank == null ? 'bg-surface-2 text-faint rounded-rank' : 'rank-no';
-  return <span className={`shrink-0 tnum inline-flex items-center justify-center ${dim} ${look}`} aria-label={rank == null ? t('Unranked') : t('Strategic rank {rank}', { rank })}>{rank ?? '–'}</span>;
+  const label = rank == null ? t('Unranked') : hash ? `${t('Priority of the epic')}: ${rank}` : t('Strategic rank {rank}', { rank });
+  return <span className={`shrink-0 tnum inline-flex items-center justify-center ${dim} ${look}`} aria-label={label} title={hash ? t('Priority of the epic') : undefined}>{rank == null ? '–' : hash ? `#${rank}` : rank}</span>;
 }
 
 // Four core states; older partial/deferred data folds into the nearest one (D31).
