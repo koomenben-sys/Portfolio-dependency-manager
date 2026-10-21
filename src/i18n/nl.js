@@ -374,6 +374,7 @@ export const nl = {
   'No asks for {team} in this quarter.': 'Geen verzoeken aan {team} in dit kwartaal.',
   'Ask': 'Verzoek',
   'From': 'Van',
+  'To': 'Aan',
   'Effort': 'Inspanning',
   'Fits?': 'Past?',
   'Open for': 'Open sinds',

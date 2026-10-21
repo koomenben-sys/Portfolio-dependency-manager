@@ -220,7 +220,7 @@ function CapacityDialog({ teamId, team, cap, locked, act, onClose }) {
 function ColumnHead({ label, deps, filter, onFilter }) {
   return (
     <div className="hidden xl:flex items-center gap-3 h-10 border-b border-ink">
-      <h2 className="inline-flex items-center gap-2 text-subtitle text-ink">{label}<span className="tnum text-muted font-normal">{deps.length}</span></h2>
+      <h2 className="inline-flex items-center gap-2 text-subtitle text-ink">{label}<span className="tnum">{deps.length}</span></h2>
       <CountChips deps={deps} value={filter} onChange={onFilter} />
     </div>
   );
@@ -245,9 +245,9 @@ function CountChips({ deps, value, onChange }) {
   );
 }
 
-// One row structure for both columns (D91): #rank · ask (+ "low certainty") · "Team · voor Epic" · size cell · `right`.
-// `team` is the provider in "Wij vragen" and the requester in "Aan ons gevraagd".
-function AskRow({ dep, epic, rank, team, followed, onOpen, right, below }) {
+// One row structure for both columns (D91): #rank · ask (+ "low certainty") · "Aan|Van Team · voor Epic" · size cell ·
+// `right`. `team` is the provider in "Wij vragen" ("Aan <team>") and the requester in "Aan ons gevraagd" ("Van <team>").
+function AskRow({ dep, epic, rank, team, direction, followed, onOpen, right, below }) {
   const { state, quarter } = usePlan();
   const t = useT();
   const labelId = `ask-${dep.id}`;
@@ -257,7 +257,7 @@ function AskRow({ dep, epic, rank, team, followed, onOpen, right, below }) {
         <RankNo rank={rank} hash />
         <div className="flex-1 min-w-[220px]">
           <div id={labelId} className="text-body font-medium">{dep.ask}{dep.certainty === 'low' && <span className="text-caption text-faint font-normal"> · {t('low certainty')}</span>}</div>
-          <div className="text-caption text-muted">{team?.name} · {t('for')} <button className="hover:underline text-accent focus-ring rounded-control text-left" onClick={onOpen}>{epic?.title}</button><FollowStar on={followed} className="inline ml-1" /></div>
+          <div className="text-caption text-muted">{t(direction === 'outgoing' ? 'To' : 'From')} <span className="font-semibold text-ink-2">{team?.name}</span> · {t('for')} <button className="hover:underline text-accent focus-ring rounded-control text-left" onClick={onOpen}>{epic?.title}</button><FollowStar on={followed} className="inline ml-1" /></div>
         </div>
         <PostLockMark dep={dep} quarter={quarter} />
         <div className="ml-auto flex items-center gap-3">
@@ -276,7 +276,7 @@ function OutgoingRow({ dep, epic, rank, team, mayWrite, locked, act, followed, o
   const t = useT();
   const [removing, setRemoving] = useState(false);
   return (
-    <AskRow dep={dep} epic={epic} rank={rank} team={team} followed={followed} onOpen={onOpen}
+    <AskRow dep={dep} epic={epic} rank={rank} team={team} direction="outgoing" followed={followed} onOpen={onOpen}
       right={() => (
         <>
           <ChipCell response={dep.response} />
@@ -309,7 +309,7 @@ function IncomingRow({ dep, epic, rank, team, mayAnswer, act, followed, onOpen }
     await act('answerDependency', dep.id, { response, reason: '' });
   };
   return (
-    <AskRow dep={dep} epic={epic} rank={rank} team={team} followed={followed} onOpen={onOpen}
+    <AskRow dep={dep} epic={epic} rank={rank} team={team} direction="incoming" followed={followed} onOpen={onOpen}
       right={(labelId) => (
         <>
           {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <ChipCell response={dep.response} />}
