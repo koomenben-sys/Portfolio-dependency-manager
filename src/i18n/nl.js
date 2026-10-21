@@ -1065,4 +1065,6 @@ export const nl = {
   '{n} vacancies': '{n} vacatures',
   'tight from 80%': 'krap vanaf 80%',
   'No size': 'Geen maat',
+  'Our commitments': 'Onze toezeggingen',
+  'No commitments.': 'Geen toezeggingen.',
 };
