@@ -26,7 +26,7 @@ const COLS = [
   { id: 'owner', label: 'Owner', on: true },
   { id: 'value', label: 'Value', on: true, needsModel: true },
   { id: 'deps', label: 'Dependencies', on: true },
-  { id: 'goal', label: 'Goal', on: false },
+  { id: 'goal', label: 'Strategic goal', on: false },
 ];
 const COLS_KEY = 'kp.prioCols';
 const defaultCols = () => Object.fromEntries(COLS.map((c) => [c.id, c.on]));
@@ -263,7 +263,7 @@ export function PrioritizeView() {
                 {show('owner') && <th className="w-36 font-medium" scope="col">{t('Owner')}</th>}
                 {show('value') && <th className="w-14 font-medium" scope="col">{t('Value')}</th>}
                 {show('deps') && <th className="w-72 font-medium" scope="col">{t('Dependencies')}</th>}
-                {show('goal') && <th className="w-44 font-medium" scope="col">{t('Goal')}</th>}
+                {show('goal') && <th className="w-44 font-medium" scope="col">{t('Strategic goal')}</th>}
                 <th className="w-20" scope="col"><span className="sr-only">{t('Reorder')}</span></th>
               </tr>
             </thead>
