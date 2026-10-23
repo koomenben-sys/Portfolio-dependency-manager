@@ -8,7 +8,7 @@ import { epicDeps, byId } from '../domain/plan';
 import { strategyCounts, activeThemes, effectiveMust, valueScore } from '../domain/value';
 import { worstAsk, ASK_SEVERITY } from '../components/plan/core';
 import { teamCapacity } from '../domain/capacity';
-import { committedEpicIds } from '../domain/rhythm';
+import { committedEpicIds, depStand } from '../domain/rhythm';
 import { useT } from '../i18n';
 import { cls, RankNo, WorstIssue, InlineReason, EmptyLine, Disclosure, ViewHeader, quarterMeta, Dialog, ErrorLine, MustChip, ValueChip, SizeCell, CapacityLine, FollowStar, Menu, MenuLabel, menuItem } from '../components/plan/core';
 import { NoQuarter } from '../components/plan/NoQuarter';
@@ -164,7 +164,7 @@ export function PrioritizeView() {
       owner: () => e.ownerName,
       value: () => <ValueChip model={model} score={valueScore(model, e.value, p)} />,
       size: () => <SizeCell size={p.size} low={p.effortLow} high={p.effortHigh} settings={state.settings} />,
-      deps: () => <WorstIssue deps={deps} teams={teams} />,
+      deps: () => <WorstIssue deps={deps} teams={teams} stands={isLockedPhase(quarter.phase) ? new Map(deps.map((d) => [d.id, depStand(state, d)])) : null} />,
       goal: () => themes.get(e.themeId)?.name,
     };
     return (

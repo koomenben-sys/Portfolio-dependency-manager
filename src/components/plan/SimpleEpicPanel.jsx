@@ -5,9 +5,10 @@ import { canWriteTeam, canRank } from '../../data/repository';
 import { quarterLabel, isLockedPhase, ASK_META } from '../../domain/model';
 import { planFor, epicDeps } from '../../domain/plan';
 import { followsOf } from '../../domain/follows';
+import { depStand } from '../../domain/rhythm';
 import { activeThemes, effectiveMust, valueScore, SIMPLE_LEVELS, SIMPLE_META, FIB, RICE_IMPACT, WSJF_FIELDS, ONE_PAGER_FIELDS, THEME_TYPE_LABEL, fmtMonth } from '../../domain/value';
 import { useT } from '../../i18n';
-import { cls, StatusChip, InlineReason, Disclosure, ErrorLine, fmtDate, Tabs, MustChip, ValueChip, normAsk, SizePicker, SizeText, SignalChip, FollowButton } from './core';
+import { cls, StatusChip, InlineReason, Disclosure, ErrorLine, fmtDate, Tabs, MustChip, ValueChip, normAsk, SizePicker, SizeText, StandChip, FollowButton } from './core';
 import { PrintSheet } from './PrintSheet';
 import { describeEvent } from './EpicPanel';
 
@@ -153,7 +154,7 @@ export function SimpleEpicPanel({ epicId, onClose }) {
                   <li key={d.id} className="px-3 py-2 text-body">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0"><span className="text-muted">{state.teams.find((x) => x.id === d.providerTeamId)?.name}</span> · {d.ask}{(d.size || d.effortHigh > 0) && <span className="text-caption text-faint"> · <SizeText size={d.size} low={d.effortLow} high={d.effortHigh} /></span>}</div>
-                      <span className="flex items-center gap-1 shrink-0"><SignalChip dep={d} /><StatusChip response={d.response} /></span>
+                      <span className="flex items-center gap-1 shrink-0">{isLockedPhase(quarter.phase) && normAsk(d.response) === 'accepted' && <StandChip stand={depStand(state, d)} week={d.startedWeek} />}<StatusChip response={d.response} /></span>
                     </div>
                     {d.responseReason && <p className="text-caption text-muted mt-0.5">{d.responseReason}</p>}
                   </li>

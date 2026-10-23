@@ -7,6 +7,9 @@ import { useT } from '../../i18n';
 import { CommitmentPill, ResponsePill, ConfidenceMark, Field, input, btn, ErrorNote, ReasonPrompt, Modal, Empty, fmtDate } from './ui';
 import { DependencyForm } from './DependencyForm';
 
+// Section 28: history lines for progress_set read the stored stand (null = derived from the asks).
+const STAND_LABEL = { not_started: 'Not started', started: 'Started', done: 'Done' };
+
 // Side panel for one epic: edit, plan for the selected quarter, dependencies, check-ins, history.
 export function EpicPanel({ epicId, onClose }) {
   const { state, actor, quarter, run } = usePlan();
@@ -239,6 +242,12 @@ export function describeEvent(e, t) {
     // Release B (section 22)
     case 'signal_set': return t('signal {from} → {to}', { from: fmt(e.before?.signal), to: fmt(e.after?.signal) });
     case 'signal_confirmed': return t('still on track confirmed');
+    // Section 28 (D100)
+    case 'progress_set': return t('stand {from} → {to}', { from: t(STAND_LABEL[e.before?.progress] || 'Derived'), to: t(STAND_LABEL[e.after?.progress] || 'Derived') }) + (e.after?.startedWeek && e.after?.progress === 'started' ? ` (wk ${e.after.startedWeek})` : '');
+    case 'progress_confirmed': return t('confirmed, still as is');
+    case 'impediment_raised': return t('impediment raised: {title}', { title: e.after?.title ?? '' });
+    case 'impediment_status_changed': return t('impediment {from} → {to}', { from: fmt(e.before?.status), to: fmt(e.after?.status) });
+    case 'impediment_escalated': return t('escalated to {to}', { to: e.after?.escalatedTo || '–' });
     case 'delivered_changed': return e.after?.delivered ? t('marked delivered') : t('delivery unmarked');
     case 'carried_over': return t('carried over to the next quarter');
     case 'capacity_changed': return t('capacity changed');

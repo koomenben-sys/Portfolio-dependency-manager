@@ -4,9 +4,9 @@ import { usePlan } from '../context/PlanContext';
 import { canWriteTeam, isAdmin } from '../data/repository';
 import { ASK_META, REASON_REQUIRED, needsTalk, isLockedPhase } from '../domain/model';
 import { planFor, phaseAllows, byId } from '../domain/plan';
-import { bottleneckFor, hasSignal, inExecution } from '../domain/rhythm';
+import { bottleneckFor, depStand, inExecution } from '../domain/rhythm';
 import { useT } from '../i18n';
-import { cls, StatusChip, AskIcon, RankNo, AnswerControl, InlineReason, toneClass, toneBorder, EmptyLine, ViewHeader, quarterMeta, ErrorLine, Disclosure, normAsk, ASK_SEVERITY, worstAsk, BottleneckChip, SignalChip } from '../components/plan/core';
+import { cls, StatusChip, AskIcon, RankNo, AnswerControl, InlineReason, toneClass, toneBorder, EmptyLine, ViewHeader, quarterMeta, ErrorLine, Disclosure, normAsk, ASK_SEVERITY, worstAsk, BottleneckChip } from '../components/plan/core';
 import { LockPlanDialog } from '../components/plan/CycleActions';
 import { NoQuarter } from '../components/plan/NoQuarter';
 import { SimpleEpicPanel } from '../components/plan/SimpleEpicPanel';
@@ -73,7 +73,7 @@ export function AlignView() {
   // "Top 5: 2 in gevaar (rang 2, 6)" — the highest-ranked epics with a Kan niet / Bespreken ask (item 13).
   const topPlans = state.plans.filter((p) => p.quarterId === quarter.id && p.rank != null).sort((a, b) => a.rank - b.rank).slice(0, TOP_N);
   // During Uitvoeren a committed ask with In gevaar / Gaat niet halen counts too (L8).
-  const atRisk = topPlans.filter((p) => deps.some((d) => d.epicId === p.epicId && (talk(d) || (executing && hasSignal(d)))));
+  const atRisk = topPlans.filter((p) => deps.some((d) => d.epicId === p.epicId && (talk(d) || (executing && ['blocked', 'escalated'].includes(depStand(state, d))))));
   // Plain render function: one team pair row (summary + its asks).
   const renderPair = (p, i) => {
               const done = discussed.has(p.key);
@@ -142,7 +142,7 @@ export function AlignView() {
 
       {topPlans.length > 0 && (
         <p className={`mb-4 text-label tnum ${atRisk.length ? 'text-ink' : 'text-muted'}`}>
-          <span className="font-medium">{t('Top {n}', { n: topPlans.length })}:</span> {t('{n} deadlines at risk', { n: atRisk.length })}
+          <span className="font-medium">{t('Top {n}', { n: topPlans.length })}:</span> {t('{n} to discuss', { n: atRisk.length })}
           {atRisk.length > 0 && <> (<span className="text-muted">{t('rank')}</span> {atRisk.map((p, i) => <React.Fragment key={p.id}>{i > 0 && ', '}<button className="text-accent font-medium hover:underline focus-ring rounded-control px-0.5 min-h-6" onClick={() => revealEpic(p.epicId)} aria-label={t('Show rank {rank} in the list', { rank: p.rank })}>{p.rank}</button></React.Fragment>)})</>}
         </p>
       )}
@@ -227,7 +227,6 @@ function PairAsk({ dep, epic, rank, bottleneck, mayAnswer, act, onOpen }) {
           {dep.responseReason && reasonFor == null && <p className="text-label text-muted mt-0.5">{dep.responseReason}</p>}
         </div>
         <BottleneckChip kind={bottleneck} />
-        <SignalChip dep={dep} />
         {mayAnswer ? <AnswerControl value={dep.response} onPick={pick} labelledBy={labelId} /> : <StatusChip response={dep.response} />}
       </div>
       {reasonFor && (
