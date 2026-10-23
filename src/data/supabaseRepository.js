@@ -15,7 +15,7 @@ import { supabase } from '../lib/supabase';
 import { buildBaseline, readiness, phaseAllows, ASKS_FIXED, ANSWERS_FIXED } from '../domain/plan';
 import { PHASE_INDEX, isLockedPhase, REASON_REQUIRED } from '../domain/model';
 import { checkTheme, isHttpUrl } from '../domain/value';
-import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, DEFAULT_ESCALATION_DAYS, checkImpedimentStatus, checkEscalationDays, nextQuarter } from '../domain/rhythm';
+import { sizePatch, checkCertainty, checkSizeMap, checkCadence, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, DEFAULT_ESCALATION_DAYS, checkImpedimentStatus, checkEscalationDays, nextQuarter, checkProgress, progressOf, quarterWeek } from '../domain/rhythm';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, canChangeImpediment, normaliseEmail, checkRole, checkMemberChange, checkCapacity } from './repository';
 
 const snake = (s) => s.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
@@ -52,6 +52,7 @@ function friendly(message) {
   if (/_size_chk/i.test(message)) return 'Unknown size';
   if (/dependencies_certainty_chk/i.test(message)) return 'Unknown certainty';
   if (/dependencies_signal_chk/i.test(message)) return 'Unknown signal';
+  if (/progress_override_chk|dependencies_progress_chk/i.test(message)) return 'Unknown progress';
   return message;
 }
 
@@ -160,12 +161,12 @@ export class SupabaseRepository {
       // no surrogate key in SQL (PK = org, team, quarter); numeric columns arrive as strings, Release B fields may be absent before 010
       capacity: capacity.map((c) => ({ id: `${c.teamId}:${c.quarterId}`, ...c, headcount: Number(c.headcount) || 0, fteVacant: Number(c.fteVacant) || 0, absenceWeeks: Number(c.absenceWeeks) || 0, reservePct: Number(c.reservePct) || 0, weeks: Number(c.weeks) || 13, focusFactor: Number(c.focusFactor) || 1 })),
       epics: epics.sort(byCreated('createdAt')),
-      plans: plans.map((p) => ({ ...p, rank: p.strategicRank, effortLow: Number(p.effortLow) || 0, effortHigh: Number(p.effortHigh) || 0, size: p.size ?? null, delivered: !!p.delivered, createdAt: p.createdAt ?? p.updatedAt ?? null })),
-      dependencies: dependencies.map((d) => ({ ...d, effortLow: Number(d.effortLow) || 0, effortHigh: Number(d.effortHigh) || 0, size: d.size ?? null, certainty: d.certainty || 'medium', signal: d.signal || 'on_track', signalNote: d.signalNote || '', signalAt: d.signalAt ?? null, confirmedAt: d.confirmedAt ?? null })).sort(byCreated('createdAt')),
+      plans: plans.map((p) => ({ ...p, rank: p.strategicRank, effortLow: Number(p.effortLow) || 0, effortHigh: Number(p.effortHigh) || 0, size: p.size ?? null, delivered: !!p.delivered, progressOverride: p.progressOverride ?? null, createdAt: p.createdAt ?? p.updatedAt ?? null })),
+      dependencies: dependencies.map((d) => ({ ...d, effortLow: Number(d.effortLow) || 0, effortHigh: Number(d.effortHigh) || 0, size: d.size ?? null, certainty: d.certainty || 'medium', signal: d.signal || 'on_track', signalNote: d.signalNote || '', signalAt: d.signalAt ?? null, confirmedAt: d.confirmedAt ?? null, progress: d.progress || 'not_started', startedAt: d.startedAt ?? null, startedWeek: d.startedWeek ?? null, doneAt: d.doneAt ?? null })).sort(byCreated('createdAt')),
       votes: votes.map((v) => ({ id: `${v.teamId}:${v.quarterId}`, ...v })),
       discussions: discussions.map((d) => ({ ...d, depId: d.dependencyId })).sort(byCreated('createdAt')),
       checkIns: checkIns.map((c) => ({ ...c, authorName: names.get(c.authorId) || '' })).sort(byCreated('createdAt')),
-      impediments: impediments.map((i) => ({ ...i, depId: i.dependencyId, reporterId: i.reporterId ?? null, actionOwnerId: i.actionOwnerId ?? null, actionOwnerName: i.actionOwnerName || '' })).sort(byCreated('raisedAt')),
+      impediments: impediments.map((i) => ({ ...i, depId: i.dependencyId ?? null, reporterId: i.reporterId ?? null, actionOwnerId: i.actionOwnerId ?? null, actionOwnerName: i.actionOwnerName || '', escalatedAt: i.escalatedAt ?? null, escalatedTo: i.escalatedTo || '' })).sort(byCreated('raisedAt')),
       events: events
         .map((e) => ({ ...e, id: String(e.id), actorName: e.actorId ? (names.get(e.actorId) || 'former member') : '', action: EVENT_ACTIONS[e.action] || e.action }))
         .sort((a, b) => a.at.localeCompare(b.at)),
@@ -445,27 +446,51 @@ export class SupabaseRepository {
     await this._withReason('quarters', quarterId, { phase: 'closed' }, reason);
     return this.load();
   }
-  // Release B (D55): provider-only signal on a committed ask; 010 dependency_guard enforces both again in SQL.
-  async setSignal(actor, depId, signal, note = '') {
+  // Section 28 (D100): provider-only progress on a committed ask; 015 dependency_guard enforces both again in SQL.
+  async _committedDep(actor, depId) {
     const d = await this._dep(depId);
-    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can set a signal');
-    if (!['accepted', 'partial'].includes(d.response)) throw new ValidationError('Signals apply to committed asks only');
-    if (!SIGNALS.includes(signal)) throw new ValidationError('Unknown signal');
-    const signalNote = trim(note).slice(0, 200);
-    const { data, error } = await supabase.from('dependencies').update({ signal, signal_note: signalNote, signal_at: now() }).eq('id', depId).select('id');
+    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can set progress');
+    if (!['accepted', 'partial'].includes(d.response)) throw new ValidationError('Progress applies to committed asks only');
+    return d;
+  }
+  async _depUpdate(depId, row) {
+    const { data, error } = await supabase.from('dependencies').update(row).eq('id', depId).select('id');
     this._throw(error);
     if (!data?.length) throw new PermissionError('Not allowed for your role or team');
-    await this._event(actor, 'signal_set', 'dependencies', depId, d.quarterId, signalNote, { signal: d.signal || 'on_track' }, { signal, note: signalNote });
+  }
+  async setProgress(actor, depId, progress) {
+    const d = await this._committedDep(actor, depId);
+    checkProgress(progress, ValidationError);
+    const before = progressOf(d);
+    if (before === progress) return this.load();
+    const q = await this._quarter(d.quarterId);
+    const row = { progress, started_at: d.startedAt ?? null, started_week: d.startedWeek ?? null, done_at: null };
+    if (progress === 'not_started') { row.started_at = null; row.started_week = null; }
+    else if (!row.started_at) { row.started_at = now(); row.started_week = quarterWeek(q, this.settings).week; }
+    if (progress === 'done') row.done_at = now();
+    await this._depUpdate(depId, row);
+    await this._event(actor, 'progress_set', 'dependencies', depId, d.quarterId, '', { progress: before }, { progress, startedWeek: row.started_week });
     return this.load();
   }
-  async confirmSignal(actor, depId) {
-    const d = await this._dep(depId);
-    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can set a signal');
-    if (!['accepted', 'partial'].includes(d.response)) throw new ValidationError('Signals apply to committed asks only');
-    const { data, error } = await supabase.from('dependencies').update({ confirmed_at: now() }).eq('id', depId).select('id');
+  async confirmProgress(actor, depId) {
+    const d = await this._committedDep(actor, depId);
+    await this._depUpdate(depId, { confirmed_at: now() });
+    await this._event(actor, 'progress_confirmed', 'dependencies', depId, d.quarterId, '', null, { progress: progressOf(d) });
+    return this.load();
+  }
+  // Epic-level stand (D101); log_epic_plan (015) refuses it for rank-only users.
+  async setEpicProgress(actor, planId, progress) {
+    const { data: row } = await supabase.from('epic_plans').select('*').eq('id', planId).maybeSingle();
+    if (!row) throw new ValidationError('Unknown plan');
+    const p = fromRow(row);
+    const e = await this._epic(p.epicId);
+    if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Only the epic team can set the epic stand');
+    if (progress != null) checkProgress(progress, ValidationError);
+    if ((p.progressOverride ?? null) === (progress ?? null)) return this.load();
+    const { data, error } = await supabase.from('epic_plans').update({ progress_override: progress ?? null }).eq('id', planId).select('id');
     this._throw(error);
     if (!data?.length) throw new PermissionError('Not allowed for your role or team');
-    await this._event(actor, 'signal_confirmed', 'dependencies', depId, d.quarterId, '', null, { signal: d.signal || 'on_track' });
+    await this._event(actor, 'progress_set', 'epic_plans', planId, p.quarterId, '', { progress: p.progressOverride ?? null }, { progress: progress ?? null });
     return this.load();
   }
   // Release B (D56): "Geleverd"; works on a closed quarter too (the 005 trigger only logs rank / commitment / effort).
@@ -578,9 +603,15 @@ export class SupabaseRepository {
     } else {
       if (!fields.title?.trim()) throw new ValidationError('Title is required');
       if (!fields.epicId && !depId) throw new ValidationError('Link the impediment to an epic');
+      // Section 28: an impediment on a toezegging (depId) always carries that ask's epic as well.
+      let quarterId = null;
+      if (depId) { const d = await this._dep(depId); fields.epicId = d.epicId; quarterId = d.quarterId; }
       const row = { ...toRow({ kind: 'impediment', ownerName: actor.name, reporterId: actor.id, actionOwnerId: null, actionOwnerName: '', ...fields }, org), dependency_id: depId || null, ref_code: await this._ref('impediment') };
       if (row.kind !== 'risk') row.roam = null;
-      this._throw((await supabase.from('impediments').insert(row)).error);
+      const { data, error } = await supabase.from('impediments').insert(row).select('id').single();
+      this._throw(error);
+      if (!quarterId) { const { data: plan } = await supabase.from('epic_plans').select('quarter_id').eq('org_id', org).eq('epic_id', fields.epicId).limit(1).maybeSingle(); quarterId = plan?.quarter_id || null; }
+      await this._event(actor, 'impediment_raised', 'impediments', data.id, quarterId, '', null, { title: fields.title.trim(), depId: depId || null });
     }
     return this.load();
   }
@@ -589,6 +620,22 @@ export class SupabaseRepository {
     return this.upsertImpediment(actor, { id, status: checkImpedimentStatus(status, ValidationError) });
   }
   async resolveImpediment(actor, id) { return this.setImpedimentStatus(actor, id, 'resolved'); }
+  // "Escaleren" (D102): same rule as the status (impediment_guard, 015); one impediment_escalated event.
+  async escalateImpediment(actor, id, to = '') {
+    const imp = await this._row('impediments', id, 'impediment');
+    const epic = imp.epicId ? await this._epic(imp.epicId) : null;
+    if (!canChangeImpediment(actor, imp, epic)) throw new PermissionError('Only the reporter, the action holder, the epic team or an admin can change the status');
+    if (imp.status === 'resolved') throw new ValidationError('A resolved impediment cannot be escalated');
+    const escalatedTo = trim(to).slice(0, 80);
+    const { data, error } = await supabase.from('impediments').update({ escalated_at: now(), escalated_to: escalatedTo }).eq('id', id).select('id');
+    this._throw(error);
+    if (!data?.length) throw new PermissionError('Not allowed for your role or team');
+    let quarterId = null;
+    if (imp.dependencyId) quarterId = (await this._dep(imp.dependencyId)).quarterId;
+    else { const { data: plan } = await supabase.from('epic_plans').select('quarter_id').eq('org_id', await this._org()).eq('epic_id', imp.epicId).limit(1).maybeSingle(); quarterId = plan?.quarter_id || null; }
+    await this._event(actor, 'impediment_escalated', 'impediments', id, quarterId, escalatedTo, null, { escalatedTo });
+    return this.load();
+  }
 
   // ── Volgen (section 23, D67): own rows only, enforced again by the 011 policies ──
   async followEpic(actor, epicId) {

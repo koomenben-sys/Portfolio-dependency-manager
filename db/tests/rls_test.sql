@@ -1,7 +1,7 @@
 -- ============================================================================
 -- db/tests/rls_test.sql  -  row-level security and tenant-isolation test (BACKLOG P1, docs/design.md section 18)
 -- ----------------------------------------------------------------------------
--- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-014).
+-- HOW TO RUN: paste the whole file into the Supabase SQL editor and click Run (after migrations 001-015).
 -- The result grid shows one row per check with PASS / FAIL; the first row is the total.
 -- Plain SQL, no extension needed (no pgTAP). Re-runnable.
 --
@@ -469,6 +469,41 @@ begin
     format('with x as (update impediments set status = ''resolved'' where id = %s returning 1) select count(*) from x', I1), '0');
   perform pg_temp.rls_check('impediment', 'insert sets reporter_id to the raiser', u_planner,
     format('with x as (insert into impediments (org_id, ref_code, kind, title, epic_id) values (%s, ''RLS-IMP-9'', ''impediment'', ''new'', %s) returning reporter_id) select count(*) from x where reporter_id = %L', A, EA1, u_planner), '1');
+
+  -- 16. Stand per toezegging (015, D100-D103): progress by the provider on committed asks; epic override by the team;
+  --     escalation follows the impediment status rule; an impediment may hang on an ask
+  perform pg_temp.rls_check('progress', 'provider sets Gestart on a committed (locked-quarter) ask', u_prov,
+    format('with x as (update dependencies set progress = ''started'', started_at = now(), started_week = 3 where id = %s returning 1) select count(*) from x', DL), '1');
+  perform pg_temp.rls_check('progress', 'provider sets Klaar', u_prov,
+    format('with x as (update dependencies set progress = ''done'', done_at = now() where id = %s returning 1) select count(*) from x', DL), '1');
+  perform pg_temp.rls_check('progress', 'admin sets progress for any team', u_admin,
+    format('with x as (update dependencies set progress = ''started'' where id = %s returning 1) select count(*) from x', DL), '1');
+  perform pg_temp.rls_check('progress', 'requester cannot set progress', u_planner,
+    format('with x as (update dependencies set progress = ''started'' where id = %s returning 1) select count(*) from x', DL), 'error:Only the provider team can set progress');
+  perform pg_temp.rls_check('progress', 'progress on an open ask is refused', u_prov,
+    format('with x as (update dependencies set progress = ''started'' where id = %s returning 1) select count(*) from x', DA), 'error:committed asks only');
+  perform pg_temp.rls_check('progress', 'bad progress value is refused', u_prov,
+    format('with x as (update dependencies set progress = ''almost'' where id = %s returning 1) select count(*) from x', DL), 'error:dependencies_progress_chk');
+  perform pg_temp.rls_check('progress', 'viewer cannot set progress (0 rows)', u_viewer,
+    format('with x as (update dependencies set progress = ''started'' where id = %s returning 1) select count(*) from x', DL), '0');
+  perform pg_temp.rls_check('progress', 'planner sets Gestart on own team''s epic', u_planner,
+    format('with x as (update epic_plans set progress_override = ''started'' where id = %s returning 1) select count(*) from x', PA1), '1');
+  perform pg_temp.rls_check('progress', 'planner cannot set it on another team''s epic (0 rows)', u_planner,
+    format('with x as (update epic_plans set progress_override = ''done'' where id = %s returning 1) select count(*) from x', PA2), '0');
+  perform pg_temp.rls_check('progress', 'can_rank viewer cannot set the epic stand', u_ranker,
+    format('with x as (update epic_plans set progress_override = ''done'' where id = %s returning 1) select count(*) from x', PA2), 'error:strategic rank only', 'rls test');
+  perform pg_temp.rls_check('progress', 'bad epic stand value is refused', u_admin,
+    format('with x as (update epic_plans set progress_override = ''almost'' where id = %s returning 1) select count(*) from x', PA2), 'error:epic_plans_progress_override_chk');
+  perform pg_temp.rls_check('progress', 'reporter escalates an impediment', u_prov,
+    format('with x as (update impediments set escalated_at = now(), escalated_to = ''Directie'' where id = %s returning 1) select count(*) from x', I1), '1');
+  perform pg_temp.rls_check('progress', 'planner who is neither reporter, holder nor epic team cannot escalate', u_prov,
+    format('with x as (update impediments set escalated_at = now(), escalated_to = ''Directie'' where id = %s returning 1) select count(*) from x', I4), 'error:Only the reporter');
+  perform pg_temp.rls_check('progress', 'admin escalates any impediment', u_admin,
+    format('with x as (update impediments set escalated_at = now() where id = %s returning 1) select count(*) from x', I4), '1');
+  perform pg_temp.rls_check('progress', 'provider raises an impediment on a committed ask', u_prov,
+    format('with x as (insert into impediments (org_id, ref_code, kind, title, epic_id, dependency_id) values (%s, ''RLS-IMP-10'', ''impediment'', ''blocked'', %s, %s) returning 1) select count(*) from x', A, EA1, DL), '1');
+  perform pg_temp.rls_check('progress', 'viewer cannot raise one', u_viewer,
+    format('with x as (insert into impediments (org_id, ref_code, kind, title, epic_id, dependency_id) values (%s, ''RLS-IMP-11'', ''impediment'', ''blocked'', %s, %s) returning 1) select count(*) from x', A, EA1, DL), 'error:row-level security');
 end $$;
 
 
