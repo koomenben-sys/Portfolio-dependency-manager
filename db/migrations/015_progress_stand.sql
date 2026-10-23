@@ -33,7 +33,7 @@ alter table impediments add column if not exists escalated_at  timestamptz;
 alter table impediments add column if not exists escalated_to  text not null default '';
 alter table impediments drop constraint if exists impediments_org_id_dependency_id_fkey;
 alter table impediments add constraint impediments_org_id_dependency_id_fkey
-  foreign key (org_id, dependency_id) references dependencies(org_id, id) on delete set null;
+  foreign key (org_id, dependency_id) references dependencies(org_id, id) on delete set null (dependency_id);   -- only the link, never org_id
 
 -- Asks (replaces 012): progress is provider-only on committed asks; everything else unchanged ----------------
 create or replace function dependency_guard() returns trigger
