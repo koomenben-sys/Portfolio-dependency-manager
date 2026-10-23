@@ -3,10 +3,10 @@ import { seedState } from './seed';
 import { buildBaseline, readiness, phaseAllows, ASKS_FIXED, ANSWERS_FIXED } from '../domain/plan';
 import { PHASES, isLockedPhase, REASON_REQUIRED } from '../domain/model';
 import { checkTheme, isHttpUrl } from '../domain/value';
-import { sizePatch, checkCertainty, checkSizeMap, checkCadence, SIGNALS, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, DEFAULT_ESCALATION_DAYS, checkImpedimentStatus, checkEscalationDays, nextQuarter } from '../domain/rhythm';
+import { sizePatch, checkCertainty, checkSizeMap, checkCadence, DEFAULT_SIZE_MAP, DEFAULT_CADENCE, DEFAULT_ESCALATION_DAYS, checkImpedimentStatus, checkEscalationDays, nextQuarter, checkProgress, progressOf, quarterWeek } from '../domain/rhythm';
 import { PermissionError, ValidationError, canWriteTeam, isAdmin, canRank, isPlanner, canChangeImpediment, normaliseEmail, checkRole, checkMemberChange, checkCapacity } from './repository';
 
-const KEY = 'kwartaalplan.mock.v9'; // v9: plan createdAt (Nieuw ongepland werk); v8: section 27 seed (impediments with Melder / Actiehouder / status); v7: section 26 seed (every team both ways, sizes, capacity per quarter); v6: section 25 seed (Uitvoering asks, signals, owners); v5 section 23; v4 Release B; v3 Release A; v2 the 2026-10-17 reset
+const KEY = 'kwartaalplan.mock.v10'; // v10: section 28 seed (stand per toezegging, linked impediments, no signals); v9: plan createdAt (Nieuw ongepland werk); v8: section 27 seed (impediments with Melder / Actiehouder / status); v7: section 26 seed (every team both ways, sizes, capacity per quarter); v6: section 25 seed (Uitvoering asks, signals, owners); v5 section 23; v4 Release B; v3 Release A; v2 the 2026-10-17 reset
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const now = () => new Date().toISOString();
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -36,17 +36,17 @@ export class MockRepository {
     this.state.epics.forEach((e) => { e.value ||= {}; e.valueNote ||= ''; e.onePager ||= {}; e.onePagerUrl ??= null; });
     this.state.settings.valueModel ||= 'none';
     this.state.capacity.forEach((c) => { c.fteVacant ??= 0; });
-    this.state.plans.forEach((p) => { p.size ??= null; p.delivered = !!p.delivered; p.createdAt ??= p.updatedAt; });
-    this.state.dependencies.forEach((d) => { d.size ??= null; d.certainty ||= 'medium'; d.signal ||= 'on_track'; d.signalNote ||= ''; d.signalAt ??= null; d.confirmedAt ??= null; });
+    this.state.plans.forEach((p) => { p.size ??= null; p.delivered = !!p.delivered; p.createdAt ??= p.updatedAt; p.progressOverride ??= null; });
+    this.state.dependencies.forEach((d) => { d.size ??= null; d.certainty ||= 'medium'; d.signal ||= 'on_track'; d.signalNote ||= ''; d.signalAt ??= null; d.confirmedAt ??= null; d.progress ||= 'not_started'; d.startedAt ??= null; d.startedWeek ??= null; d.doneAt ??= null; });
     this.state.settings.sizeMap ||= { ...DEFAULT_SIZE_MAP };
     this.state.settings.cadence ||= { ...DEFAULT_CADENCE };
     this.state.settings.impedimentEscalationDays ??= DEFAULT_ESCALATION_DAYS;
-    this.state.impediments.forEach((i) => { i.reporterId ??= null; i.actionOwnerId ??= null; i.actionOwnerName ||= ''; });
+    this.state.impediments.forEach((i) => { i.reporterId ??= null; i.actionOwnerId ??= null; i.actionOwnerName ||= ''; i.depId ??= null; i.escalatedAt ??= null; i.escalatedTo ||= ''; });
     if (!this.state.follows || Array.isArray(this.state.follows)) this.state.follows = {};
   }
   async reset() {
     this.state = { invitations: [], ...seedState() };
-    this.counters = { epic: 33, dependency: 39, impediment: 7 };
+    this.counters = { epic: 36, dependency: 52, impediment: 8 };
     return this._persist();
   }
   // Blank organisation for the onboarding wizard (demo mode). Keeps the language choice.
@@ -170,7 +170,7 @@ export class MockRepository {
       }
       Object.assign(existing, plan, { updatedAt: now() });
     } else {
-      const created = { id: uid(), rank: null, effortLow: 0, effortHigh: 0, size: null, delivered: false, commitment: 'draft', confidence: 'medium', ...plan, createdAt: now(), updatedAt: now() };
+      const created = { id: uid(), rank: null, effortLow: 0, effortHigh: 0, size: null, delivered: false, progressOverride: null, commitment: 'draft', confidence: 'medium', ...plan, createdAt: now(), updatedAt: now() };
       this.state.plans.push(created);
       this._event(actor, 'plan_added', 'plans', created.id, q.id, reason, null, { epicId: plan.epicId });
       if (plan.rank != null) this._event(actor, 'rank_changed', 'plans', created.id, q.id, reason, { rank: null }, { rank: plan.rank });
@@ -216,7 +216,7 @@ export class MockRepository {
     if (dep.certainty !== undefined) checkCertainty(dep.certainty, ValidationError);
     if ((dep.effortLow || 0) > (dep.effortHigh || 0)) throw new ValidationError('High estimate must be at least the low estimate');
     this._guardAsk(dep.quarterId, dep.reason, 'add an ask');
-    const created = { id: uid(), refCode: this._ref('dependency'), requesterTeamId: epic.teamId, requesterName: epic.ownerName || actor.name, ifDeclined: '', neededBy: null, effortLow: 0, effortHigh: 0, size: null, certainty: 'medium', signal: 'on_track', signalNote: '', signalAt: null, confirmedAt: null, grantedLow: null, grantedHigh: null, response: 'proposed', responseReason: '', deferredToQuarterId: null, respondedAt: null, createdAt: now(), ...dep };
+    const created = { id: uid(), refCode: this._ref('dependency'), requesterTeamId: epic.teamId, requesterName: epic.ownerName || actor.name, ifDeclined: '', neededBy: null, effortLow: 0, effortHigh: 0, size: null, certainty: 'medium', signal: 'on_track', signalNote: '', signalAt: null, confirmedAt: null, progress: 'not_started', startedAt: null, startedWeek: null, doneAt: null, grantedLow: null, grantedHigh: null, response: 'proposed', responseReason: '', deferredToQuarterId: null, respondedAt: null, createdAt: now(), ...dep };
     delete created.reason;
     this.state.dependencies.push(created);
     this._event(actor, 'dependency_added', 'dependencies', created.id, dep.quarterId, '', null, { ask: dep.ask });
@@ -343,25 +343,46 @@ export class MockRepository {
     q.phase = 'closed';
     return this._persist();
   }
-  // Release B (D55): the providing team signals on a committed ask; every change leaves an event row.
-  async setSignal(actor, depId, signal, note = '') {
+  // Section 28 (D100): the providing team sets Niet gestart · Gestart · Klaar on a committed ask; one progress_set
+  // event per change. Gestart records the quarter week; Klaar the moment; going back clears them.
+  _committedDep(actor, depId) {
     const d = this.state.dependencies.find((x) => x.id === depId);
     if (!d) throw new ValidationError('Unknown dependency');
-    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can set a signal');
-    if (!['accepted', 'partial'].includes(d.response)) throw new ValidationError('Signals apply to committed asks only');
-    if (!SIGNALS.includes(signal)) throw new ValidationError('Unknown signal');
-    const next = { signal, signalNote: String(note || '').trim().slice(0, 200), signalAt: now() };
-    this._event(actor, 'signal_set', 'dependencies', d.id, d.quarterId, next.signalNote, { signal: d.signal || 'on_track' }, { signal, note: next.signalNote });
+    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can set progress');
+    if (!['accepted', 'partial'].includes(d.response)) throw new ValidationError('Progress applies to committed asks only');
+    return d;
+  }
+  async setProgress(actor, depId, progress) {
+    const d = this._committedDep(actor, depId);
+    checkProgress(progress, ValidationError);
+    const before = progressOf(d);
+    if (before === progress) return this._persist();
+    const q = this._quarter(d.quarterId);
+    const next = { progress, startedAt: d.startedAt ?? null, startedWeek: d.startedWeek ?? null, doneAt: null };
+    if (progress === 'not_started') { next.startedAt = null; next.startedWeek = null; }
+    else if (!next.startedAt) { next.startedAt = now(); next.startedWeek = quarterWeek(q, this.state.settings).week; }
+    if (progress === 'done') next.doneAt = now();
+    this._event(actor, 'progress_set', 'dependencies', d.id, d.quarterId, '', { progress: before }, { progress, startedWeek: next.startedWeek });
     Object.assign(d, next);
     return this._persist();
   }
-  async confirmSignal(actor, depId) {
-    const d = this.state.dependencies.find((x) => x.id === depId);
-    if (!d) throw new ValidationError('Unknown dependency');
-    if (!canWriteTeam(actor, d.providerTeamId)) throw new PermissionError('Only the provider team can set a signal');
-    if (!['accepted', 'partial'].includes(d.response)) throw new ValidationError('Signals apply to committed asks only');
+  // "Bevestigen" (D104): still as it is; writes confirmed_at and a progress_confirmed event.
+  async confirmProgress(actor, depId) {
+    const d = this._committedDep(actor, depId);
     d.confirmedAt = now();
-    this._event(actor, 'signal_confirmed', 'dependencies', d.id, d.quarterId, '', null, { signal: d.signal || 'on_track' });
+    this._event(actor, 'progress_confirmed', 'dependencies', d.id, d.quarterId, '', null, { progress: progressOf(d) });
+    return this._persist();
+  }
+  // Epic-level stand (D101): the epic team sets Gestart / Klaar on the epic itself; null returns to the derived stand.
+  async setEpicProgress(actor, planId, progress) {
+    const p = this.state.plans.find((x) => x.id === planId);
+    if (!p) throw new ValidationError('Unknown plan');
+    const e = this._epic(p.epicId);
+    if (!canWriteTeam(actor, e.teamId)) throw new PermissionError('Only the epic team can set the epic stand');
+    if (progress != null) checkProgress(progress, ValidationError);
+    if ((p.progressOverride ?? null) === (progress ?? null)) return this._persist();
+    this._event(actor, 'progress_set', 'plans', p.id, p.quarterId, '', { progress: p.progressOverride ?? null }, { progress: progress ?? null });
+    p.progressOverride = progress ?? null; p.updatedAt = now();
     return this._persist();
   }
   // Release B (D56): "Geleverd" on a committed epic; works on a closed quarter too.
@@ -441,7 +462,12 @@ export class MockRepository {
       }
       Object.assign(existing, patch);
     } else {
-      this.state.impediments.push({ id: uid(), refCode: this._ref('impediment'), kind: 'impediment', ownerName: actor.name, reporterId: actor.id, actionOwnerId: null, actionOwnerName: '', status: 'open', roam: null, raisedAt: now(), resolvedAt: null, depId: null, ...patch });
+      // Section 28: an impediment on a toezegging (depId) always carries that ask's epic as well.
+      if (patch.depId) { const d = this.state.dependencies.find((x) => x.id === patch.depId); if (!d) throw new ValidationError('Unknown dependency'); patch.epicId = d.epicId; }
+      const created = { id: uid(), refCode: this._ref('impediment'), kind: 'impediment', ownerName: actor.name, reporterId: actor.id, actionOwnerId: null, actionOwnerName: '', status: 'open', roam: null, raisedAt: now(), resolvedAt: null, depId: null, escalatedAt: null, escalatedTo: '', ...patch };
+      this.state.impediments.push(created);
+      const q = this.state.dependencies.find((x) => x.id === created.depId)?.quarterId || this.state.plans.find((p) => p.epicId === created.epicId)?.quarterId || null;
+      this._event(actor, 'impediment_raised', 'impediments', created.id, q, '', null, { title: created.title, depId: created.depId });
     }
     return this._persist();
   }
@@ -451,6 +477,17 @@ export class MockRepository {
     return this.upsertImpediment(actor, { id, status: checkImpedimentStatus(status, ValidationError) });
   }
   async resolveImpediment(actor, id) { return this.setImpedimentStatus(actor, id, 'resolved'); }
+  // "Escaleren" (D102): same people as the status; escalated_to is free text ("Directie"); one impediment_escalated event.
+  async escalateImpediment(actor, id, to = '') {
+    const imp = this.state.impediments.find((x) => x.id === id);
+    if (!imp) throw new ValidationError('Unknown impediment');
+    if (!canChangeImpediment(actor, imp, this.state.epics.find((e) => e.id === imp.epicId))) throw new PermissionError('Only the reporter, the action holder, the epic team or an admin can change the status');
+    if (imp.status === 'resolved') throw new ValidationError('A resolved impediment cannot be escalated');
+    imp.escalatedAt = now(); imp.escalatedTo = String(to || '').trim().slice(0, 80);
+    const q = this.state.dependencies.find((x) => x.id === imp.depId)?.quarterId || this.state.plans.find((p) => p.epicId === imp.epicId)?.quarterId || null;
+    this._event(actor, 'impediment_escalated', 'impediments', imp.id, q, imp.escalatedTo, null, { escalatedTo: imp.escalatedTo });
+    return this._persist();
+  }
 
   // ── Volgen (section 23, D67): personal, per actor, no event rows ──────────────
   async followEpic(actor, epicId) {

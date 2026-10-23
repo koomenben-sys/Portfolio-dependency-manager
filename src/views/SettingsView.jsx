@@ -4,7 +4,7 @@ import { usePlan } from '../context/PlanContext';
 import { isAdmin, canRank } from '../data/repository';
 import { PHASES, quarterLabel } from '../domain/model';
 import { VALUE_MODELS, VALUE_MODEL_LABEL, THEME_TYPES, THEME_TYPE_LABEL, monthToDate, dateToMonth } from '../domain/value';
-import { SIZES, sizeMapOf, cadenceOf, escalationDays } from '../domain/rhythm';
+import { SIZES, sizeMapOf, cadenceOf, escalationDays, FREQUENCIES, FREQUENCY_LABEL, CADENCE_MODES, CADENCE_MODE_LABEL } from '../domain/rhythm';
 import { useT, LANGUAGES } from '../i18n';
 import { cls, ViewHeader, ErrorLine, Disclosure, MustChip } from '../components/plan/core';
 import { Field, input, btn, ErrorNote } from '../components/plan/ui';
@@ -56,12 +56,13 @@ export function SettingsView() {
             <label className="block"><span className={cls.label}>{t('Name')}</span><input className={cls.input} defaultValue={state.settings.orgName || ''} disabled={!admin} onBlur={(e) => e.target.value !== (state.settings.orgName || '') && act('updateSettings', { orgName: e.target.value })} /></label>
             <label className="block"><span className={cls.label}>{t('Language')}</span><select className={cls.input} value={state.settings.language || 'nl'} onChange={(e) => act('updateSettings', { language: e.target.value })}>{LANGUAGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
             <label className="block"><span className={cls.label}>{t('Value model')}</span><select className={cls.input} value={state.settings.valueModel || 'none'} disabled={!admin} onChange={(e) => act('updateSettings', { valueModel: e.target.value })}>{VALUE_MODELS.map((m) => <option key={m} value={m}>{t(VALUE_MODEL_LABEL[m])}</option>)}</select></label>
-            <Steering act={act} admin={admin} />
             <label className="block"><span className={cls.label}>{t('Skin')}</span><select className={cls.input} value={state.settings.skin || 'zakelijk'} disabled={!admin} onChange={(e) => act('updateSettings', { skin: e.target.value })}>{SKINS.map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}</select></label>
             <label className="block"><span className={cls.label}>{t('Escalation after (days)')}</span><input type="number" min="1" max="365" className={`${cls.input} !w-24 tnum`} defaultValue={escalationDays(state.settings)} disabled={!admin} onBlur={(e) => Number(e.target.value) !== escalationDays(state.settings) && act('updateSettings', { impedimentEscalationDays: Number(e.target.value) })} /></label>
           </div>
           <SizeMap act={act} admin={admin} />
         </Section>
+
+        <Section id="rhythm" title={t('Rhythm')}><Rhythm act={act} admin={admin} /></Section>
 
         <Section id="teams" title={t('Teams')} meta={state.teams.length}>
           <ul className="divide-y divide-border">
@@ -142,19 +143,33 @@ function SizeMap({ act, admin }) {
     </div>
   );
 }
-// Release B (L9): Sturen — Op uitzondering (default, prompts nothing) or Sprintkadans with N weeks.
-function Steering({ act, admin }) {
+// Ritme (section 28, D104): the bijwerkmoment — day(s) of the week, time, frequency (weekly / two-weekly / per sprint
+// with N weeks) and mode (alleen afwijkingen | elke periode bevestigen). Stored in settings.cadence (org_settings.profile).
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function Rhythm({ act, admin }) {
   const { state } = usePlan();
   const t = useT();
   const c = cadenceOf(state.settings);
+  const save = (patch) => act('updateSettings', { cadence: { ...c, ...patch } });
+  const toggleDay = (d) => { const days = c.days.includes(d) ? c.days.filter((x) => x !== d) : [...c.days, d]; if (days.length) save({ days }); };
   return (
-    <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
-      <label className="block"><span className={cls.label}>{t('Steering')}</span>
-        <select className={cls.input} value={c.mode} disabled={!admin} onChange={(e) => act('updateSettings', { cadence: { ...c, mode: e.target.value } })}>
-          <option value="exception">{t('By exception')}</option><option value="sprint">{t('Sprint cadence')}</option>
-        </select>
+    <div className="flex flex-wrap gap-x-5 gap-y-3 items-end">
+      <div role="group" aria-label={t('Update day')}>
+        <span className={cls.label}>{t('Update day')}</span>
+        <div className="inline-flex rounded-control border border-border-strong overflow-hidden bg-surface">
+          {WEEKDAYS.map((label, i) => { const d = i + 1; const on = c.days.includes(d); return (
+            <button key={d} type="button" aria-pressed={on} disabled={!admin} onClick={() => toggleDay(d)} className={`h-8 px-2.5 text-caption font-medium transition-base focus-ring-inset ${i > 0 ? 'border-l border-border-strong' : ''} ${on ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-surface-2 hover:text-ink'} disabled:cursor-not-allowed`}>{t(label)}</button>
+          ); })}
+        </div>
+      </div>
+      <label className="block"><span className={cls.label}>{t('Before')}</span><input type="time" className={`${cls.input} !w-28 tnum`} defaultValue={c.time} disabled={!admin} onBlur={(e) => e.target.value && e.target.value !== c.time && save({ time: e.target.value })} /></label>
+      <label className="block"><span className={cls.label}>{t('Frequency')}</span>
+        <select className={`${cls.input} !w-auto`} value={c.frequency} disabled={!admin} onChange={(e) => save({ frequency: e.target.value })}>{FREQUENCIES.map((f) => <option key={f} value={f}>{t(FREQUENCY_LABEL[f])}</option>)}</select>
       </label>
-      {c.mode === 'sprint' && <label className="block"><span className={cls.label}>{t('Weeks')}</span><select className={`${cls.input} !w-16 tnum`} value={c.weeks} disabled={!admin} onChange={(e) => act('updateSettings', { cadence: { ...c, weeks: Number(e.target.value) } })}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>}
+      {c.frequency === 'sprint' && <label className="block"><span className={cls.label}>{t('Weeks')}</span><select className={`${cls.input} !w-16 tnum`} value={c.weeks} disabled={!admin} onChange={(e) => save({ weeks: Number(e.target.value) })}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>}
+      <label className="block"><span className={cls.label}>{t('Mode')}</span>
+        <select className={`${cls.input} !w-auto`} value={c.mode} disabled={!admin} onChange={(e) => save({ mode: e.target.value })}>{CADENCE_MODES.map((m) => <option key={m} value={m}>{t(CADENCE_MODE_LABEL[m])}</option>)}</select>
+      </label>
     </div>
   );
 }

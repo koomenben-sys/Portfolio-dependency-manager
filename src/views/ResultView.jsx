@@ -14,7 +14,8 @@ import { ResultTable, resultDate } from './QuarterResultView';
 // Step 3 once the quarter is Afgesloten — Resultaat (docs/design.md section 23, D66; acceptance M6). Merges
 // Kwartaalresultaat (the per-goal table) and the old Afsluiten (per team the committed epics with "Geleverd" and
 // "Doorschuiven naar <next quarter>" on undelivered ones). Print / PDF. The old #kwartaalresultaat and #afsluiten
-// routes land here (App.jsx). No predictability percentage (D62).
+// routes land here (App.jsx). No predictability percentage (D62). Section 28 (D103): "Geleverd" is derived from Klaar
+// on Voortgang (every toezegging Klaar, or the epic set Klaar); the manual flag stays for epics without that.
 export function ResultView() {
   const { state, actor, quarter, run } = usePlan();
   const t = useT();
@@ -55,8 +56,8 @@ export function ResultView() {
                         <button className="min-w-0 flex-1 text-left text-body truncate hover:underline focus-ring rounded-control" onClick={() => setOpenEpic(x.epic.id)}>{x.epic.title}<FollowStar on={followed.has(x.epic.id)} className="inline ml-1.5 -mt-0.5" /></button>
                         {!x.plan && <span className="text-caption text-muted">{t('removed from the quarter')}</span>}
                         {x.plan && (mayEdit ? (
-                          <label className="inline-flex items-center gap-2 h-8 px-1.5 rounded-control text-label cursor-pointer hover:bg-surface-2 print:hidden">
-                            <input type="checkbox" className="w-4 h-4 accent-[var(--color-accent-500)]" checked={x.delivered} onChange={(e) => act('setDelivered', x.plan.id, e.target.checked)} />{t('Delivered')}
+                          <label className="inline-flex items-center gap-2 h-8 px-1.5 rounded-control text-label cursor-pointer hover:bg-surface-2 print:hidden" title={x.derivedDone ? t('Done on Progress') : undefined}>
+                            <input type="checkbox" className="w-4 h-4 accent-[var(--color-accent-500)]" checked={x.delivered} disabled={x.derivedDone} onChange={(e) => act('setDelivered', x.plan.id, e.target.checked)} />{t('Delivered')}{x.derivedDone && <span className="text-caption text-muted">· {t('Done')}</span>}
                           </label>
                         ) : null)}
                         {x.plan && !mayEdit && (x.delivered ? <span className="inline-flex items-center gap-1 text-label text-ok-fg"><Check size={14} aria-hidden="true" />{t('Delivered')}</span> : <span className="text-label text-muted">{t('Not delivered')}</span>)}

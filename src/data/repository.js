@@ -23,11 +23,14 @@
 //     asks also carry `certainty` (low|medium|high, requester only, D52)
 //   lockPlan(actor, quarterId, reason='')              (admin; baseline + phase locked in one step, one phase_changed row; D54)
 //   closeQuarter(actor, quarterId, reason='')          (admin; locked/active -> closed)
-//   setSignal(actor, depId, signal, note='') / confirmSignal(actor, depId)   (provider team, committed asks only; D55)
+//   setProgress(actor, depId, 'not_started'|'started'|'done') / confirmProgress(actor, depId)   (provider team, committed asks only; D100/D104)
+//   setEpicProgress(actor, planId, progress|null)   (epic team; null = derived from the asks; D101)
+//   escalateImpediment(actor, id, to='')            (canChangeImpediment; escalated_at / escalated_to; D102)
+//   upsertImpediment also takes depId: an impediment on a toezegging (its epic is derived from the ask)
 //   setDelivered(actor, planId, bool) / carryOver(actor, planId)            (epic team; carryOver is idempotent; D56)
 //   followEpic(actor, epicId) / unfollowEpic(actor, epicId)   (any member, own rows only; state.follows = own epic ids
 //     in Supabase, { [actorId]: epicId[] } in the mock; domain/follows.js reads both; D67/D68)
-//   updateSettings also carries sizeMap { S:[lo,hi], ... } and cadence { mode: 'exception'|'sprint', weeks }
+//   updateSettings also carries sizeMap { S:[lo,hi], ... } and cadence { mode: 'exception'|'confirm', frequency, weeks, days, time } (D104)
 //   upsertTeam / deleteTeam / upsertQuarter
 //   upsertTheme(actor, { id?, name, type: 'goal'|'program', must, mustDeadline, archived }) / deleteTheme   (rank permission; D40)
 //   upsertEpic also carries themeId, value (jsonb inputs), valueNote, onePager {problem, outcome, outOfScope}, onePagerUrl, externalUrl (D43/D44/D47)

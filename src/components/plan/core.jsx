@@ -1,9 +1,9 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown, Flag, TriangleAlert, OctagonX, Pencil, Star } from 'lucide-react';
+import { Check, X, Clock, CircleDot, CircleHelp, ArrowRight, ChevronDown, Flag, TriangleAlert, OctagonX, Pencil, Star, Circle, Play } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { ASK_META, COMMITMENT_META, isLockedPhase } from '../../domain/model';
 import { SIMPLE_META, fmtMonth } from '../../domain/value';
-import { SIZES, SIGNALS, SIGNAL_META, BOTTLENECK_META, signalOf, worstSignal, fmtEffort, isPostLock, sizeMapOf } from '../../domain/rhythm';
+import { SIZES, STAND_META, BOTTLENECK_META, fmtEffort, isPostLock, sizeMapOf } from '../../domain/rhythm';
 import { useT } from '../../i18n';
 
 // Calm primitives for the three core screens (docs/design.md section 19). Tokens come from src/index.css and differ
@@ -97,23 +97,27 @@ export const worstAsk = (deps) => (deps.length ? deps.map((d) => normAsk(d.respo
 const WORST_TEXT = { declined: 'text-danger-fg', needs_priority_call: 'text-warn-fg', proposed: 'text-ink-2', accepted: 'text-ok-fg' };
 
 // The Afhankelijkheden cell (owner feedback 2026-10-21, item F; D82): "4/5 toegezegd" coloured by the worst state,
-// followed by the worst signal or answer when there is one: "4/5 toegezegd · Deadline in gevaar · Platform & Security",
-// "2/3 toegezegd · Kan niet · Claims", "1/3 toegezegd · 2 open". The tooltip lists every ask.
-// Release B (L8): a signal worse than Op koers on a committed ask wins over an open ask.
-export function WorstIssue({ deps, teams }) {
+// followed by the worst answer when there is one: "2/3 toegezegd · Kan niet · Claims", "1/3 toegezegd · 2 open".
+// Section 28 (D100): once every ask is committed and `stands` is given (Uitvoering / Afgesloten), the cell reads the
+// derived stand instead: "2/3 gestart · 1 geblokkeerd", "3/3 klaar". The tooltip lists every ask.
+export function WorstIssue({ deps, teams, stands = null }) {
   const t = useT();
   if (!deps.length) return <span className="text-faint text-caption">–</span>;
   const worst = worstAsk(deps);
-  const sig = worst === 'accepted' || worst === 'proposed' ? worstSignal(deps) : null;
-  const all = deps.map((d) => `${teams.get(d.providerTeamId)?.name || '?'}: ${d.ask} — ${t(ASK_META[normAsk(d.response)].label)}${signalOf(d) !== 'on_track' ? ` · ${t(SIGNAL_META[signalOf(d)].label)}${d.signalNote ? ` (${d.signalNote})` : ''}` : ''}`).join('\n');
+  const all = deps.map((d) => `${teams.get(d.providerTeamId)?.name || '?'}: ${d.ask} — ${t(ASK_META[normAsk(d.response)].label)}${stands?.get(d.id) ? ` · ${t(STAND_META[stands.get(d.id)].label)}` : ''}`).join('\n');
   const yes = deps.filter((d) => normAsk(d.response) === 'accepted').length;
-  const count = `${yes}/${deps.length} ${t(ASK_META.accepted.label).toLowerCase()}`;
+  let count = `${yes}/${deps.length} ${t(ASK_META.accepted.label).toLowerCase()}`;
   let icon; let tone; let tail = null;
-  if (sig) {
-    const m = SIGNAL_META[signalOf(sig)];
-    icon = <SignalIcon signal={signalOf(sig)} size={13} className="shrink-0" />;
-    tone = m.tone === 'danger' ? 'text-danger-fg' : 'text-warn-fg';
-    tail = <>{t(m.label)} <span className="text-muted">· {teams.get(sig.providerTeamId)?.name}</span></>;
+  if (stands && worst === 'accepted') {
+    const list = deps.map((d) => stands.get(d.id) || 'not_started');
+    const done = list.filter((s) => s === 'done').length; const started = list.filter((s) => s !== 'not_started').length;
+    const blocked = list.filter((s) => s === 'blocked').length; const escalated = list.filter((s) => s === 'escalated').length;
+    const stand = done === list.length ? 'done' : escalated ? 'escalated' : blocked ? 'blocked' : started ? 'started' : 'not_started';
+    icon = <StandIcon stand={stand} size={13} className="shrink-0" />;
+    tone = stand === 'escalated' ? 'text-danger-fg' : stand === 'blocked' ? 'text-warn-fg' : stand === 'done' ? 'text-ok-fg' : stand === 'started' ? 'text-info-fg' : 'text-ink-2';
+    count = stand === 'done' ? `${done}/${list.length} ${t('Done').toLowerCase()}` : `${started}/${list.length} ${t('Started').toLowerCase()}`;
+    if (escalated) tail = <>{escalated} {t('Escalated').toLowerCase()}</>;
+    else if (blocked) tail = <>{blocked} {t('Blocked').toLowerCase()}</>;
   } else {
     icon = <AskIcon response={worst} size={13} className="shrink-0" />;
     tone = WORST_TEXT[worst];
@@ -175,36 +179,17 @@ export function SizeCell({ size, low, high, settings, className = '' }) {
   );
 }
 
-const SIGNAL_ICON = { on_track: Check, at_risk: TriangleAlert, wont_make: OctagonX };
-export const SignalIcon = ({ signal, size = 12, className = '' }) => { const I = SIGNAL_ICON[signal] || Check; return <I size={size} strokeWidth={2.25} className={className} aria-hidden="true" />; };
-// Read-only signal: icon + label (+ note), nothing when on track (L7: Op koers shows nothing).
-export function SignalChip({ dep, className = '', withNote = true }) {
+// Stand per toezegging / epic (section 28, D100): Niet gestart · Gestart (wk n) · Geblokkeerd · Geëscaleerd · Klaar.
+// Tint + icon + label, never colour alone. `week` adds "wk 3" to Gestart.
+const STAND_ICON = { not_started: Circle, started: Play, blocked: OctagonX, escalated: TriangleAlert, done: Check };
+export const StandIcon = ({ stand, size = 12, className = '' }) => { const I = STAND_ICON[stand] || Circle; return <I size={size} strokeWidth={2.25} className={className} aria-hidden="true" />; };
+export function StandChip({ stand, week = null, className = '' }) {
   const t = useT();
-  const sig = signalOf(dep);
-  if (sig === 'on_track') return null;
-  const m = SIGNAL_META[sig];
+  const m = STAND_META[stand] || STAND_META.not_started;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 h-6 text-caption font-medium whitespace-nowrap ${toneClass(m.tone)} ${className}`} title={dep.signalNote || undefined}>
-      <SignalIcon signal={sig} />{t(m.label)}{withNote && dep.signalNote && <span className="font-normal truncate max-w-[220px]"> · {dep.signalNote}</span>}
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 h-6 text-caption font-semibold whitespace-nowrap ${toneClass(m.tone)} ${className}`}>
+      <StandIcon stand={stand} />{t(m.label)}{stand === 'started' && week != null && <span className="font-normal tnum"> wk {week}</span>}
     </span>
-  );
-}
-// Provider control: Op koers · Deadline in gevaar · Gaat niet halen (role=radiogroup); the caller opens the note input.
-const SIG_ACTIVE = { on_track: 'bg-surface-2 text-ink-2 border-border-strong', at_risk: 'bg-warn-bg text-warn-fg border-warn-border', wont_make: 'bg-danger-bg text-danger-fg border-danger-border' };
-export function SignalControl({ value, onPick, disabled = false, labelledBy }) {
-  const t = useT();
-  return (
-    <div role="radiogroup" aria-labelledby={labelledBy} aria-label={labelledBy ? undefined : t('Signal')} className="inline-flex rounded-control border border-border-strong overflow-hidden bg-surface">
-      {SIGNALS.map((k, i) => {
-        const active = value === k;
-        return (
-          <button key={k} type="button" role="radio" aria-checked={active} disabled={disabled} onClick={() => onPick(k)}
-            className={`inline-flex items-center gap-1 h-7 px-2 text-caption font-medium transition-base focus-ring-inset disabled:cursor-not-allowed ${i > 0 ? 'border-l border-border-strong' : ''} ${active ? SIG_ACTIVE[k] : 'text-muted hover:bg-surface-2 hover:text-ink disabled:opacity-50'}`}>
-            <SignalIcon signal={k} size={12} />{t(SIGNAL_META[k].label)}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 // One reason chip per ask / pair (D53): Boven capaciteit · Grote job · Lage zekerheid.

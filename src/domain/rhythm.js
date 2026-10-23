@@ -1,6 +1,6 @@
 // Release B — Capaciteit & ritme (docs/design.md section 22, D50-D56). Pure functions shared by both
-// adapters and every screen: T-shirt sizes, certainty, derived bottlenecks, commitment signals with the sprint
-// cadence, the Voortgang selectors (section 23) and the delivered checklist for Resultaat.
+// adapters and every screen: T-shirt sizes, certainty, derived bottlenecks, the stand per toezegging with the
+// bijwerkmoment cadence (section 28), the Voortgang selectors (section 23) and the delivered checklist for Resultaat.
 import { byId, quarterOrdinal, quarterStart } from './plan';
 import { teamLoad } from './capacity';
 
@@ -64,25 +64,75 @@ export function bottleneckFor(state, dep, loads = null) {
   return null;
 }
 
-// ── Commitment signals (D55) ─────────────────────────────────────────────────
-export const SIGNALS = ['on_track', 'at_risk', 'wont_make'];
-export const SIGNAL_META = {
-  on_track: { label: 'On track', tone: 'ok', order: 0 },
-  at_risk: { label: 'Deadline at risk', tone: 'warn', order: 1 },
-  wont_make: { label: "Won't make it", tone: 'danger', order: 2 },
-};
-export const signalOf = (dep) => (SIGNALS.includes(dep?.signal) ? dep.signal : 'on_track');
-export const hasSignal = (dep) => normAsk(dep.response) === 'accepted' && signalOf(dep) !== 'on_track';
-// Worst signal among the committed asks, or null when everything is on track.
-export function worstSignal(deps) {
-  let worst = null;
-  for (const d of deps) {
-    if (!hasSignal(d)) continue;
-    if (!worst || SIGNAL_META[signalOf(d)].order > SIGNAL_META[signalOf(worst)].order) worst = d;
-  }
-  return worst;
-}
+// ── Commitment signals (D55) — retired by section 28 (D100): the columns stay, nothing writes them ─────────
 export const inExecution = (phase) => phase === 'locked' || phase === 'active';
+
+// ── Stand per toezegging (section 28, D100-D102) ─────────────────────────────
+// Stored: dependencies.progress not_started | started | done (provider team). Derived on top: blocked (an open
+// impediment is linked to the ask) and escalated (such an impediment was escalated). Done wins over everything.
+export const PROGRESS = ['not_started', 'started', 'done'];
+export const STAND_META = {
+  not_started: { label: 'Not started', tone: 'neutral', order: 0 },
+  started: { label: 'Started', tone: 'info', order: 1 },
+  blocked: { label: 'Blocked', tone: 'warn', order: 2 },
+  escalated: { label: 'Escalated', tone: 'danger', order: 3 },
+  done: { label: 'Done', tone: 'ok', order: 4 },
+};
+export function checkProgress(p, Err = Error) {
+  if (!PROGRESS.includes(p)) throw new Err('Unknown progress');
+  return p;
+}
+export const progressOf = (dep) => (PROGRESS.includes(dep?.progress) ? dep.progress : 'not_started');
+const isOpenImp = (i) => i.status !== 'resolved' && (i.kind || 'impediment') === 'impediment';
+// Open impediments linked to one ask (depId) or, with depId null, to the epic itself.
+export const impedimentsOf = (state, { depId = null, epicId = null }) => state.impediments.filter((i) => isOpenImp(i) && (depId ? i.depId === depId : i.epicId === epicId && !i.depId));
+export function depStand(state, dep) {
+  const p = progressOf(dep);
+  if (p === 'done') return 'done';
+  const imps = impedimentsOf(state, { depId: dep.id });
+  if (imps.some((i) => i.escalatedAt)) return 'escalated';
+  if (imps.length) return 'blocked';
+  return p;
+}
+// Epic stand (D101): Gestart as soon as one committed ask is started (or the epic sets it), Klaar when every committed
+// ask is Klaar (or the epic sets it when it has none). Blocked / escalated come from impediments on the asks or the epic.
+export function epicStand(state, epicId, quarterId) {
+  const plan = state.plans.find((p) => p.epicId === epicId && p.quarterId === quarterId) || null;
+  const deps = state.dependencies.filter((d) => d.quarterId === quarterId && d.epicId === epicId && normAsk(d.response) === 'accepted');
+  const stands = deps.map((d) => depStand(state, d));
+  const override = PROGRESS.includes(plan?.progressOverride) ? plan.progressOverride : null;
+  const done = stands.filter((s) => s === 'done').length;
+  const started = stands.filter((s) => s !== 'not_started').length;
+  const blocked = stands.filter((s) => s === 'blocked' || s === 'escalated').length;
+  const own = impedimentsOf(state, { epicId });
+  const escalated = stands.some((s) => s === 'escalated') || own.some((i) => i.escalatedAt);
+  let stand = 'not_started';
+  if (override === 'done' || (deps.length > 0 && done === deps.length)) stand = 'done';
+  else if (escalated) stand = 'escalated';
+  else if (blocked || own.length) stand = 'blocked';
+  else if (started || override === 'started') stand = 'started';
+  return { stand, deps, done, started, blocked, total: deps.length, impediments: own, override };
+}
+// Delivered on Afsluiten (D103): the manual flag or a derived Klaar.
+export const isDelivered = (state, plan) => !!plan && (!!plan.delivered || epicStand(state, plan.epicId, plan.quarterId).stand === 'done');
+// Warning (D102): a committed ask that is not started while its size no longer fits before the deadline:
+// upper pw of its size (or effort_high) >= remaining whole weeks. Deadline: needed_by, else the epic's (Moet, asks, quarter end).
+export function startWarning(state, dep, quarter, mustOf, now = Date.now()) {
+  if (normAsk(dep.response) !== 'accepted' || depStand(state, dep) !== 'not_started') return null;
+  const upper = dep.size ? sizeRange(state.settings, dep.size)?.[1] : Number(dep.effortHigh) || 0;
+  if (!upper) return null;
+  const dl = dep.neededBy ? new Date(dep.neededBy) : epicDeadline(state, dep.epicId, quarter, mustOf).date;
+  const weeks = Math.max(0, Math.floor((dl.getTime() - now) / (7 * DAY)));
+  return upper >= weeks ? { size: dep.size || `${upper} pw`, weeks } : null;
+}
+// "Laatst gewijzigd": the latest event on a record (both adapters' entity names), { at, name, action } or null.
+const ENTITY_ALIASES = { plans: ['plans', 'epic_plans'], epic_plans: ['plans', 'epic_plans'] };
+export function lastChange(state, entity, id) {
+  const names = ENTITY_ALIASES[entity] || [entity];
+  let best = null;
+  for (const e of state.events) if (e.entityId === id && names.includes(e.entity) && (!best || e.at > best.at)) best = e;
+  return best ? { at: best.at, name: best.actorName || '', action: best.action } : null;
+}
 
 // "Toegezegd dit kwartaal" (owner feedback 2026-10-21, item D; docs/design.md section 25, D80). An epic counts as
 // committed when its plan commitment is committed or at_risk, or when it has asks and every ask is accepted
@@ -102,32 +152,101 @@ export function committedEpicIds(state, quarterId) {
   return out;
 }
 
-// Cadence (L9): { mode: 'exception' | 'sprint', weeks: 1..4 }.
-export const DEFAULT_CADENCE = { mode: 'exception', weeks: 2 };
-export const cadenceOf = (settings) => ({ ...DEFAULT_CADENCE, ...(settings?.cadence || {}) });
+// ── Ritme / bijwerkmoment (section 28, D104) ─────────────────────────────────
+// cadence: { mode: 'exception' | 'confirm', frequency: 'weekly' | 'biweekly' | 'sprint', weeks: 1..4 (sprint length),
+// days: [1..7] (ISO weekdays), time: 'HH:MM' }. The older { mode: 'sprint', weeks } (L9) reads as confirm + sprint.
+export const DEFAULT_CADENCE = { mode: 'exception', frequency: 'weekly', weeks: 2, days: [1], time: '12:00' };
+export const FREQUENCIES = ['weekly', 'biweekly', 'sprint'];
+export const FREQUENCY_LABEL = { weekly: 'Weekly', biweekly: 'Every two weeks', sprint: 'Per sprint' };
+export const CADENCE_MODES = ['exception', 'confirm'];
+export const CADENCE_MODE_LABEL = { exception: 'Exceptions only', confirm: 'Confirm every period' };
+export const cadenceOf = (settings) => {
+  const c = { ...DEFAULT_CADENCE, ...(settings?.cadence || {}) };
+  if (c.mode === 'sprint') { c.mode = 'confirm'; c.frequency = 'sprint'; }
+  if (!Array.isArray(c.days) || !c.days.length) c.days = [1];
+  return c;
+};
 export function checkCadence(c, Err = Error) {
-  const next = { ...DEFAULT_CADENCE, ...c };
-  if (!['exception', 'sprint'].includes(next.mode)) throw new Err('Unknown steering mode');
+  const next = cadenceOf({ cadence: c });
+  if (!CADENCE_MODES.includes(next.mode)) throw new Err('Unknown steering mode');
+  if (!FREQUENCIES.includes(next.frequency)) throw new Err('Unknown frequency');
   next.weeks = Number(next.weeks);
   if (!(next.weeks >= 1 && next.weeks <= 4 && Number.isInteger(next.weeks))) throw new Err('Sprint length is 1 to 4 weeks');
+  next.days = [...new Set(next.days.map(Number))].filter((d) => Number.isInteger(d) && d >= 1 && d <= 7).sort();
+  if (!next.days.length) throw new Err('Pick at least one day');
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(next.time || '')) throw new Err('Time is HH:MM');
   return next;
 }
-// Start of the current sprint, counted in N-week steps from the quarter start; null before the quarter starts.
+export const periodWeeks = (c) => (c.frequency === 'weekly' ? 1 : c.frequency === 'biweekly' ? 2 : c.weeks);
+// Start of the current period, counted in N-week steps from the quarter start; null before the quarter starts.
 export function currentSprintStart(quarter, settings, now = Date.now()) {
   const c = cadenceOf(settings);
   const start = quarterStart(quarter, settings?.fiscalYearStartMonth || 1).getTime();
   if (now < start) return null;
-  const len = c.weeks * 7 * DAY;
+  const len = periodWeeks(c) * 7 * DAY;
   return start + Math.floor((now - start) / len) * len;
 }
-// Sprint mode, Uitvoeren, committed ask whose signal / confirmation predates the current sprint (L9).
-export function needsConfirmation(dep, quarter, settings, now = Date.now()) {
-  if (cadenceOf(settings).mode !== 'sprint' || !quarter || !inExecution(quarter.phase)) return false;
-  if (normAsk(dep.response) !== 'accepted') return false;
-  const sprint = currentSprintStart(quarter, settings, now);
-  if (sprint == null) return false;
-  const last = Math.max(dep.signalAt ? new Date(dep.signalAt).getTime() : 0, dep.confirmedAt ? new Date(dep.confirmedAt).getTime() : 0);
-  return last < sprint;
+const isoDay = (d) => ((d.getDay() + 6) % 7) + 1;
+const atTime = (d, time) => { const [h, m] = String(time).split(':').map(Number); const x = new Date(d); x.setHours(h, m, 0, 0); return x; };
+// Next bijwerkmoment after `now`: the first configured weekday + time ahead ("bijwerken vóór ma 12:00").
+export function nextUpdateMoment(settings, now = Date.now()) {
+  const c = cadenceOf(settings);
+  for (let i = 0; i < 8; i += 1) {
+    const d = atTime(new Date(now + i * DAY), c.time);
+    if (c.days.includes(isoDay(d)) && d.getTime() > now) return d;
+  }
+  return atTime(new Date(now + DAY), c.time);
+}
+// Last bijwerkmoment at or before `now`: the latest configured weekday + time inside the current period, else the
+// one before the period started. Weekly: the latest occurrence in the past seven days.
+export function lastUpdateMoment(quarter, settings, now = Date.now()) {
+  const c = cadenceOf(settings);
+  const latestBefore = (limit) => {
+    for (let i = 0; i < 8; i += 1) {
+      const d = atTime(new Date(limit - i * DAY), c.time);
+      if (c.days.includes(isoDay(d)) && d.getTime() <= limit) return d.getTime();
+    }
+    return null;
+  };
+  if (c.frequency === 'weekly' || !quarter) return latestBefore(now);
+  const ps = currentSprintStart(quarter, settings, now);
+  if (ps == null) return null;
+  const inPeriod = latestBefore(now);
+  return inPeriod != null && inPeriod >= ps ? inPeriod : latestBefore(ps - 1);
+}
+// Confirm mode, Uitvoeren, committed ask not Klaar and not touched (progress, confirmation, any event) since the last bijwerkmoment.
+export function needsConfirmation(state, dep, quarter, now = Date.now()) {
+  if (cadenceOf(state.settings).mode !== 'confirm' || !quarter || !inExecution(quarter.phase)) return false;
+  if (normAsk(dep.response) !== 'accepted' || progressOf(dep) === 'done') return false;
+  const last = lastUpdateMoment(quarter, state.settings, now);
+  if (last == null) return false;
+  const touched = Math.max(0, ...[dep.confirmedAt, dep.startedAt, dep.doneAt, lastChange(state, 'dependencies', dep.id)?.at].filter(Boolean).map((x) => new Date(x).getTime()));
+  return touched < last;
+}
+// Weekafsluiting (D105): what changed in the quarter since `since` (ISO or null), grouped per epic in rank order.
+const DIGEST_ACTIONS = new Set(['progress_set', 'progress_confirmed', 'impediment_raised', 'impediment_status_changed', 'impediment_escalated']);
+export function changesSince(state, quarterId, since) {
+  const epics = byId(state.epics); const deps = byId(state.dependencies); const imps = byId(state.impediments); const plans = byId(state.plans);
+  const planOf = (epicId) => state.plans.find((p) => p.epicId === epicId && p.quarterId === quarterId);
+  const rows = [];
+  for (const e of state.events) {
+    if (!DIGEST_ACTIONS.has(e.action) || (since && e.at <= since)) continue;
+    let epicId; let subject;
+    if (e.entity === 'dependencies') { const d = deps.get(e.entityId); if (!d || d.quarterId !== quarterId) continue; epicId = d.epicId; subject = d.ask; }
+    else if (e.entity === 'impediments') { const i = imps.get(e.entityId); if (!i || (e.quarterId && e.quarterId !== quarterId)) continue; epicId = i.epicId; subject = i.title; }
+    else { const p = plans.get(e.entityId); if (!p || p.quarterId !== quarterId) continue; epicId = p.epicId; subject = epics.get(p.epicId)?.title || ''; }
+    const plan = planOf(epicId);
+    if (!plan) continue;
+    rows.push({ id: e.id, at: e.at, name: e.actorName || '', action: e.action, entity: e.entity, epicId, subject, before: e.before || {}, after: e.after || {} });
+  }
+  rows.sort((a, b) => a.at.localeCompare(b.at));
+  const groups = [];
+  for (const r of rows) {
+    let g = groups.find((x) => x.epicId === r.epicId);
+    if (!g) { g = { epicId: r.epicId, rank: planOf(r.epicId)?.rank ?? null, title: epics.get(r.epicId)?.title || '', rows: [] }; groups.push(g); }
+    g.rows.push(r);
+  }
+  return groups.sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
 }
 
 // ── Voortgang (section 23, D65) ──────────────────────────────────────────────
@@ -222,7 +341,7 @@ export function closeRows(state, quarterId) {
     const rows = [...committedEpicIds].map((id) => epics.get(id)).filter((e) => e && e.teamId === team.id).map((epic) => {
       const plan = plans.find((p) => p.epicId === epic.id) || null;
       const baseRank = base?.plans.find((b) => b.epicId === epic.id)?.rank ?? plan?.rank ?? null;
-      return { epic, plan, rank: plan?.rank ?? baseRank, delivered: !!plan?.delivered, carried: !!(next && state.plans.some((p) => p.epicId === epic.id && p.quarterId === next.id)) };
+      return { epic, plan, rank: plan?.rank ?? baseRank, delivered: isDelivered(state, plan), derivedDone: !!plan && epicStand(state, plan.epicId, quarterId).stand === 'done', carried: !!(next && state.plans.some((p) => p.epicId === epic.id && p.quarterId === next.id)) };
     }).sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
     return { team, rows, ...predictability(rows) };
   });

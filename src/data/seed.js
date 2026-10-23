@@ -5,6 +5,7 @@
 // 2026-10-21 (section 25, item K): every phase has data. 2026 Q4 (Uitvoering) carries 16 plans incl. two not
 // committed and one backlog epic, 17 asks across all teams (13 committed, 2 can't, 2 discuss), three signals
 // (two In gevaar, one Gaat niet halen with a note) and owners; 2026 Q3 (Afgesloten) has delivered flags and asks.
+// 2026-10-23 (section 28, D100): stands per toezegging, impediments linked to asks, no expectation signals.
 // 2026-10-21 (section 26, D88): every team asks and provides in every phase, every ask has a size (S/M/L/XL mix),
 // capacity per quarter puts one team above 100% and one in 80-100% in each phase, every epic has an owner.
 import { buildBaseline } from '../domain/plan';
@@ -135,7 +136,7 @@ const P1 = [
   [13, null, 4, 8, 'draft', 'medium', 'L'], [18, null, 4, 8, 'draft', 'medium', 'L'],
 ];
 const plans = P1.map(([n, rank, effortLow, effortHigh, commitment, confidence, size], i) => ({
-  id: `p1-${i + 1}`, epicId: eid(n), quarterId: 'q-27-1', rank, effortLow, effortHigh, commitment, confidence, size: size || null, delivered: false,
+  id: `p1-${i + 1}`, epicId: eid(n), quarterId: 'q-27-1', rank, effortLow, effortHigh, commitment, confidence, size: size || null, delivered: false, progressOverride: null,
   createdAt: ago(40 + i), updatedAt: ago(1 + (i % 9)),
 }));
 // Plans for 2026 Q4 (active): [epic, rank, low, high, commitment, confidence, size]. Ranks 1-12 committed; 14 and 15 are
@@ -148,7 +149,7 @@ const P0 = [
   [13, 14, 4, 8, 'not_committed', 'low', 'L'], [18, 15, 4, 8, 'discuss', 'low', 'L'], [20, null, 2, 4, 'draft', 'medium', 'M'],
 ];
 const plans0 = P0.map(([n, rank, effortLow, effortHigh, commitment, confidence, size], i) => ({
-  id: `p0-${i + 1}`, epicId: eid(n), quarterId: 'q-26-4', rank, effortLow, effortHigh, commitment, confidence, size: size || null, delivered: false,
+  id: `p0-${i + 1}`, epicId: eid(n), quarterId: 'q-26-4', rank, effortLow, effortHigh, commitment, confidence, size: size || null, delivered: false, progressOverride: n === 32 ? 'started' : null,
   createdAt: ago(45 + i), updatedAt: ago(20 + i),
 }));
 // Plans for 2026 Q3 (closed): [epic, rank, low, high, delivered, size]. Every team delivered something; Claims (above
@@ -158,7 +159,7 @@ const P3 = [
   [23, 6, 4, 8, false, 'L'], [28, 7, 1, 2, true, 'S'], [33, 8, 4, 8, true, 'L'], [34, 9, 2, 4, true, 'M'], [35, 10, 8, 13, false, 'XL'],
 ];
 const plans3 = P3.map(([n, rank, effortLow, effortHigh, delivered, size], i) => ({
-  id: `p3-${i + 1}`, epicId: eid(n), quarterId: 'q-26-3', rank, effortLow, effortHigh, commitment: 'committed', confidence: 'medium', size: size || null, delivered,
+  id: `p3-${i + 1}`, epicId: eid(n), quarterId: 'q-26-3', rank, effortLow, effortHigh, commitment: 'committed', confidence: 'medium', size: size || null, delivered, progressOverride: null,
   createdAt: ago(130 + i), updatedAt: ago(100 + i),
 }));
 
@@ -227,15 +228,21 @@ const dependencies = D.map(([n, epicN, provider, quarterId, ask, effortLow, effo
   requesterTeamId: E.find((x) => x[0] === epicN)[1], providerTeamId: provider, quarterId, ask,
   ifDeclined: '', effortLow, effortHigh, size: size || null, certainty: certainty || 'medium', response, responseReason,
   signal: 'on_track', signalNote: '', signalAt: null, confirmedAt: null,
+  progress: 'not_started', startedAt: null, startedWeek: null, doneAt: null,
   requesterName: plannerOf(E.find((x) => x[0] === epicN)[1]), neededBy: null,
   grantedLow: null, grantedHigh: null, deferredToQuarterId: null, createdAt: ago(created),
   respondedAt: response === 'proposed' ? null : ago(Math.max(1, created - 3)),
 }));
-// Release B (D55): in the running quarter Platform & Security flags one committed ask of Claims; section 25 adds
-// Polisadministratie: Gaat niet halen on the DNB figures (with a line) and In gevaar on the address change API.
-Object.assign(dependencies.find((d) => d.id === 'd-21'), { signal: 'at_risk', signalNote: 'Pentest schuift', signalAt: ago(2) });
-Object.assign(dependencies.find((d) => d.id === 'd-25'), { signal: 'wont_make', signalNote: 'Extract geblokkeerd door kernmigratie; cijfers pas na de deadline', signalAt: ago(1) });
-Object.assign(dependencies.find((d) => d.id === 'd-26'), { signal: 'at_risk', signalNote: 'Twee engineers op IFRS 17', signalAt: ago(4) });
+// Section 28 (D100): stand per toezegging in the running quarter — a mix of Niet gestart / Gestart (week) / Klaar.
+// [dep, progress, days ago, started week]. The address change API (d-26) is not started with a close needed_by: the
+// size warning case (M · 2 wk). 2026 Q3: every ask of a delivered epic is Klaar; the undelivered ones are not.
+const PROGRESS_Q4 = [['d-20', 'started', 12, 2], ['d-21', 'started', 9, 2], ['d-23', 'done', 4, 1], ['d-24', 'started', 6, 3], ['d-27', 'started', 10, 2], ['d-28', 'done', 3, 1],
+  ['d-29', 'started', 11, 2], ['d-31', 'done', 2, 2], ['d-33', 'started', 5, 3], ['d-35', 'done', 1, 1], ['d-39', 'started', 13, 1], ['d-40', 'done', 6, 1], ['d-41', 'done', 7, 1], ['d-42', 'started', 8, 2]];
+const PROGRESS_Q3 = ['d-36', 'd-38', 'd-44', 'd-45', 'd-46', 'd-47', 'd-48', 'd-50'];
+for (const [id, progress, days, week] of PROGRESS_Q4) Object.assign(dependencies.find((d) => d.id === id), { progress, startedAt: ago(days + 4), startedWeek: week, doneAt: progress === 'done' ? ago(days) : null });
+for (const id of PROGRESS_Q3) Object.assign(dependencies.find((d) => d.id === id), { progress: 'done', startedAt: ago(110), startedWeek: 2, doneAt: ago(100) });
+Object.assign(dependencies.find((d) => d.id === 'd-37'), { progress: 'started', startedAt: ago(105), startedWeek: 3 });
+dependencies.find((d) => d.id === 'd-26').neededBy = inDays(16);
 
 const votes = [
   { id: 'v1', teamId: 't-pay', quarterId: 'q-27-1', vote: 4, reason: '', votedAt: ago(1) },
@@ -258,17 +265,19 @@ const checkIns = [
 ].map(([n, confidence, note, d], i) => ({ id: `ci-${i + 1}`, epicId: eid(n), quarterId: 'q-26-4', confidence, note, authorName: plannerOf(E.find((x) => x[0] === n)[1]), createdAt: ago(d) }));
 // Epics 29 and 31 intentionally have no check-in (stale).
 
-// Section 23 (M5) / section 27 (D92/D93): 2026 Q4 impediments with a Melder (ownerName / reporterId), an Actiehouder
-// and mixed statuses: IMP-0001 (12 days, In behandeling) and IMP-0006 (9 days, Open) are escalated at the default of
-// 7 days; IMP-0002 is fresh; IMP-0005 is resolved. Risks (IMP-0003 / 0004) stay beta.
+// Section 23 (M5) / section 27 (D92/D93) / section 28 (D102): 2026 Q4 impediments with a Melder (ownerName /
+// reporterId), an Actiehouder and mixed statuses. Three hang on a toezegging (depId): IMP-0002 on the training data
+// extract, IMP-0006 on the PSP firewall rules (escalated to the Directie), IMP-0007 on the pentest. IMP-0001 sits on
+// the epic itself (12 days, In behandeling: the "Escalatie" hint at 7 days); IMP-0005 is resolved. Risks stay beta.
 const impediments = [
   { id: 'im-1', refCode: 'IMP-0001', kind: 'impediment', title: 'Waiting on firewall change approval', epicId: eid(17), depId: null, ownerName: 'Mark van Dijk', reporterId: 'u-cld', actionOwnerId: 'u-admin', actionOwnerName: 'Anouk de Jong', status: 'in_progress', roam: null, raisedAt: ago(12), resolvedAt: null },
-  { id: 'im-2', refCode: 'IMP-0002', kind: 'impediment', title: 'No access to claims archive for model training', epicId: eid(7), depId: null, ownerName: 'Sanne Bakker', reporterId: 'u-clm', actionOwnerId: 'u-dat', actionOwnerName: 'Fatima El Amrani', status: 'open', roam: null, raisedAt: ago(3), resolvedAt: null },
+  { id: 'im-2', refCode: 'IMP-0002', kind: 'impediment', title: 'No access to claims archive for model training', epicId: eid(7), depId: 'd-20', ownerName: 'Fatima El Amrani', reporterId: 'u-dat', actionOwnerId: 'u-clm', actionOwnerName: 'Sanne Bakker', status: 'open', roam: null, raisedAt: ago(3), resolvedAt: null },
   { id: 'im-3', refCode: 'IMP-0003', kind: 'risk', title: 'Core vendor release slips to February', epicId: eid(11), depId: null, ownerName: 'Pieter Mulder', reporterId: 'u-pol', actionOwnerId: null, actionOwnerName: '', status: 'open', roam: 'owned', raisedAt: ago(20), resolvedAt: null },
   { id: 'im-4', refCode: 'IMP-0004', kind: 'risk', title: 'DNB reporting format not final', epicId: eid(21), depId: null, ownerName: 'Mark van Dijk', reporterId: 'u-cld', actionOwnerId: null, actionOwnerName: '', status: 'open', roam: 'accepted', raisedAt: ago(9), resolvedAt: null },
   { id: 'im-5', refCode: 'IMP-0005', kind: 'impediment', title: 'Test devices not available', epicId: eid(25), depId: null, ownerName: 'Lotte Meijer', reporterId: 'u-por', actionOwnerId: 'u-por', actionOwnerName: 'Lotte Meijer', status: 'resolved', roam: null, raisedAt: ago(14), resolvedAt: ago(5) },
-  { id: 'im-6', refCode: 'IMP-0006', kind: 'impediment', title: 'PSP sandbox certificate expired, no renewal date', epicId: eid(30), depId: null, ownerName: 'Joris Smit', reporterId: 'u-pay', actionOwnerId: null, actionOwnerName: 'Leverancier PSP', status: 'open', roam: null, raisedAt: ago(9), resolvedAt: null },
-];
+  { id: 'im-6', refCode: 'IMP-0006', kind: 'impediment', title: 'PSP sandbox certificate expired, no renewal date', epicId: eid(30), depId: 'd-29', ownerName: 'Mark van Dijk', reporterId: 'u-cld', actionOwnerId: null, actionOwnerName: 'Leverancier PSP', status: 'open', roam: null, raisedAt: ago(9), resolvedAt: null, escalatedAt: ago(1), escalatedTo: 'Directie' },
+  { id: 'im-7', refCode: 'IMP-0007', kind: 'impediment', title: 'Pentest partner only available from week 6', epicId: eid(7), depId: 'd-21', ownerName: 'Mark van Dijk', reporterId: 'u-cld', actionOwnerId: 'u-cld', actionOwnerName: 'Mark van Dijk', status: 'open', roam: null, raisedAt: ago(4), resolvedAt: null },
+].map((i) => ({ escalatedAt: null, escalatedTo: '', ...i }));
 
 const events = [
   { id: 'ev-1', at: ago(6), actorId: 'u-dir', actorName: 'Ruud Visser', action: 'rank_changed', entity: 'plans', entityId: 'p1-3', quarterId: 'q-27-1', reason: 'DORA reporting is required by the regulator; moved up', before: { rank: 7 }, after: { rank: 3 } },
@@ -282,7 +291,7 @@ const state = {
   members: PERSONAS,
   settings: { language: 'nl', setupComplete: true, orgName: 'Oranje Verzekeringen', unitLabel: 'team', capacityUnit: 'person-weeks', fiscalYearStartMonth: 1, staleDays: 14, noResponseDays: 5, voteBlocksLock: false,
     capacityDefaults: { weeks: 13, focusFactor: 0.65, reservePct: 20 }, modules: false, valueModel: 'simple', skin: 'zakelijk',
-    sizeMap: { S: [1, 2], M: [2, 4], L: [4, 8], XL: [8, 13] }, cadence: { mode: 'exception', weeks: 2 }, impedimentEscalationDays: 7 },
+    sizeMap: { S: [1, 2], M: [2, 4], L: [4, 8], XL: [8, 13] }, cadence: { mode: 'exception', frequency: 'weekly', weeks: 2, days: [1], time: '12:00' }, impedimentEscalationDays: 7 },
 };
 // Q3 was locked and closed: its baseline is the committed set Afsluiten measures against (D56).
 state.quarters.find((q) => q.id === 'q-26-3').baseline = buildBaseline(state, 'q-26-3');
@@ -297,8 +306,17 @@ state.events.push({ id: 'ev-3', at: ago(7), actorId: 'u-pay', actorName: 'Joris 
 state.plans.push({ id: 'p0-16', epicId: eid(23), quarterId: 'q-26-4', rank: 13, effortLow: 2, effortHigh: 4, commitment: 'committed', confidence: 'medium', size: 'M', delivered: false, createdAt: ago(10), updatedAt: ago(10) });
 // "Nieuw ongepland werk" (D97): the backlog epic 20 was also added after the lock.
 state.plans.find((p) => p.quarterId === 'q-26-4' && p.epicId === eid(20)).createdAt = ago(5);
-state.events.push({ id: 'ev-4', at: ago(2), actorId: 'u-cld', actorName: 'Mark van Dijk', action: 'signal_set', entity: 'dependencies', entityId: 'd-21', quarterId: 'q-26-4', reason: 'Pentest schuift', before: { signal: 'on_track' }, after: { signal: 'at_risk', note: 'Pentest schuift' } });
-state.events.push({ id: 'ev-5', at: ago(4), actorId: 'u-pol', actorName: 'Pieter Mulder', action: 'signal_set', entity: 'dependencies', entityId: 'd-26', quarterId: 'q-26-4', reason: 'Twee engineers op IFRS 17', before: { signal: 'on_track' }, after: { signal: 'at_risk', note: 'Twee engineers op IFRS 17' } });
-state.events.push({ id: 'ev-6', at: ago(1), actorId: 'u-pol', actorName: 'Pieter Mulder', action: 'signal_set', entity: 'dependencies', entityId: 'd-25', quarterId: 'q-26-4', reason: 'Extract geblokkeerd door kernmigratie; cijfers pas na de deadline', before: { signal: 'on_track' }, after: { signal: 'wont_make', note: 'Extract geblokkeerd door kernmigratie; cijfers pas na de deadline' } });
+// Section 28: one progress_set event per seeded stand ("Laatst gewijzigd" = date + name), the impediment events and
+// the escalation of IMP-0006, so the Weekafsluiting of the running quarter is not empty.
+let evN = 4;
+const byTeam = Object.fromEntries(PERSONAS.filter((p) => p.teamId).map((p) => [p.teamId, p]));
+for (const [id, progress, days, week] of PROGRESS_Q4) {
+  const d = dependencies.find((x) => x.id === id); const who = byTeam[d.providerTeamId];
+  if (progress === 'done') state.events.push({ id: `ev-${evN++}`, at: ago(days + 4), actorId: who.id, actorName: who.name, action: 'progress_set', entity: 'dependencies', entityId: id, quarterId: 'q-26-4', reason: '', before: { progress: 'not_started' }, after: { progress: 'started', startedWeek: week } });
+  state.events.push({ id: `ev-${evN++}`, at: ago(days), actorId: who.id, actorName: who.name, action: 'progress_set', entity: 'dependencies', entityId: id, quarterId: 'q-26-4', reason: '', before: { progress: progress === 'done' ? 'started' : 'not_started' }, after: { progress, startedWeek: week } });
+}
+state.events.push({ id: `ev-${evN++}`, at: ago(6), actorId: 'u-pol', actorName: 'Pieter Mulder', action: 'progress_set', entity: 'plans', entityId: 'p0-4', quarterId: 'q-26-4', reason: '', before: { progress: null }, after: { progress: 'started' } });
+for (const i of impediments.filter((x) => x.kind === 'impediment' && x.refCode !== 'IMP-0005')) state.events.push({ id: `ev-${evN++}`, at: i.raisedAt, actorId: i.reporterId, actorName: i.ownerName, action: 'impediment_raised', entity: 'impediments', entityId: i.id, quarterId: 'q-26-4', reason: '', before: null, after: { title: i.title, depId: i.depId } });
+state.events.push({ id: `ev-${evN++}`, at: ago(1), actorId: 'u-cld', actorName: 'Mark van Dijk', action: 'impediment_escalated', entity: 'impediments', entityId: 'im-6', quarterId: 'q-26-4', reason: 'Directie', before: null, after: { escalatedTo: 'Directie' } });
 
 export const seedState = () => JSON.parse(JSON.stringify(state));

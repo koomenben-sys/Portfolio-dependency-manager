@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import LogoMark from './components/plan/LogoMark';
-import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid, Presentation, Pause, Play, Square } from 'lucide-react';
+import { Settings, ChevronDown, LogOut, Check, Compass, Languages, LayoutGrid, Presentation, Pause, Play, Square, Lock } from 'lucide-react';
 import { PlanProvider, usePlan } from './context/PlanContext';
 import { useAuth } from './context/AuthContext';
 import { DATA_SOURCE, isAdmin } from './data/repository';
@@ -13,6 +13,9 @@ import { SettingsView } from './views/SettingsView';
 import { QuarterResultView } from './views/QuarterResultView';
 import { ProgressView } from './views/ProgressView';
 import { ResultView } from './views/ResultView';
+import { WeekCloseView } from './views/WeekCloseView';
+import { CloseQuarterDialog } from './components/plan/CycleActions';
+import { inExecution } from './domain/rhythm';
 import { OverviewView } from './views/OverviewView';
 import { BoardView } from './views/BoardView';
 import { DependenciesViewLegacy } from './views/DependenciesView.legacy';
@@ -49,7 +52,7 @@ const EXTENDED = [
 ];
 const SETTINGS = { id: 'instellingen', label: 'Settings', View: SettingsView };
 // Reachable by URL or a button, never listed in the nav (Release A, D45): the tussenstand during Planning.
-const HIDDEN = [{ id: 'kwartaalresultaat', label: 'Quarter result', View: QuarterResultView }];
+const HIDDEN = [{ id: 'kwartaalresultaat', label: 'Quarter result', View: QuarterResultView }, { id: 'weekafsluiting', label: 'Week close', View: WeekCloseView }];
 const ALL = [...CORE, ...EXTENDED, SETTINGS, ...HIDDEN];
 const VIEW_IDS = new Set([...ALL.map((v) => v.id), 'afsluiten']);
 const viewFromHash = () => { const h = window.location.hash.replace('#', ''); return VIEW_IDS.has(h) ? h : 'prioriteren'; };
@@ -58,6 +61,7 @@ const viewFromHash = () => { const h = window.location.hash.replace('#', ''); re
 function resolveView(id, quarter) {
   if (!quarter) return id === 'afsluiten' ? 'resultaat' : id;
   if (id === 'kwartaalresultaat') return cyclePhase(quarter.phase) === 'Planning' ? id : stepForPhase('resultaat', quarter.phase);
+  if (id === 'weekafsluiting') return cyclePhase(quarter.phase) === 'Execution' ? id : stepForPhase('voortgang', quarter.phase);
   return stepForPhase(id, quarter.phase);
 }
 
@@ -96,6 +100,7 @@ function ShellInner({ ctx, onSignOut }) {
   const t = useT();
   const [tour, setTour] = useState(null);
   const [skipWizard, setSkipWizard] = useState(false);
+  const [closing, setClosing] = useState(false); // "Kwartaal afsluiten" lives in the account menu (section 28, D105)
   const [view, setViewState] = useState(viewFromHash);
   const setView = (id) => { if (!VIEW_IDS.has(id)) return; setViewState(id); window.location.hash = id; };
   useEffect(() => { const on = () => setViewState(viewFromHash()); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
@@ -199,10 +204,12 @@ function ShellInner({ ctx, onSignOut }) {
                       {SCENARIOS.map((sc) => <button key={sc.id} role="menuitem" className={menuItem} onClick={() => { close(); setSkipWizard(true); setTour(sc.id); }}><span className="truncate">{sc.title[t.lang] || sc.title.nl}</span><span className="ml-auto text-caption text-muted tnum">{sc.steps.length}</span></button>)}
                     </>
                   )}
+                  {quarter && isAdmin(actor) && inExecution(quarter.phase) && (<><MenuSep /><button role="menuitem" className={menuItem} data-tour="close-quarter" onClick={() => { close(); setClosing(true); }}><Lock size={14} aria-hidden="true" />{t('Close quarter')}<span className="ml-auto text-caption text-muted">{quarterLabel(quarter)}</span></button></>)}
                   {onSignOut && (<><MenuSep /><button role="menuitem" className={menuItem} onClick={onSignOut}><LogOut size={14} aria-hidden="true" />{t('Sign out')}</button></>)}
                 </>
               )}
             </Menu>
+            {closing && quarter && <CloseQuarterDialog quarter={quarter} onClose={() => setClosing(false)} onDone={() => setView('resultaat')} />}
           </div>
         </div>
       </header>
