@@ -958,3 +958,63 @@ Feature: Quarter bar
     When I select "#1 Digital claims intake" under Deadline in gevaar
     Then the bar highlights week 3 to the deadline week and reads "Tot deadline (wk 13): 10 weken"
 ```
+
+## Q. Voortgang V3 — stand per toezegging (2026-10-23, docs/design.md section 28)
+
+**Acceptance criteria**
+- Q1. Teams report only Gestart, Klaar, Impediment and Escaleren. The Op koers / Deadline in gevaar / Gaat niet halen control and chips appear nowhere (Voortgang, Prioriteiten, Afstemmen, Kwartaalresultaat, epic panel); the 010 columns stay but are not written.
+- Q2. A committed ask has a stand Niet gestart · Gestart (wk n) · Klaar set by the provider team or an admin only, in both repositories and in SQL (015); the requester, a viewer and an open ask are refused. Geblokkeerd (open impediment on the ask) and Geëscaleerd (escalated impediment) are derived; Klaar wins.
+- Q3. The epic stand is derived: Gestart as soon as one ask is Gestart or the epic team sets it; Klaar when every ask is Klaar or set on the epic; Geblokkeerd / Geëscaleerd from impediments on its asks or on the epic. A rank-only user cannot set the epic stand.
+- Q4. Voortgang shows, per epic in rank order (only epics with committed asks, impediments or an epic stand): rank, title, team · eigenaar, summary, a 13-week line (start → deadline, dashed when not started, deadline outline, now line) and the stand chip; under it one row per ask with "Door <team> · <maat>", stand chip, warning, "Laatst gewijzigd" (date + name from the latest event) and a Melden menu (Gestart / Klaar / Impediment melden) for the provider team and admins. Viewers see no menu or button.
+- Q5. Impediments hang on an ask or on an epic and nest under that row with actiehouder, days open, state (Open / In behandeling / Geëscaleerd → <aan wie>, plus the Escalatie age hint) and Escaleren / Opgelost for whoever may change the status. Escaleren writes escalated_at, escalated_to and an impediment_escalated event.
+- Q6. "⚠ <maat> · n wk tot deadline" appears on a Niet gestart ask whose size's upper pw ≥ the whole weeks left to its deadline (needed_by, else Moet deadline, else latest needed_by, else quarter end).
+- Q7. Resultaat reads Geleverd from Klaar (all asks Klaar or the epic set Klaar); the manual checkbox stays for other epics and is disabled when derived.
+- Q8. Instellingen › Ritme: bijwerkdag(en), tijd, frequentie (wekelijks / tweewekelijks / per sprint + weken) and modus (alleen afwijkingen | elke periode bevestigen), stored in settings.cadence. The Voortgang title line reads "Week n van N · bijwerken vóór <dag> <tijd>". In confirm mode an ask untouched since the last bijwerkmoment shows "Bevestigen"; one click writes confirmed_at and a progress_confirmed event and the button disappears.
+- Q9. "Weekafsluiting" (button on Voortgang, #weekafsluiting) lists what changed since the previous bijwerkmoment per epic: started, done, confirmed, new impediments, escalations, resolved; printable and downloadable as CSV; "Heel kwartaal" shows everything.
+- Q10. Removed from Voortgang: the Deadline in gevaar table, Onze toezeggingen, the big quarter bar; "Nieuw ongepland werk" is one collapsed line with a count; "Kwartaal afsluiten" sits in the account menu (admin, Uitvoering). `npm run test:rls` stays green.
+
+```gherkin
+Feature: Stand per toezegging
+
+  Scenario: Provider reports Gestart
+    Given 2026 Q4 is in execution and Mark van Dijk (Platform & Security) opens Voortgang
+    When he picks Melden › Gestart on "Network segmentation review"
+    Then the ask reads "Gestart wk 4", "Laatst gewijzigd" shows today and his name
+    And the epic "Policy admin migration" reads Gestart with its line from week 4
+
+  Scenario: Klaar makes the epic Klaar and Geleverd
+    Given that ask is the only committed ask of the epic
+    When he picks Melden › Klaar
+    Then the epic reads "1/1 klaar" and Klaar, and on Resultaat it counts as Geleverd
+
+  Scenario: Requester may not set a stand
+    When Pieter Mulder (Polisadministratie, the requesting team) tries to set Gestart on that ask
+    Then he is refused with "Alleen het leverende team kan de stand zetten"
+
+Feature: Impediments on an ask
+
+  Scenario: Report and escalate
+    Given Anouk picks Melden › Impediment melden on "Payout API for claims settlement" and saves a title
+    Then the impediment nests under the ask and the ask reads Geblokkeerd
+    When she clicks Escaleren, types "Directie" and saves
+    Then the row reads "Geëscaleerd → Directie", the ask and its epic read Geëscaleerd and the top line counts one more
+
+  Scenario: Resolve
+    When the action holder clicks Opgelost
+    Then the row disappears and the ask returns to its own stand
+
+Feature: Bijwerkmoment
+
+  Scenario: Confirm every period
+    Given Ritme is Monday 12:00, weekly, "elke periode bevestigen" and it is Friday
+    Then every committed ask not touched since Monday 12:00 shows "Bevestigen"
+    When the provider clicks it
+    Then "Laatst gewijzigd" shows today and the button is gone
+
+Feature: Weekafsluiting
+
+  Scenario: What changed this week
+    When Anouk opens Weekafsluiting
+    Then she sees per epic the stands set, impediments raised, escalated and resolved since Monday 12:00
+    And CSV downloads the same rows
+```
