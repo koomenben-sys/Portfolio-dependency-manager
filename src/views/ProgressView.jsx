@@ -84,6 +84,7 @@ export function ProgressView() {
             <span className="text-faint"> · </span>{t('Escalated')} <b className={`font-semibold ${escalated ? 'text-danger-fg' : 'text-ink'}`}>{escalated}</b>
           </span>
           <FollowOnlyToggle on={followOnly} onChange={setFollowOnly} count={followedInQuarter} />
+          {executing && <a className={cls.secondary} href="#weekafsluiting" data-tour="week-close"><FileText size={14} aria-hidden="true" />{t('Week close')}</a>}
           <label className="flex items-center gap-2.5 text-label text-muted w-full sm:w-auto"><span className="sr-only">{t('Choose team')}</span>
             <select className={`${cls.input} !h-10 sm:!w-56 text-subtitle font-medium text-ink`} value={teamId} onChange={(e) => setTeamId(e.target.value)} data-tour="team-select" aria-label={t('Choose team')}>
               <option value="">{t('All teams')}</option>

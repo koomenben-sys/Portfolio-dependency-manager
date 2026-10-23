@@ -13,6 +13,7 @@ import { SettingsView } from './views/SettingsView';
 import { QuarterResultView } from './views/QuarterResultView';
 import { ProgressView } from './views/ProgressView';
 import { ResultView } from './views/ResultView';
+import { WeekCloseView } from './views/WeekCloseView';
 import { CloseQuarterDialog } from './components/plan/CycleActions';
 import { inExecution } from './domain/rhythm';
 import { OverviewView } from './views/OverviewView';
@@ -51,7 +52,7 @@ const EXTENDED = [
 ];
 const SETTINGS = { id: 'instellingen', label: 'Settings', View: SettingsView };
 // Reachable by URL or a button, never listed in the nav (Release A, D45): the tussenstand during Planning.
-const HIDDEN = [{ id: 'kwartaalresultaat', label: 'Quarter result', View: QuarterResultView }];
+const HIDDEN = [{ id: 'kwartaalresultaat', label: 'Quarter result', View: QuarterResultView }, { id: 'weekafsluiting', label: 'Week close', View: WeekCloseView }];
 const ALL = [...CORE, ...EXTENDED, SETTINGS, ...HIDDEN];
 const VIEW_IDS = new Set([...ALL.map((v) => v.id), 'afsluiten']);
 const viewFromHash = () => { const h = window.location.hash.replace('#', ''); return VIEW_IDS.has(h) ? h : 'prioriteren'; };
@@ -60,6 +61,7 @@ const viewFromHash = () => { const h = window.location.hash.replace('#', ''); re
 function resolveView(id, quarter) {
   if (!quarter) return id === 'afsluiten' ? 'resultaat' : id;
   if (id === 'kwartaalresultaat') return cyclePhase(quarter.phase) === 'Planning' ? id : stepForPhase('resultaat', quarter.phase);
+  if (id === 'weekafsluiting') return cyclePhase(quarter.phase) === 'Execution' ? id : stepForPhase('voortgang', quarter.phase);
   return stepForPhase(id, quarter.phase);
 }
 
