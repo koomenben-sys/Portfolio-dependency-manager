@@ -3,9 +3,9 @@ import { usePlan } from '../../context/PlanContext';
 import { useT } from '../../i18n';
 import { ConfirmDialog } from './core';
 
-// Phase transitions are buttons at the end of step 3 (docs/design.md section 23, D64/M7): "Plan vastzetten" on
-// Afstemmen, "Kwartaal afsluiten" on Voortgang. The phase word in the header is plain text (App.jsx); the menu
-// behind it (Release B, D56) is gone. Both dialogs confirm without a reason field (D62).
+// Phase transitions (docs/design.md section 23, D64/M7): "Plan vastzetten" is the button at the end of Afstemmen;
+// "Kwartaal afsluiten" sits in the account menu during Uitvoering (section 28, D105; it left the Voortgang header).
+// The phase word in the header is plain text (App.jsx). Both dialogs confirm without a reason field (D62).
 
 // "Plan vastzetten": no reason field (D62), one command (baseline + locked), the word becomes Uitvoeren.
 export function LockPlanDialog({ quarter, onClose, onDone }) {
